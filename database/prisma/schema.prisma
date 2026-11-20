@@ -60,6 +60,7 @@ model Branch {
   id              String           @id @default(uuid()) @db.Uuid
   organizationId  String           @db.Uuid
   organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  users           User[]
   code            String           @db.VarChar(50)
   name            String           @db.VarChar(200)
   country         String           @default("EGY") @db.VarChar(3)
@@ -101,6 +102,8 @@ model User {
   id                       String                     @id @default(uuid()) @db.Uuid
   organizationId           String                     @db.Uuid
   organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  branchId                 String?                    @db.Uuid
+  branch                   Branch?                    @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   email                    String                     @db.VarChar(320)
   emailNormalized          String                     @db.VarChar(320)
   passwordHash             String?                    @db.VarChar(128)

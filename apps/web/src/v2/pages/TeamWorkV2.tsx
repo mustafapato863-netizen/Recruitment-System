@@ -2,15 +2,17 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageReturn, withReturnTo } from '../returnTarget';
 import { ArrowLeft, ArrowLeftRight, BarChart3, Briefcase, CalendarDays, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, Clock, Copy, Eye, FileText, Folder, Info, Pause, RotateCw, Users, XCircle } from 'lucide-react';
-import { ButtonV2, DrawerV2, EmptyStateV2, ForbiddenStateV2, initials, InputV2, SelectV2, SkeletonV2, StatusChip, TabsV2, TextareaV2 } from '../../components/v2';
+import { ButtonV2, DrawerV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, TabsV2, TextareaV2 } from '../../components/v2';
+import { useV2Shell } from '../../components/v2/shell/AppShellV2';
 import type { StatusTone } from '../../components/v2';
 import { useAuth } from '../../auth/AuthContext';
-import { fetchTeamJobs, fetchTeamWork, fileHref, interviewsThisWeekCount, teamJobDetail, type ReportWork, type TeamFile, type TeamJob, type TaskTone, type TeamTask, type TeamWork, type WaitingOffer, type WaitingScorecard } from '../api/teamWork';
+import { compareTeamWorkload, fetchTeamJobs, fetchTeamWork, fileHref, interviewsThisWeekCount, teamJobDetail, type ReportWork, type TeamFile, type TeamJob, type TaskTone, type TeamTask, type TeamWork, type WaitingOffer, type WaitingScorecard } from '../api/teamWork';
 import { ReassignDrawer } from '../drawers/ReassignDrawer';
 import { OfferDecisionDrawer } from '../drawers/OfferDecisionDrawer';
 import { canSeePay } from '../api/offerDecision';
 import { JobStatusDrawer } from '../drawers/JobStatusDrawer';
 import { cairoToday, jobActions, type JobAction } from '../api/jobs';
+import { getInitials } from '../userIdentity';
 import {
   approveRequisition, declineRequisition, deptOf, dueOf, fetchContext, fetchRequisitions, formatDue, mineOrTeam, ownerOf, reqError, requestRequisitionChanges, siteOf, titleOf,
   type ReqContext, type Requisition,
@@ -49,17 +51,10 @@ function itemIcon(task: TeamTask): { tone: 'danger' | 'success' | 'info'; node: 
   return { tone: 'info', node: <Clock /> };
 }
 
-/** Scheduled interviews, or files already in Interview. Null when the schedule was not returned. */
-function personInterviews(files: TeamFile[]): number | null {
-  const unknown = files.some((file) => file.interview === undefined);
-  const known = files.filter((file) => file.interview != null || file.stage === 'Interview');
-  if (known.length === 0 && unknown) return null;
-  return known.length;
-}
-
 /** M2 Team work (Manager, v2): reporting-line cards, what is waiting on me, and Reassign (B7). */
 export function TeamWorkV2() {
   const { user } = useAuth();
+  const setApprovalsCount = useV2Shell()?.setApprovalsCount;
   const location = useLocation();
   const approvalsPage = location.pathname === '/approvals';
   const pageReturn = usePageReturn();
@@ -175,7 +170,6 @@ export function TeamWorkV2() {
     ...(jobs ?? []).map((job) => job.site).filter((site): site is string => !!site),
   ])].sort((a, b) => a.localeCompare(b));
   const onBranch = (row: ReportWork) => !branchQ || row.files.some((file) => file.site === branchQ) || (jobs ?? []).some((job) => job.ownerId === row.person.id && job.site === branchQ);
-  const workloadRows = visibleMembers.filter(onBranch);
   const workloadId = params.get('workload');
   const workload = reports?.find((row) => row.person.id === workloadId) ?? null;
   const sources = (reports ?? []).filter((row) => row.files.length > 0 && onBranch(row));
@@ -189,12 +183,31 @@ export function TeamWorkV2() {
     return file?.site === branchQ;
   });
   const listFiltered = Boolean(jobQ || itemStatus || branchQ);
+  const workloadRows = visibleMembers.filter(onBranch).sort((a, b) => compareTeamWorkload(
+    {
+      name: a.person.name,
+      overdueCount: listFiltered ? filesFor(a).filter((file) => !!file.followUpDate && file.followUpDate < today).length : a.overdue,
+      openCount: listFiltered ? filesFor(a).length : a.open,
+      interviewsCount: interviewsThisWeekCount(listFiltered ? filesFor(a) : a.files),
+    },
+    {
+      name: b.person.name,
+      overdueCount: listFiltered ? filesFor(b).filter((file) => !!file.followUpDate && file.followUpDate < today).length : b.overdue,
+      openCount: listFiltered ? filesFor(b).length : b.open,
+      interviewsCount: interviewsThisWeekCount(listFiltered ? filesFor(b) : b.files),
+    },
+  ));
   const memberTotal = workloadRows.length;
   const memberPages = Math.max(1, Math.ceil(memberTotal / MEMBER_PAGE));
   const pageRaw = Number(params.get('page'));
   const memberPage = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.min(memberPages, Math.floor(pageRaw)) : 1;
   const pagedMembers = workloadRows.slice((memberPage - 1) * MEMBER_PAGE, memberPage * MEMBER_PAGE);
   const weekInterviews = reports ? interviewsThisWeekCount(reports.flatMap((row) => row.files)) : null;
+  useEffect(() => {
+    if (!setApprovalsCount) return undefined;
+    setApprovalsCount(waitingCount);
+    return () => setApprovalsCount(null);
+  }, [setApprovalsCount, waitingCount]);
   const activityRows = (reports ?? []).flatMap((row) => filesFor(row).map((file) => ({ file, owner: row.person.name })));
   activityRows.sort((a, b) => {
     if (a.file.followUpDate === b.file.followUpDate) return a.file.candidate.localeCompare(b.file.candidate);
@@ -353,7 +366,7 @@ export function TeamWorkV2() {
                         tasks={tasks}
                         open={open}
                         overdue={overdue}
-                        interviews={personInterviews(listFiltered ? files : row.files)}
+                        interviews={interviewsThisWeekCount(listFiltered ? files : row.files)}
                         returnTo={pageReturn}
                         onOpen={() => go({ recruiter: row.person.id, rtab: null, rq: null, rstage: null })}
                         onReassign={() => go({ reassign: row.person.id, file: null, handoff: null, reassignJob: null })}
@@ -456,14 +469,16 @@ function MemberCard({ row, tasks, open, overdue, interviews, returnTo, onOpen, o
   return (
     <article className="rf2-team__member" aria-labelledby={headingId}>
       <div className="rf2-team__head">
-        <span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{initials(row.person.name)}</span>
+        <span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{getInitials(row.person.name)}</span>
         <div className="rf2-team__who">
           <h2 id={headingId} className="rf2-team__h">
             <button type="button" className="rf2-team__name" onClick={onOpen}>{row.person.name}</button>
           </h2>
           {row.person.detail ? <p className="rf2-jtable__sub">{row.person.detail}</p> : null}
         </div>
-        <ButtonV2 kind="tertiary" size="sm" icon={<ArrowLeftRight />} aria-label={`Reassign: ${row.person.name}`} onClick={onReassign}>Reassign</ButtonV2>
+        {open >= 10 ? <StatusChip tone="warning" label="High capacity" /> : null}
+        <ButtonV2 kind="tertiary" size="sm" icon={<ArrowLeftRight />} aria-label={`Reassign: ${row.person.name}`} disabled={open === 0}
+          title={open === 0 ? 'No open items to reassign' : undefined} onClick={onReassign}>Reassign</ButtonV2>
       </div>
       <p className="rf2-team__metrics">
         <span><strong>{open}</strong> Open</span>
@@ -492,7 +507,7 @@ function MemberCard({ row, tasks, open, overdue, interviews, returnTo, onOpen, o
                   <Link className="rf2-link" to={withReturnTo(fileHref(task.fileId), returnTo)}>{task.title}</Link>
                   {task.meta ? <p className="rf2-jtable__sub">{task.meta}</p> : null}
                 </div>
-                <StatusChip tone={pill.tone} label={pill.label} icon={pill.tone === 'danger' ? <CircleAlert aria-hidden="true" /> : undefined} />
+                <StatusChip tone={pill.tone} label={task.blockerLabel && !task.title.startsWith(task.blockerLabel) ? task.blockerLabel : pill.label} icon={pill.tone === 'danger' ? <CircleAlert aria-hidden="true" /> : undefined} />
               </li>
             );
           })}
@@ -640,7 +655,7 @@ function RecruiterDetails({ recruiter, jobs, userId, returnTo, params, go, onJob
       <p className="rf2-crumbs">Team work / {recruiter.person.name}</p>
       <ButtonV2 kind="secondary" size="sm" icon={<ArrowLeft />} onClick={() => go({ recruiter: null, rtab: null, rq: null, rstage: null })}>Back to Team work</ButtonV2>
       <div className="rf2-team__head">
-        <span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{initials(recruiter.person.name)}</span>
+        <span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{getInitials(recruiter.person.name)}</span>
         <div className="rf2-team__who">
           <h2>{recruiter.person.name}</h2>
           <p className="rf2-jtable__sub">{recruiter.person.detail ?? 'Recruiter'} · {relationship}</p>
@@ -648,7 +663,8 @@ function RecruiterDetails({ recruiter, jobs, userId, returnTo, params, go, onJob
         </div>
         <div className="rf2-team__actions">
           <ButtonV2 kind="secondary" size="sm" icon={<Copy />} onClick={() => void copyLink()}>Copy link</ButtonV2>
-          <ButtonV2 kind="secondary" size="sm" icon={<ArrowLeftRight />} onClick={() => go({ reassign: recruiter.person.id, file: null, handoff: null })}>Reassign</ButtonV2>
+          <ButtonV2 kind="secondary" size="sm" icon={<ArrowLeftRight />} disabled={recruiter.open === 0}
+            title={recruiter.open === 0 ? 'No open items to reassign' : undefined} onClick={() => go({ reassign: recruiter.person.id, file: null, handoff: null })}>Reassign</ButtonV2>
         </div>
       </div>
       {copyNote ? <p className="rf2-jtable__sub" role="status">{copyNote}</p> : null}

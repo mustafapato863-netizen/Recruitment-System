@@ -22,6 +22,7 @@ import { blockingGate, cairoToday, isRedactedJob, type CardInterview, type FileG
 import { fetchAllPages } from './paged';
 import { fetchPeople, type Person } from './requisitions';
 import { fetchMyWorkApi, type WorkItem } from './myWork';
+import { splitPersonIdentity } from '../userIdentity';
 
 const enc = encodeURIComponent;
 const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
@@ -32,14 +33,22 @@ export interface RawTeamApp {
   followUpDate?: string | null; positionTitle?: string | null; vacancyBranchName?: string | null; vacancyLocation?: string | null;
   candidate?: { firstName?: string; lastName?: string } | null; gates?: FileGate[]; interview?: CardInterview | null; updatedAt?: string;
 }
-export interface TeamFile { id: string; code: string; candidate: string; vacancyId: string; job: string; site: string | null; stage: string; followUpDate: string | null; gates?: FileGate[]; interview?: CardInterview | null }
+export interface TeamFile { id: string; code: string; candidate: string; vacancyId: string; job: string; site: string | null; stage: string; followUpDate: string | null; gates?: FileGate[]; interview?: CardInterview | null; updatedAt?: string }
 export type TaskTone = 'overdue' | 'today' | 'week' | 'waiting' | null;
 export type TaskKind = 'followup-overdue' | 'gate' | 'offer' | 'followup' | 'interview' | 'next';
-export interface TeamTask { fileId: string; kind: TaskKind; title: string; meta: string; tone: TaskTone }
+export interface TeamTask { fileId: string; kind: TaskKind; title: string; meta: string; tone: TaskTone; blockerLabel?: string }
 export interface ReportWork { person: Person; files: TeamFile[]; tasks: TeamTask[]; open: number; overdue: number }
 export interface WaitingOffer { offerId: string; versionId: string; versionNumber: number; applicationId: string; candidate: string; job: string; ownerName: string | null; submittedAt: string | null }
 export interface WaitingScorecard { interviewId: string; applicationId: string | null; candidate: string; job: string | null; dueAt: string | null; overdue: boolean }
 export interface TeamWork { reports: ReportWork[] | null; waiting: WaitingOffer[]; scorecards: WaitingScorecard[]; source: 'team-work' | 'composed' }
+export interface TeamWorkloadRank { name: string; overdueCount: number; openCount: number; interviewsCount: number | null }
+
+export function compareTeamWorkload(a: TeamWorkloadRank, b: TeamWorkloadRank): number {
+  return b.overdueCount - a.overdueCount
+    || b.openCount - a.openCount
+    || (b.interviewsCount ?? -1) - (a.interviewsCount ?? -1)
+    || a.name.localeCompare(b.name);
+}
 
 /** Typed adapter for the coming GET /team/work (shape from FRONTEND_GAP M2; every field optional so a partial server works). */
 export interface TeamWorkApi {
@@ -53,7 +62,7 @@ export interface TeamWorkApi {
 const toFile = (a: RawTeamApp): TeamFile => ({
   id: a.id, code: a.applicationCode, vacancyId: a.vacancyId, stage: a.stage, followUpDate: a.followUpDate?.slice(0, 10) ?? null,
   candidate: `${a.candidate?.firstName ?? ''} ${a.candidate?.lastName ?? ''}`.trim() || a.applicationCode,
-  job: a.positionTitle ?? 'Job', site: a.vacancyBranchName ?? a.vacancyLocation ?? null, gates: a.gates,
+  job: a.positionTitle ?? 'Job', site: a.vacancyBranchName ?? a.vacancyLocation ?? null, gates: a.gates, updatedAt: a.updatedAt,
   // Missing `interview` is unknown. An explicit null means this file has no scheduled interview.
   interview: a.interview === undefined ? undefined : a.interview,
 });
@@ -90,13 +99,27 @@ export function interviewsThisWeekCount(
 const GATE_TASK: Record<string, string> = { 'screen-note': 'Screen note missing', scorecard: 'Scorecard missing', 'offer-accepted': 'Offer not accepted yet', 'joining-checks': 'Joining checks open' };
 const addDays = (d: string, n: number) => { const x = new Date(`${d}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const cairoDay = (iso: string) => cairoToday(new Date(iso));
+const dayNumber = (day: string) => {
+  const [year, month, date] = day.split('-').map(Number);
+  return Math.floor(Date.UTC(year, month - 1, date) / 86_400_000);
+};
+
+function taskAge(f: TeamFile, today: string): string | null {
+  if (f.followUpDate && f.followUpDate < today) {
+    const days = Math.max(1, dayNumber(today) - dayNumber(f.followUpDate));
+    return `${days}d overdue`;
+  }
+  if (!f.updatedAt) return null;
+  const days = dayNumber(today) - dayNumber(cairoDay(f.updatedAt));
+  return days > 0 ? `${days}d since update` : null;
+}
 
 /** One task per file, most urgent first: overdue follow-up › blocked gate › offer waiting › follow-up today › interview › next step. */
 export function taskFor(f: TeamFile, today = cairoToday()): TeamTask {
-  const meta = [f.job, f.site].filter(Boolean).join(' · ');
+  const meta = [f.job, f.site, taskAge(f, today)].filter(Boolean).join(' · ');
   if (f.followUpDate && f.followUpDate < today) return { fileId: f.id, kind: 'followup-overdue', title: `Follow-up overdue — ${f.candidate}`, meta, tone: 'overdue' };
   const g = blockingGate({ stage: f.stage as never, gates: f.gates, interview: f.interview ?? undefined });
-  if (g) return { fileId: f.id, kind: 'gate', title: `${GATE_TASK[g.gate] ?? 'Gate open'} — ${f.candidate}`, meta, tone: 'overdue' };
+  if (g) return { fileId: f.id, kind: 'gate', title: `${GATE_TASK[g.gate] ?? 'Gate open'} — ${f.candidate}`, meta, tone: 'overdue', blockerLabel: GATE_TASK[g.gate] ?? 'Gate open' };
   if (f.stage === 'Offer') return { fileId: f.id, kind: 'offer', title: `Offer in progress — ${f.candidate}`, meta, tone: 'waiting' };
   if (f.followUpDate === today) return { fileId: f.id, kind: 'followup', title: `Follow up — ${f.candidate}`, meta, tone: 'today' };
   if (f.interview?.when === 'next') {
@@ -153,7 +176,10 @@ export async function fetchTeamWork(): Promise<TeamWork> {
     // report with no open files still has a row and is a reassign target. /team/work supplies each person's files.
     const people = await fetchPeople();
     const byId = new Map(api.reports.map((r) => [r.user.id, r]));
-    const roster: Person[] = people ?? api.reports.map((r) => ({ id: r.user.id, name: r.user.displayName ?? r.user.name ?? 'Unnamed', detail: r.user.roleName ?? undefined }));
+    const roster: Person[] = people ?? api.reports.map((r) => {
+      const identity = splitPersonIdentity(r.user.displayName ?? r.user.name ?? 'Unnamed', r.user.roleName);
+      return { id: r.user.id, name: identity.displayName, detail: identity.jobTitle ?? undefined };
+    });
     const reports = roster.map((person) => {
       const r = byId.get(person.id);
       return buildReport({ ...person, detail: person.detail ?? r?.user.roleName ?? undefined },

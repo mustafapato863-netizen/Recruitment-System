@@ -297,13 +297,14 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   // ── 1. Core Users (Real Saudi German Health Team) ───────────
   const admin = await tx.user.upsert({
     where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'ahmed.mahmoud@recruitflow.local' } },
-    update: { displayName: 'Ahmed Mahmoud (HR Director)', status: 'Active' },
+    update: { displayName: 'Ahmed Mahmoud', jobTitle: 'HR Director', status: 'Active' },
     create: {
       id: fixtureId(150),
       organizationId: organization.id,
       email: 'ahmed.mahmoud@recruitflow.local',
       emailNormalized: 'ahmed.mahmoud@recruitflow.local',
-      displayName: 'Ahmed Mahmoud (HR Director)',
+      displayName: 'Ahmed Mahmoud',
+      jobTitle: 'HR Director',
       passwordHash: DEMO_PASSWORD_HASH,
       status: 'Active',
     },
@@ -315,38 +316,38 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   // Additional Real SGH Recruiters from 2026 Vacant List
   const recruiterSindu = await tx.user.upsert({
     where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'sindu@recruitflow.local' } },
-    update: { displayName: 'Sindu (Senior Recruiter)', status: 'Active' },
-    create: { id: fixtureId(151), organizationId: organization.id, email: 'sindu@recruitflow.local', emailNormalized: 'sindu@recruitflow.local', displayName: 'Sindu (Senior Recruiter)', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
+    update: { displayName: 'Sindu', jobTitle: 'Senior Recruiter', status: 'Active' },
+    create: { id: fixtureId(151), organizationId: organization.id, email: 'sindu@recruitflow.local', emailNormalized: 'sindu@recruitflow.local', displayName: 'Sindu', jobTitle: 'Senior Recruiter', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
   });
 
   const recruiterZenah = await tx.user.upsert({
     where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'zenah@recruitflow.local' } },
-    update: { displayName: 'Zenah (Recruiter)', status: 'Active' },
-    create: { id: fixtureId(152), organizationId: organization.id, email: 'zenah@recruitflow.local', emailNormalized: 'zenah@recruitflow.local', displayName: 'Zenah (Recruiter)', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
+    update: { displayName: 'Zenah', jobTitle: 'Recruiter', status: 'Active' },
+    create: { id: fixtureId(152), organizationId: organization.id, email: 'zenah@recruitflow.local', emailNormalized: 'zenah@recruitflow.local', displayName: 'Zenah', jobTitle: 'Recruiter', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
   });
 
   const recruiterLady = await tx.user.upsert({
     where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'lady@recruitflow.local' } },
-    update: { displayName: 'Lady (Nursing Recruiter)', status: 'Active' },
-    create: { id: fixtureId(153), organizationId: organization.id, email: 'lady@recruitflow.local', emailNormalized: 'lady@recruitflow.local', displayName: 'Lady (Nursing Recruiter)', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
+    update: { displayName: 'Lady', jobTitle: 'Nursing Recruiter', status: 'Active' },
+    create: { id: fixtureId(153), organizationId: organization.id, email: 'lady@recruitflow.local', emailNormalized: 'lady@recruitflow.local', displayName: 'Lady', jobTitle: 'Nursing Recruiter', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
   });
 
   const hiringManagerOmarH = await tx.user.upsert({
     where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'omar.hassan@recruitflow.local' } },
-    update: { displayName: 'Omar Hassan (Hiring Mgr)', status: 'Active' },
-    create: { id: fixtureId(154), organizationId: organization.id, email: 'omar.hassan@recruitflow.local', emailNormalized: 'omar.hassan@recruitflow.local', displayName: 'Omar Hassan (Hiring Mgr)', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
+    update: { displayName: 'Omar Hassan', jobTitle: 'Hiring Manager', status: 'Active' },
+    create: { id: fixtureId(154), organizationId: organization.id, email: 'omar.hassan@recruitflow.local', emailNormalized: 'omar.hassan@recruitflow.local', displayName: 'Omar Hassan', jobTitle: 'Hiring Manager', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
   });
 
   const financeYousef = await tx.user.upsert({
     where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'yousef.hamdy@recruitflow.local' } },
-    update: { displayName: 'Yousef Hamdy (Finance)', status: 'Active' },
-    create: { id: fixtureId(155), organizationId: organization.id, email: 'yousef.hamdy@recruitflow.local', emailNormalized: 'yousef.hamdy@recruitflow.local', displayName: 'Yousef Hamdy (Finance)', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
+    update: { displayName: 'Yousef Hamdy', jobTitle: 'Finance', status: 'Active' },
+    create: { id: fixtureId(155), organizationId: organization.id, email: 'yousef.hamdy@recruitflow.local', emailNormalized: 'yousef.hamdy@recruitflow.local', displayName: 'Yousef Hamdy', jobTitle: 'Finance', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
   });
 
   const legalHeba = await tx.user.upsert({
     where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'heba.salem@recruitflow.local' } },
-    update: { displayName: 'Heba Salem (Legal)', status: 'Active' },
-    create: { id: fixtureId(156), organizationId: organization.id, email: 'heba.salem@recruitflow.local', emailNormalized: 'heba.salem@recruitflow.local', displayName: 'Heba Salem (Legal)', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
+    update: { displayName: 'Heba Salem', jobTitle: 'Legal', status: 'Active' },
+    create: { id: fixtureId(156), organizationId: organization.id, email: 'heba.salem@recruitflow.local', emailNormalized: 'heba.salem@recruitflow.local', displayName: 'Heba Salem', jobTitle: 'Legal', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
   });
 
   // Assign roles
@@ -385,6 +386,12 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     alSuyouh: await upsertBranch(tx, orgId, fixtureId(106), 'SUYOUH-CLN', 'SGH Clinic Al Suyouh', 'Sharjah'),
     group: await upsertBranch(tx, orgId, fixtureId(107), 'GRP-HQ', 'SGH Group Corporate Office', 'Dubai'),
   };
+
+  await tx.user.updateMany({ where: { id: admin.id }, data: { branchId: branches.group.id } });
+  await tx.user.updateMany({ where: { id: { in: [recruiterSarah.id, recruiterSindu.id, recruiterZenah.id, hiringManagerHassan.id, hiringManagerOmarH.id, talentManagerMona?.id].filter(Boolean) } }, data: { branchId: branches.dubai.id } });
+  await tx.user.updateMany({ where: { id: recruiterLady.id }, data: { branchId: branches.ajman.id } });
+  await tx.user.updateMany({ where: { id: { in: [financeYousef.id, legalHeba.id] } }, data: { branchId: branches.group.id } });
+  await tx.user.updateMany({ where: { id: hiringManagerHassan.id }, data: { displayName: 'Hassan Ali', jobTitle: 'Hiring Manager' } });
 
   // ── 3. Real Positions from 2026 Manpower List ──────────────
   const positions = {

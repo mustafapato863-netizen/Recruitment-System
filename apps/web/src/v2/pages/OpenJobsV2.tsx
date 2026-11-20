@@ -27,6 +27,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, type StatusTone } from '../../components/v2';
 import { fetchOpenJobs, type JobStatus, type MyJobRow, type OpenJobs, type OtherJobRow } from '../api/jobs';
 import { JdReviewDrawer } from '../drawers/JdReviewDrawer';
+import { getInitials } from '../userIdentity';
 import './jobs.css';
 
 export const STATUS_TONE: Record<JobStatus, StatusTone> = { Open: 'success', 'Partially Filled': 'success', 'On Hold': 'warning', Filled: 'info', Closed: 'neutral' };
@@ -297,12 +298,6 @@ function StageBits({ counts }: { counts: Record<string, number> }) {
   );
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '';
-  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1]?.[0] ?? '' : '')).toUpperCase();
-}
-
 function jobMark(title: string, department: string | null): LucideIcon {
   const text = `${title} ${department ?? ''}`;
   if (/developer|engineer|software|\bit\b|data|cyber/i.test(text)) return Code;
@@ -338,7 +333,7 @@ function JobCards({ rows, returnTo, onCalibrateJd }: { rows: MyJobRow[]; returnT
                 </div>
                 <div className="rf2-jcard__metric">
                   <p className="rf2-jcard__k">Owner</p>
-                  {j.ownerName ? <p className="rf2-jcard__owner"><span className="rf2-jcard__av" aria-hidden="true">{initials(j.ownerName)}</span><span>{j.ownerName}</span></p> : <p className="rf2-jcard__owner">No owner</p>}
+                  {j.ownerName ? <p className="rf2-jcard__owner"><span className="rf2-jcard__av" aria-hidden="true">{getInitials(j.ownerName)}</span><span>{j.ownerName}</span></p> : <p className="rf2-jcard__owner">No owner</p>}
                 </div>
               </div>
               {j.attention ? <p className="rf2-jtable__sub">{j.attention}</p> : null}

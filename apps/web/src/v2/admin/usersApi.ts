@@ -17,7 +17,13 @@ export interface AdminUser {
   id: string; email: string; displayName: string; jobTitle?: string | null; status: string; managerId: string | null;
   roles: Array<{ id: string; code: string; name: string }>; lastLoginAt: string | null;
   /** B10 may send the seat per user; else derived from role codes (provisional table). */
-  seat?: string | null; branchName?: string | null; site?: string | null;
+  seat?: string | null; branchId?: string | null; branchName?: string | null; site?: string | null;
+}
+export interface AdminUserUpdate {
+  managerId?: string | null;
+  branchId?: string | null;
+  status?: 'Active' | 'Inactive';
+  roleIds?: string[];
 }
 const RANK: Record<Seat, number> = { employee: 0, manager: 1, admin: 2 };
 export function seatOf(u: Pick<AdminUser, 'roles' | 'seat'>): Seat {
@@ -33,8 +39,9 @@ export const statusTone = (s: string) => (s === 'Active' ? 'success' : s === 'In
 export async function fetchUsers(): Promise<AdminUser[]> {
   return (await fetchAllPages<AdminUser>('/users?directory=1')).map((u) => ({ ...u, roles: u.roles ?? [], managerId: u.managerId ?? null }));
 }
-export const setStatus = (id: string, status: 'Active' | 'Inactive') => patchApi<AdminUser>(`/users/${encodeURIComponent(id)}`, { status });
-export const setManager = (id: string, managerId: string | null) => patchApi<AdminUser>(`/users/${encodeURIComponent(id)}`, { managerId });
+export const updateUser = (id: string, update: AdminUserUpdate) => patchApi<AdminUser>(`/users/${encodeURIComponent(id)}`, update);
+export const setStatus = (id: string, status: 'Active' | 'Inactive') => updateUser(id, { status });
+export const setManager = (id: string, managerId: string | null) => updateUser(id, { managerId });
 export const inviteUser = (body: { email: string; displayName: string; roleIds?: string[] }) => postApi<{ id: string }>('/users/invitations', body);
 
 export interface OwnedWork { openApplicationsPrimary: number; openApplicationsTaskOwner: number; openJobsPrimary: number; openRequisitions: number; countsUnknown?: boolean }

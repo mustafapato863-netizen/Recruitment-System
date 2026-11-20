@@ -13,7 +13,7 @@ import { ThemeProvider } from '../../theme/ThemeContext';
 import type { Seat } from '../seat';
 
 describe('B2-17: v2 home per seat', () => {
-  it.each([['employee', '/my-work'], ['manager', '/my-work'], ['admin', '/users']] as const)('%s: / → %s, never the Command Center', (seat, home) => {
+  it.each([['employee', '/my-work'], ['manager', '/team-work'], ['admin', '/users']] as const)('%s: / → %s, never the Command Center', (seat, home) => {
     expect(v2Redirect(seat, '/')).toBe(home);
     expect(SEAT_HOME[seat]).toBe(home);
   });
@@ -22,7 +22,7 @@ describe('B2-17: v2 home per seat', () => {
 describe('B2-18: v1 pages are not destinations for v2 seats', () => {
   it.each([
     ['employee', '/users', '/my-work'], ['employee', '/vacancy-requests', '/my-work'], ['employee', '/applications', '/my-work'],
-    ['manager', '/approval-inbox', '/my-work'], ['manager', '/vacancies', '/my-work'], ['manager', '/tasks', '/my-work'],
+    ['manager', '/approval-inbox', '/my-work'], ['manager', '/vacancies', null], ['manager', '/tasks', '/my-work'],
     ['admin', '/my-work', '/users'],
   ] as const)('%s %s → %s', (seat, path, to) => expect(v2Redirect(seat, path)).toBe(to));
 
@@ -57,8 +57,8 @@ describe('v2 default: every v1 URL redirects to its v2 equivalent', () => {
     ['manager', '/vacancy-requests/create', '/vacancy-requests?req=new'], ['manager', '/vacancy-requests/r1', '/vacancy-requests?req=r1'],
     ['manager', '/applications/a1/transition', '/applications/a1'], ['manager', '/offers/approvals/inbox', '/my-work'],
     ['manager', '/team-result', '/reports'], ['manager', '/vacancies/v1', null],
-    ['manager', '/approvals', null], ['manager', '/team-interviews', null], ['manager', '/vacancies', '/my-work'],
-    ['manager', '/users', '/my-work'],
+    ['manager', '/approvals', null], ['manager', '/team-interviews', null], ['manager', '/vacancies', null],
+    ['manager', '/users', '/team-work'],
     // Admin
     ['admin', '/', '/users'], ['admin', '/reporting-tree', '/users'],
     ['admin', '/interviews/i1', '/users'], ['admin', '/vacancy-requests/r1', '/users'], ['admin', '/candidates', '/users'],
@@ -69,7 +69,7 @@ describe('v2 default: every v1 URL redirects to its v2 equivalent', () => {
     expect(v2Redirect('employee', '/my-interviews', { interviews: false })).toBe('/my-work');
   });
   it('requisition detail/create without requisitions rights go home', () => {
-    expect(v2Redirect('manager', '/vacancy-requests/create', { requisitions: false })).toBe('/my-work');
+    expect(v2Redirect('manager', '/vacancy-requests/create', { requisitions: false })).toBe('/team-work');
   });
   it('interviewer-only: /interviews/:id keeps the id; other v1 URLs → /my-interviews', () => {
     const o = { interviews: true, interviewerOnly: true };
@@ -87,7 +87,7 @@ describe('candidate entry paths stay out of the staff home', () => {
   });
   it('a staff session still opens the staff home', () => {
     expect(v2Redirect('employee', '/')).toBe('/my-work');
-    expect(v2Redirect('manager', '/')).toBe('/my-work');
+    expect(v2Redirect('manager', '/')).toBe('/team-work');
     expect(v2Redirect('admin', '/')).toBe('/users');
   });
 });
@@ -103,10 +103,12 @@ describe('classic staff URLs land on a v2 surface', () => {
     '/classic/master-data': '/my-work', '/settings': '/my-work', '/classic/pipeline-settings': '/my-work',
   };
   const manager: Record<string, string | null> = {
-    ...Object.fromEntries(Object.keys(employee).map((path) => [path, path.startsWith('/interviews') ? '/my-interviews' : '/my-work'])),
-    '/import': '/my-work',
-    '/import/candidates/j1': '/my-work',
-    '/hires': null, '/hires/h1': null, '/joinings': null, '/offers': null,
+    ...Object.fromEntries(Object.keys(employee).map((path) => [path, path.startsWith('/interviews') ? '/my-interviews' : '/team-work'])),
+    '/joinings': null,
+    '/vacancies/v1/analytics': null,
+    '/import': '/team-work',
+    '/import/candidates/j1': '/team-work',
+    '/hires': null, '/hires/h1': null, '/offers': null,
   };
   const admin: Record<string, string | null> = {
     ...Object.fromEntries(Object.keys(employee).map((path) => [path, '/users'])),
@@ -153,6 +155,16 @@ describe('classic staff URLs land on a v2 surface', () => {
     expect(v2Redirect('employee', '/cv-bank', { ...opts, permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
     expect(v2Redirect('employee', '/classic/vacancies', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/my-work');
     expect(v2Redirect('employee', '/applications/a1', { permissions: ['CANDIDATE_VIEW'] })).toBe('/my-work');
+  });
+  it('the manager home is Team work; /my-work remains directly available for personal tasks', () => {
+    expect(v2Redirect('manager', '/')).toBe('/team-work');
+    expect(v2Redirect('manager', '/my-work')).toBeNull();
+    expect(canOpenRoute('/team-work', ['APPLICATION_VIEW'])).toBe(true);
+    expect(canOpenRoute('/team-work', [])).toBe(false);
+    expect(v2Redirect('manager', '/team-work', { permissions: ['APPLICATION_VIEW'] })).toBeNull();
+    expect(v2Redirect('manager', '/', { permissions: [] })).toBe('/my-work');
+    expect(v2Redirect('manager', '/team-work', { permissions: [] })).toBe('/my-work');
+    expect(authorizedLanding(routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: [] }))).toBe('/my-work');
   });
   it('the other redirects stay: requisition approval inbox, offer approvals, /interviews/:id', () => {
     for (const p of ['/approval-inbox', '/inbox']) expect(v2Redirect('manager', p)).toBe('/my-work');
@@ -250,13 +262,13 @@ describe('talent pools are an employee page', () => {
   });
   it('sends other seats home; sourcing-match, CV bank, and import land on an authorized page', () => {
     const opts = { requisitions: true, interviews: true } as const;
-    expect(v2Redirect('manager', '/talent-pools', opts)).toBe('/my-work');
+    expect(v2Redirect('manager', '/talent-pools', opts)).toBe('/team-work');
     expect(v2Redirect('admin', '/talent-pools/pool-1', opts)).toBe('/users');
     expect(v2Redirect('employee', '/sourcing-match', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/cv-bank', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/import', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/import', { ...opts, permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
-    expect(v2Redirect('manager', '/sourcing-match', opts)).toBe('/my-work');
+    expect(v2Redirect('manager', '/sourcing-match', opts)).toBe('/team-work');
     expect(v2Redirect('admin', '/cv-bank', opts)).toBe('/users');
   });
 });
@@ -306,8 +318,8 @@ describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', ()
     expect(permittedClassicItems(OMAR.permissions)).toEqual([]);
     const recruiter = ['VACANCY_VIEW', 'CANDIDATE_VIEW', 'APPLICATION_VIEW'];
     expect(permittedNavItems('employee', recruiter, false, true, false).map((item) => item.label)).toEqual(['My Work', 'Open jobs', 'Candidates', 'Match Skills', 'Interviews', 'Reports']);
-    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, false, false).map((item) => item.label)).toEqual(['Team work', 'Requisitions', 'Approvals', 'Team result']);
-    expect(permittedNavItems('admin', [], true, false, false).map((item) => item.label)).toEqual(['Users', 'Roles', 'Licences & seats', 'Pipeline template', 'Master data', 'WhatsApp templates', 'Reports', 'Audit', 'Integrations']);
+    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, false, false).map((item) => item.label)).toEqual(['Team work', 'My Work', 'Requisitions', 'Approvals', 'Joining', 'Team result']);
+    expect(permittedNavItems('admin', [], true, false, false).map((item) => item.label)).toEqual(['Users & Access', 'Pipeline template', 'Master data', 'WhatsApp templates', 'Reports', 'Audit', 'Integrations']);
   });
   it.each(['/applications/a1', '/applications/a1?drawer=prehire'])('Omar: the shell mounts the application file at %s', async (path) => {
     expect(await go(OMAR, path.split('?')[0])).toBeNull();
@@ -329,7 +341,7 @@ describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', ()
 describe('direct offer and hire links land on an authorized page', () => {
   it('uses the seat home, the interviewer desk, or the specialist queue', () => {
     expect(authorizedLanding(routeActor('employee', { roles: [{ code: 'RECRUITER' }], permissions: ['APPLICATION_VIEW'] }))).toBe('/my-work');
-    expect(authorizedLanding(routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW'] }))).toBe('/my-work');
+    expect(authorizedLanding(routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW'] }))).toBe('/team-work');
     expect(authorizedLanding(routeActor('admin', { roles: [{ code: 'ADMINISTRATOR' }], permissions: [] }))).toBe('/users');
     expect(authorizedLanding(routeActor('employee', { roles: [{ code: 'INTERVIEWER' }], permissions: ['VACANCY_VIEW', 'INTERVIEW_PARTICIPATE'] }))).toBe('/my-interviews');
     expect(authorizedLanding(routeActor('employee', { roles: [{ code: 'FINAL_HIRING_APPROVER' }], permissions: ['FINAL_HIRING_APPROVAL'] }))).toBe('/hires/approvals/inbox');

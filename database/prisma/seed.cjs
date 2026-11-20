@@ -579,7 +579,8 @@ async function main() {
       {
         id: '10000000-0000-4000-8000-000000000011',
         email: 'hassan.ali@recruitflow.local',
-        displayName: 'Dr. Hassan Ali',
+        displayName: 'Hassan Ali',
+        jobTitle: 'Hiring Manager',
       },
       {
         id: '10000000-0000-4000-8000-000000000012',
@@ -606,6 +607,8 @@ async function main() {
           email: u.email,
           emailNormalized: u.email,
           displayName: u.displayName,
+          jobTitle: u.jobTitle ?? null,
+          branchId: branch.id,
           passwordHash: DEFAULT_PASSWORD_HASH,
         },
         create: {
@@ -614,6 +617,8 @@ async function main() {
           email: u.email,
           emailNormalized: u.email,
           displayName: u.displayName,
+          jobTitle: u.jobTitle ?? null,
+          branchId: branch.id,
           passwordHash: DEFAULT_PASSWORD_HASH,
         },
       });
@@ -937,7 +942,7 @@ async function main() {
 
     const userB = await tx.user.upsert({
       where: { id: '20000000-0000-4000-8000-000000000004' },
-      update: { passwordHash: DEFAULT_PASSWORD_HASH },
+      update: { passwordHash: DEFAULT_PASSWORD_HASH, branchId: branchB.id },
       create: {
         id: '20000000-0000-4000-8000-000000000004',
         organizationId: orgB.id,
@@ -945,6 +950,7 @@ async function main() {
         emailNormalized: 'tarek.kamal@acme-health.local',
         passwordHash: DEFAULT_PASSWORD_HASH,
         displayName: 'Tarek Kamal',
+        branchId: branchB.id,
         status: 'Active',
       },
     });

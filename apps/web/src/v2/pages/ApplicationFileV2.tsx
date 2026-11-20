@@ -25,6 +25,7 @@ import { authorizedLanding, routeActor, type RoutePolicy } from '../destinations
 import { readPipelineSourceSet } from '../api/jobs';
 import { allowedReturnDest, fileReturnTo, withReturnTo } from '../returnTarget';
 import { CandidateActivityPanel } from '../../components/candidate/CandidateActivityPanel';
+import { getInitials } from '../userIdentity';
 
 export { fileReturnTo };
 
@@ -37,13 +38,6 @@ type Load =
 
 const STAGE_LABEL: Record<string, string> = { 'Pre-Hire': 'Pre-hire' };
 const label = (s: string) => STAGE_LABEL[s] ?? s;
-function fileInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '•';
-  const first = parts[0]?.charAt(0) ?? '';
-  const second = parts.length > 1 ? (parts[parts.length - 1]?.charAt(0) ?? '') : (parts[0]?.charAt(1) ?? '');
-  return `${first}${second}`.toUpperCase();
-}
 const fmt = (iso: string, withTime = false) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -710,7 +704,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
   });
   const openDocuments = () => setParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'documents'); return n; });
   const focusNote = () => { setMoreOpen(true); setNoteSignal((n) => n + 1); };
-  const initials = fileInitials(name);
+  const initials = getInitials(name);
   const nextAppointment = [...file.interviews].filter((i) => i.status === 'Scheduled' || i.status === 'Rescheduled').sort((a, b) => a.scheduledStart.localeCompare(b.scheduledStart))[0] ?? null;
   const latestInterview = [...file.interviews].sort((a, b) => b.scheduledStart.localeCompare(a.scheduledStart))[0] ?? null;
   const interviewForMessage = nextAppointment ?? latestInterview;

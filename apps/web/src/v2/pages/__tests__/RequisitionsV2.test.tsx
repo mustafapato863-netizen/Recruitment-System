@@ -836,7 +836,7 @@ describe('Requisition summary, filters, and row actions', () => {
     expect(sub).toHaveTextContent('Information Technology · HRIS Developer');
     expect(sub).toHaveAttribute('title', 'Information Technology · HRIS Developer');
     const row = title.closest('tr')!;
-    expect(row.querySelector('.rf2-avatar')).toHaveTextContent('ZR');
+    expect(row.querySelector('.rf2-avatar')).toHaveTextContent('Z');
     expect(row.querySelector('.rf2-avatar')?.textContent).not.toMatch(/[^A-Z?]/);
     expect(row.querySelector('.rf2-reqs__tile svg')).toHaveClass('lucide-briefcase');
     const imaging = screen.getByRole('button', { name: 'Radiology Technician' });

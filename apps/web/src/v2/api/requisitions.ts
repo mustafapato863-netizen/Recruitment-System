@@ -28,6 +28,7 @@ import { getApi, patchApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
 import { domainError } from './gates';
 import { bannerError, serverFormErrors } from '../forms/serverErrors';
+import { splitPersonIdentity } from '../userIdentity';
 
 const enc = encodeURIComponent;
 export type ReqStatus = 'Draft' | 'Pending Approval' | 'Changes Requested' | 'Approved' | 'Rejected' | 'Cancelled' | 'Converted to Vacancy';
@@ -83,7 +84,8 @@ export async function fetchPeople(): Promise<Person[] | null> {
   try {
     const rows = list(await getApi<RawUser[] | { data: RawUser[] }>('/users/assignable'));
     return rows.filter((u) => (u.status ?? 'Active') === 'Active').map((u) => {
-      const person: Person = { id: u.id, name: u.displayName ?? u.name ?? 'Unnamed', detail: u.roles?.[0]?.name };
+      const identity = splitPersonIdentity(u.displayName ?? u.name ?? 'Unnamed', u.roles?.[0]?.name);
+      const person: Person = { id: u.id, name: identity.displayName, detail: identity.jobTitle ?? undefined };
       if ('managerId' in u) person.managerId = u.managerId ?? null;
       return person;
     });

@@ -29,7 +29,7 @@ beforeEach(() => { vi.clearAllMocks(); shell.value = { seat: 'admin' }; serve();
 describe('A02 Users', () => {
   it('lists users with seat, reports-to and status; inactive last; search + role filter; axe', async () => {
     const u = userEvent.setup();
-    const { container } = renderAt();
+    renderAt();
     const table = await screen.findByRole('table', { name: 'Users' });
     const rows = within(table).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(9);
@@ -43,10 +43,127 @@ describe('A02 Users', () => {
     await u.type(screen.getByLabelText('Search users'), 'noura');
     expect(within(table).getAllByRole('row')).toHaveLength(2);
     expect(within(table).queryByRole('columnheader', { name: 'Email' })).toBeNull();
-    expect(within(table).getByRole('columnheader', { name: 'Site' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Branch' })).toBeInTheDocument();
+    expect(screen.getByText('Showing 1–1 of 1 users')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reporting tree' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Invite user' })).toBeInTheDocument();
     expect(screen.getByText(/Interviewer is not a role/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).toBeNull();
+  });
+  it('keeps the users directory accessible', async () => {
+    const { container } = renderAt();
+    await screen.findByRole('table', { name: 'Users' });
     expect(await axeViolations(container)).toEqual([]);
+  });
+  it('paginates without clipping the directory rows', async () => {
+    const u = userEvent.setup();
+    serve({
+      '/users?directory=1&page=1&pageSize=100': fx.users.map((user, index) => ({
+        ...user,
+        id: `page-${index}`,
+        displayName: `Page User ${index + 1}`,
+        email: `page${index + 1}@recruitflow.app`,
+        managerId: null,
+      })).concat([
+        { ...fx.users[0], id: 'page-extra', displayName: 'Page User 10', email: 'page10@recruitflow.app', managerId: null },
+        { ...fx.users[1], id: 'page-eleven', displayName: 'Page User 11', email: 'page11@recruitflow.app', managerId: null },
+      ]),
+    });
+    renderAt();
+    const table = await screen.findByRole('table', { name: 'Users' });
+    expect(within(table).getAllByRole('row')).toHaveLength(11);
+    expect(screen.getByText('Showing 1–10 of 11 users')).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Next' }));
+    const lastPageRows = within(table).getAllByRole('row');
+    expect(lastPageRows).toHaveLength(2);
+    expect(lastPageRows[1]).toHaveTextContent('Page User');
+    expect(screen.getByText('Showing 11–11 of 11 users')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+  });
+  it('filters by branch and status and warns when an active Employee has no manager', async () => {
+    const u = userEvent.setup();
+    serve({
+      '/users?directory=1&page=1&pageSize=100': [
+        { ...fx.users[0], branchId: 'b-jeddah', branchName: 'Jeddah' },
+        { ...fx.users[6], managerId: null, branchId: 'b-cairo', branchName: 'Cairo' },
+        { ...fx.users[7], branchId: 'b-jeddah', branchName: 'Jeddah' },
+      ],
+      '/master-data/catalog/branches': [
+        { id: 'b-cairo', name: 'Cairo', status: 'Active' },
+        { id: 'b-jeddah', name: 'Jeddah', status: 'Active' },
+      ],
+    });
+    renderAt();
+    const table = await screen.findByRole('table', { name: 'Users' });
+    expect(within(table).getByText('Unassigned manager')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Branch filter')).not.toBeDisabled());
+    await u.selectOptions(screen.getByLabelText('Branch filter'), 'b-jeddah');
+    expect(within(table).getAllByRole('row')).toHaveLength(3);
+    expect(within(table).getByRole('row', { name: /Rasha Nabil/ })).toBeInTheDocument();
+    await u.selectOptions(screen.getByLabelText('Status filter'), 'Active');
+    expect(within(table).getAllByRole('row')).toHaveLength(2);
+    expect(within(table).getByRole('row', { name: /Omar Khalil/ })).toBeInTheDocument();
+    expect(screen.getByText('Showing 1–1 of 1 users')).toBeInTheDocument();
+  });
+  it('keeps unsaved role and status edits available after a failed save', async () => {
+    const u = userEvent.setup();
+    serve({
+      '/master-data/catalog/branches': [{ id: 'b-cairo', name: 'Cairo', status: 'Active' }],
+    });
+    api.patchApi.mockRejectedValueOnce(new ApiError(500, 'Server unavailable'));
+    renderAt();
+    const table = await screen.findByRole('table', { name: 'Users' });
+    await u.click(within(within(table).getByRole('row', { name: /Ahmed Fathy/ })).getByRole('button', { name: 'Edit Ahmed Fathy' }));
+    const d = await screen.findByRole('dialog', { name: 'Edit Ahmed Fathy' });
+    const role = await within(d).findByLabelText(/Role and seat/);
+    await waitFor(() => expect(within(d).getByLabelText('Branch')).not.toBeDisabled());
+    await u.selectOptions(role, 'r-hm');
+    await u.selectOptions(within(d).getByLabelText('Branch'), 'b-cairo');
+    await u.selectOptions(within(d).getByLabelText('Status'), 'Inactive');
+    await u.click(within(d).getByRole('button', { name: 'Save changes' }));
+    expect(await within(d).findByRole('alert')).toHaveTextContent('Server unavailable');
+    expect(within(d).getByLabelText(/Role and seat/)).toHaveValue('r-hm');
+    expect(within(d).getByLabelText('Status')).toHaveValue('Inactive');
+    expect(api.patchApi).toHaveBeenCalledWith('/users/u-ahmed', {
+      managerId: 'u-hala', branchId: 'b-cairo', status: 'Inactive', roleIds: ['r-hm'],
+    });
+  });
+  it('saves seat role, manager, branch, and status through one user update', async () => {
+    const u = userEvent.setup();
+    serve({
+      '/master-data/catalog/branches': [{ id: 'b-cairo', name: 'Cairo', status: 'Active' }],
+    });
+    api.patchApi.mockResolvedValue({});
+    renderAt();
+    const table = await screen.findByRole('table', { name: 'Users' });
+    await u.click(within(within(table).getByRole('row', { name: /Ahmed Fathy/ })).getByRole('button', { name: 'Edit Ahmed Fathy' }));
+    const d = await screen.findByRole('dialog', { name: 'Edit Ahmed Fathy' });
+    await u.selectOptions(await within(d).findByLabelText(/Role and seat/), 'r-hm');
+    await waitFor(() => expect(within(d).getByLabelText('Branch')).not.toBeDisabled());
+    await u.selectOptions(within(d).getByLabelText('Reports to'), 'u-karim');
+    await u.selectOptions(within(d).getByLabelText('Branch'), 'b-cairo');
+    await u.selectOptions(within(d).getByLabelText('Status'), 'Inactive');
+    await u.click(within(d).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/users/u-ahmed', {
+      managerId: 'u-karim', branchId: 'b-cairo', status: 'Inactive', roleIds: ['r-hm'],
+    }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Ahmed Fathy updated.');
+  });
+  it('guards closing the edit drawer when changes are unsaved', async () => {
+    const u = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderAt();
+    const table = await screen.findByRole('table', { name: 'Users' });
+    await u.click(within(within(table).getByRole('row', { name: /Ahmed Fathy/ })).getByRole('button', { name: 'Edit Ahmed Fathy' }));
+    const d = await screen.findByRole('dialog', { name: 'Edit Ahmed Fathy' });
+    await u.selectOptions(await within(d).findByLabelText(/Role and seat/), 'r-hm');
+    await u.click(within(d).getByRole('button', { name: 'Cancel' }));
+    expect(confirm).toHaveBeenCalledWith('Discard your unsaved user changes?');
+    expect(screen.getByRole('dialog', { name: 'Edit Ahmed Fathy' })).toBeInTheDocument();
+    confirm.mockReturnValue(true);
+    await u.click(within(d).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    confirm.mockRestore();
   });
   it('deactivate is PATCH {status:Inactive} (never DELETE), two-step confirm', async () => {
     const u = userEvent.setup();
@@ -152,7 +269,7 @@ describe('A02 Users', () => {
     await u.click(within(d).getByRole('button', { name: 'Send invitation' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/users/invitations', { displayName: 'Sara Ali', email: 'sara@recruitflow.app', roleIds: ['r-rec'] }));
   });
-  it('shows the branch name, otherwise the site, otherwise an em dash', async () => {
+  it('shows the branch name, otherwise the legacy site, otherwise an em dash', async () => {
     serve({
       '/users?directory=1&page=1&pageSize=100': [
         { ...fx.users[6], branchName: 'SGH Cairo', site: 'Ignored' },

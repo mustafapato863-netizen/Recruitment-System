@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { routeActor } from '../destinations';
-import { allowedReturn, returnFromLocation, withReturnTo } from '../returnTarget';
+import { allowedReturn, fileReturnTo, returnFromLocation, withReturnTo } from '../returnTarget';
 
 const recruiter = routeActor('employee', {
   roles: [{ code: 'RECRUITER' }],
@@ -40,6 +40,13 @@ describe('returnFromLocation', () => {
     expect(returnFromLocation('/vacancies', '?view=cards')).toBe('/vacancies?view=cards');
   });
 
+  it('returns to Team work with only supported, validated filters', () => {
+    expect(returnFromLocation('/team-work', '?tab=waiting&branch=Dubai&job=HRIS%20Developer&status=overdue&page=2&junk=1'))
+      .toBe('/team-work?tab=waiting&branch=Dubai&job=HRIS+Developer&status=overdue&page=2');
+    expect(fileReturnTo('/team-work?tab=unknown&status=closed&page=0&reassign=bad%2Fid&branch=Riyadh'))
+      .toEqual({ href: '/team-work?branch=Riyadh', kind: 'team-work' });
+  });
+
   it('drops a nested returnTo, sanitizes unknown keys, and rejects pages the file will not navigate back to', () => {
     expect(returnFromLocation('/my-work', '?day=tomorrow&returnTo=%2Fsettings')).toBe('/my-work?day=tomorrow');
     expect(returnFromLocation('/search', '?q=Ahmed&returnTo=%2Fmy-work&junk=1')).toBe('/search?q=Ahmed');
@@ -59,6 +66,9 @@ describe('allowedReturn', () => {
     expect(allowedReturn('/search?q=Ahmed', recruiter)).toBe('/search?q=Ahmed');
     expect(allowedReturn('/reports?tab=time&month=2026-09&job=v1', recruiter)).toBe('/reports?tab=time&month=2026-09&job=v1');
     expect(allowedReturn('/my-result?month=2026-09&job=v1', recruiter)).toBe('/my-result?month=2026-09&job=v1');
+    const manager = routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW'] });
+    expect(allowedReturn('/team-work?tab=waiting&status=overdue', manager)).toBe('/team-work?tab=waiting&status=overdue');
+    expect(allowedReturn('/team-work', routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: [] }))).toBeNull();
     expect(allowedReturn('/cv-bank?search=Alex&page=2&junk=discard', recruiter)).toBe('/cv-bank?search=Alex&page=2');
     expect(allowedReturn('/cv-bank?search=Alex', noCandidates)).toBeNull();
     expect(allowedReturn('/cv-bank?search=Alex', interviewer)).toBeNull();

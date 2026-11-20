@@ -8,7 +8,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
 import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequirePermissions, RequireAdmin } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 
@@ -66,6 +66,7 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @RequireAdmin()
   @RequirePermissions('USERS_MANAGE')
   @AuditAction('USER_UPDATE')
   @UseGuards(TenantScopedGuard)

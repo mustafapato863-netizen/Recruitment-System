@@ -2,7 +2,7 @@ import type { Seat } from '../../../v2/seat';
 
 export type NavIconName =
   | 'my-work' | 'jobs' | 'candidates' | 'interviews' | 'my-interviews'
-  | 'team' | 'requisitions' | 'approvals' | 'result'
+  | 'team' | 'requisitions' | 'approvals' | 'joinings' | 'result'
   | 'users' | 'roles' | 'licenses' | 'pipeline' | 'master-data' | 'templates' | 'reports' | 'audit' | 'integrations' | 'classic';
 
 export type AdminNavGroup =
@@ -55,9 +55,12 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
     heading: 'Manager workspace',
     searchPlaceholder: 'Search candidates and jobs',
     items: [
-      { key: 'team-work', label: 'Team work', to: '/my-work', icon: 'team' },
+      { key: 'team-work', label: 'Team work', to: '/team-work', icon: 'team', requires: ['APPLICATION_VIEW'] },
+      { key: 'my-work', label: 'My Work', to: '/my-work', icon: 'my-work', requires: ['APPLICATION_VIEW'] },
       { key: 'requisitions', label: 'Requisitions', to: '/vacancy-requests', icon: 'requisitions', requires: ['VACANCY_REQUEST_VIEW'], notForRecruiter: true },
-      { key: 'approvals', label: 'Approvals', to: '/approvals', icon: 'approvals' },
+      { key: 'approvals', label: 'Approvals', to: '/approvals', icon: 'approvals', requires: ['APPLICATION_VIEW'] },
+      { key: 'open-jobs', label: 'Open jobs', to: '/vacancies', icon: 'jobs', requires: ['VACANCY_VIEW'] },
+      { key: 'joinings', label: 'Joining', to: '/joinings', icon: 'joinings', requires: ['APPLICATION_VIEW'] },
       { key: 'interviews', label: 'Interviews', to: '/team-interviews', icon: 'interviews', requires: ['VACANCY_VIEW'] },
       { key: 'my-interviews', label: 'My interviews', to: '/my-interviews', icon: 'my-interviews', requires: ['VACANCY_VIEW'], interviewerOnly: true },
       { key: 'team-result', label: 'Team result', to: '/reports', icon: 'result', requires: ['APPLICATION_VIEW'] },
@@ -67,9 +70,7 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
     heading: 'Admin workspace',
     searchPlaceholder: 'Search users and settings',
     items: [
-      { key: 'users', label: 'Users', to: '/users', icon: 'users', group: 'Users & Access', requires: ['USERS_VIEW'] },
-      { key: 'roles', label: 'Roles', to: '/roles', icon: 'roles', group: 'Users & Access', requires: ['ROLES_VIEW'] },
-      { key: 'license-seats', label: 'Licences & seats', to: '/licenses', icon: 'licenses', group: 'Users & Access', requires: ['USERS_VIEW'] },
+      { key: 'users-access', label: 'Users & Access', to: '/users', icon: 'users', group: 'Users & Access', requiresAny: ['USERS_VIEW', 'ROLES_VIEW'] },
       { key: 'pipeline', label: 'Pipeline template', to: '/pipeline-settings', icon: 'pipeline', group: 'Recruitment Setup', requires: ['MASTER_DATA_VIEW'] },
       { key: 'master-data', label: 'Master data', to: '/master-data', icon: 'master-data', group: 'Organization', requires: ['MASTER_DATA_VIEW'] },
       { key: 'templates', label: 'WhatsApp templates', to: '/whatsapp-templates', icon: 'templates', group: 'Recruitment Setup', requiresAny: ['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW'] },
@@ -187,7 +188,8 @@ export function activeNavKey(items: SeatNavItem[], pathname: string, hash = ''):
   let best: SeatNavItem | undefined;
   for (const item of items) {
     const [path, frag] = item.to.split('#');
-    const matches = pathname === path || pathname.startsWith(`${path}/`);
+    const matches = pathname === path || pathname.startsWith(`${path}/`)
+      || (item.group === 'Users & Access' && ADMIN_GROUP_ROUTES.some((entry) => entry.group === item.group && (pathname === entry.to || pathname.startsWith(`${entry.to}/`))));
     if (!matches) continue;
     if (frag ? hash !== `#${frag}` : hash && items.some((i) => i.to === `${path}${hash}`)) continue;
     if (!best || path.length > best.to.split('#')[0].length) best = item;

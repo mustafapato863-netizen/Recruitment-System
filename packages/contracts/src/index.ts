@@ -613,6 +613,10 @@ export interface UserRecord {
   email: string;
   displayName: string;
   jobTitle?: string | null;
+  branchId: string | null;
+  branch: { id: string; name: string } | null;
+  /** Effective V2 seat inferred from assigned roles and direct reports. */
+  seat: 'employee' | 'manager' | 'admin';
   status: string;
   organizationId: string;
   /** Direct manager (reports-to) link; null means top of the reporting tree. */
@@ -629,12 +633,17 @@ export interface CreateUserInput {
   password: string;
   roles?: string[];
   jobTitle?: string | null;
+  branchId?: string | null;
 }
 
 export interface UpdateUserInput {
   displayName?: string;
   jobTitle?: string | null;
   status?: string;
+  /** Assign or clear the user's organization branch. */
+  branchId?: string | null;
+  /** Replace all assigned roles atomically (admin only). */
+  roleIds?: string[];
   /** Set the reports-to manager (admin only); null clears the link. */
   managerId?: string | null;
 }

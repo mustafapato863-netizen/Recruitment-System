@@ -7,8 +7,7 @@ import { findExistingFile, isApplicationExists } from '../api/applicationExists'
 import { addToJob, canAdd, fetchSuggestions, matchErrorFromError, sourceLabel, type Suggestion, type SuggestionsResponse } from '../api/matching';
 import { jobTitle, type JobDetail } from '../api/jobs';
 import { formatDay } from '../pages/OpenJobsV2';
-
-const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
+import { getInitials } from '../userIdentity';
 
 /** E10 Suggest from bank (B6 #13): evidence lines, never a score. Add to this job; select 2–4 to compare (E24). */
 export function SuggestDrawer({ job, accepting, onClose, onAdded }: { job: JobDetail; accepting: boolean; onClose: () => void; onAdded: () => void }) {
@@ -65,7 +64,7 @@ export function SuggestDrawer({ job, accepting, onClose, onAdded }: { job: JobDe
                   <li key={s.candidate.id} className="rf2-sugg__card">
                     <div className="rf2-sugg__top">
                       <input type="checkbox" aria-label={`Select ${s.candidate.name} to compare`} checked={picked.includes(s.candidate.id)} disabled={!picked.includes(s.candidate.id) && picked.length >= 4} onChange={() => toggle(s.candidate.id)} />
-                      <span className="rf2-kcard__avatar" aria-hidden="true">{initials(s.candidate.name)}</span>
+                      <span className="rf2-kcard__avatar" aria-hidden="true">{getInitials(s.candidate.name)}</span>
                       <div className="rf2-sugg__who"><p className="rf2-jtable__name">{s.candidate.name}</p>{!canAdd(s) ? <span className="rf2-sr-only"> Already on this job{s.stage ? ` in ${s.stage}` : ''}; cannot be added again.</span> : null}<p className="rf2-jtable__sub">{[s.candidate.code, s.candidate.currentTitle, s.candidate.location].filter(Boolean).join(' · ')}</p></div>
                       {s.candidate.id in onJob ? (onJob[s.candidate.id]
                         ? <Link className="rf2-link" to={withReturnTo(`/applications/${encodeURIComponent(onJob[s.candidate.id] as string)}`, pageReturn)} data-testid="application-exists">Already on this job · open the file</Link>

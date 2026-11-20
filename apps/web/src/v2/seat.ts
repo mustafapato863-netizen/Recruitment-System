@@ -77,3 +77,14 @@ export function resolveSeat(me: MeLike | null | undefined): Seat {
   }
   return seat;
 }
+
+export function availableWorkspaceSeats(me: MeLike | null | undefined): Seat[] {
+  const primary = resolveSeat(me);
+  if (primary === 'admin') return [...SEATS];
+  const available = new Set<Seat>(['employee', primary]);
+  for (const role of me?.roles ?? []) {
+    const mapped = PROVISIONAL_ROLE_SEATS[String(role?.code ?? '').trim().toUpperCase()];
+    if (mapped) available.add(mapped);
+  }
+  return SEATS.filter((seat) => available.has(seat));
+}

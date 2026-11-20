@@ -35,6 +35,10 @@ function serve(scenario: Scenario, extra: Record<string, unknown> = {}) {
   });
 }
 
+function requestedPaths() {
+  return api.getApi.mock.calls.map(([path]) => path).filter((path) => path !== '/applications/a1/ats-match');
+}
+
 async function openMore(user: ReturnType<typeof userEvent.setup>) {
   const more = screen.getByRole('button', { name: 'More actions' });
   if (more.getAttribute('aria-expanded') !== 'true') await user.click(more);
@@ -105,7 +109,7 @@ describe('partial application file', () => {
     expect(await screen.findByRole('button', { name: 'Log screen' })).toBeEnabled();
     expect(screen.getByText('Documents is not available for this role.')).toBeInTheDocument();
     expect(note).toHaveValue('Keep this draft');
-    expect(api.getApi.mock.calls.map(([path]) => path)).toEqual(['/screening/application/a1']);
+    expect(requestedPaths()).toEqual(['/screening/application/a1']);
     expect(api.postApi).not.toHaveBeenCalled();
     expect(api.patchApi).not.toHaveBeenCalled();
     expect(api.putApi).not.toHaveBeenCalled();
@@ -404,7 +408,7 @@ describe('partial application file', () => {
     await user.click(screen.getByRole('button', { name: 'Retry interviews' }));
     expect(await screen.findByRole('button', { name: 'Schedule interview' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Action unavailable' })).not.toBeInTheDocument();
-    expect(api.getApi.mock.calls.map(([path]) => path)).toEqual(['/interviews?applicationId=a1']);
+    expect(api.getApi.mock.calls.map(([path]) => path).filter((path) => path.startsWith('/interviews'))).toEqual(['/interviews?applicationId=a1']);
     emptyRecovery.unmount();
 
     serve('scored', { '/interviews': new ApiError(500, 'Interviews could not be listed.') });
@@ -416,7 +420,7 @@ describe('partial application file', () => {
     expect(await screen.findByRole('button', { name: 'Draft offer' })).toBeEnabled();
     expect(within(screen.getByRole('list', { name: 'Gate to Offer' })).getByText(/Scorecard submitted/).closest('li')).toHaveAttribute('data-ok', 'true');
     expect(screen.getByRole('list', { name: 'Interviews' })).toHaveTextContent('1 scorecard submitted');
-    expect(api.getApi.mock.calls.map(([path]) => path)).toEqual(['/interviews?applicationId=a1', '/interviews/iv1/scorecard']);
+    expect(api.getApi.mock.calls.map(([path]) => path).filter((path) => path.startsWith('/interviews'))).toEqual(['/interviews?applicationId=a1', '/interviews/iv1/scorecard']);
   });
 
   it('shows failed-section blocker and targeted retry for manager view without exposing owner actions or hiding offer review', async () => {
@@ -442,7 +446,7 @@ describe('partial application file', () => {
     await user.click(screen.getByRole('button', { name: 'Retry the offer' }));
     expect(await screen.findByRole('button', { name: 'Review offer' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Action unavailable' })).not.toBeInTheDocument();
-    expect(api.getApi.mock.calls.map(([path]) => path)).toEqual(['/offers?applicationId=a1', '/offers/o1']);
+    expect(requestedPaths()).toEqual(['/offers?applicationId=a1', '/offers/o1']);
     blockedManager.unmount();
 
     const pendingOffer = fileResponses('offer-pending')['/offers/o1'];
@@ -466,7 +470,7 @@ describe('partial application file', () => {
     await user.click(screen.getByRole('button', { name: 'Retry hiring' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Action unavailable' })).not.toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Review offer' })).toBeEnabled();
-    expect(api.getApi.mock.calls.map(([path]) => path)).toEqual(['/hiring?applicationId=a1']);
+    expect(requestedPaths()).toEqual(['/hiring?applicationId=a1']);
     blockedWithOffer.unmount();
 
     serve('offer-pending', { '/screening/application/a1': new ApiError(500, 'Screening timed out.') });
@@ -485,7 +489,7 @@ describe('partial application file', () => {
     await user.click(screen.getByRole('button', { name: 'Retry screening' }));
     expect(await screen.findByText('Notice: 30 days')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Review offer' })).toBeEnabled();
-    expect(api.getApi.mock.calls.map(([path]) => path)).toEqual(['/screening/application/a1']);
+    expect(requestedPaths()).toEqual(['/screening/application/a1']);
   });
 
   it('connects document history retry, loading, error, and request controls to the parent documents section', async () => {
@@ -509,7 +513,7 @@ describe('partial application file', () => {
     expect(await screen.findByText(/File stored · Version 2/)).toBeInTheDocument();
     expect(screen.getByText(/Passport requested/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Request this document' })).toBeEnabled();
-    expect(api.getApi.mock.calls.map(([path]) => path)).toEqual(['/applications/a1/documents', '/applications/a1/document-history']);
+    expect(requestedPaths()).toEqual(['/applications/a1/documents', '/applications/a1/document-history']);
     parentFailed.unmount();
 
     serve('interview', { '/applications/a1/document-history': new ApiError(500, 'History down.') });
@@ -527,7 +531,7 @@ describe('partial application file', () => {
     await user.click(screen.getByRole('button', { name: 'Retry documents' }));
     expect(await screen.findByText(/File stored · Version 3/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Request this document' })).toBeEnabled();
-    expect(api.getApi.mock.calls.map(([path]) => path)).toEqual(['/applications/a1/document-history']);
+    expect(requestedPaths()).toEqual(['/applications/a1/document-history']);
     historyFailed.unmount();
 
     serve('interview', { '/applications/a1/documents': new ApiError(403, 'Forbidden') });
@@ -557,7 +561,7 @@ describe('partial application file', () => {
     await user.click(screen.getByRole('button', { name: 'Retry documents' }));
     expect(await screen.findByText('No documents yet.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Request this document' })).toBeEnabled();
-    expect(api.getApi.mock.calls.map(([path]) => path)).toEqual(['/applications/a1/document-history']);
+    expect(requestedPaths()).toEqual(['/applications/a1/document-history']);
     emptyParent404.unmount();
 
     serve('interview', {
@@ -673,7 +677,7 @@ describe('partial application file', () => {
     expect(await screen.findByText("Waiting on Karim Hassan's scorecard")).toBeInTheDocument();
     await openMore(user);
     expect(screen.getByRole('button', { name: 'Scorecard' })).toBeEnabled();
-    expect(api.getApi.mock.calls.map(([path]) => path)).toEqual(['/interviews/iv1/scorecard']);
+    expect(requestedPaths()).toEqual(['/interviews/iv1/scorecard']);
     view.unmount();
 
     serve('interview', {

@@ -84,7 +84,9 @@ describe('B2: owner block on user deactivation', () => {
       vacancy: { count: vi.fn().mockResolvedValue(j) },
       vacancyRequest: { count: vi.fn().mockResolvedValue(r) },
       user: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      $transaction: vi.fn(),
     };
+    prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
     const service = new UsersService(prisma as never, {} as never, {} as never);
     vi.spyOn(service, 'getById').mockResolvedValue({} as never);
     return { service, prisma };

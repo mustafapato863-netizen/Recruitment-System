@@ -14,6 +14,7 @@ import {
   type AssignablePerson, type BoardApplication, type BoardStage, type JobBoard, type JobDetail,
 } from '../api/jobs';
 import { GATE_COPY, type GateCode } from '../api/gates';
+import { getInitials } from '../userIdentity';
 import { JobStatusDrawer } from '../drawers/JobStatusDrawer';
 import { ImportCvsDrawer } from '../drawers/ImportCvsDrawer';
 import { SuggestDrawer } from '../drawers/SuggestDrawer';
@@ -37,7 +38,6 @@ export function formatSlot(startAt: string, endAt: string): string {
   const t = (d: Date) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
   return `${day}, ${t(s)}${Number.isNaN(e.getTime()) ? '' : `–${t(e)}`}`;
 }
-const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
 function cardRole(app: BoardApplication): string | null {
   const title = app.candidate?.currentTitle?.trim();
   return title || null;
@@ -370,7 +370,7 @@ function CardFace({ app }: { app: BoardApplication }) {
     <article className="rf2-kcard" aria-hidden="true">
       <CardTag app={app} />
       <div className="rf2-kcard__top">
-        <span className="rf2-kcard__avatar">{initials(name)}</span>
+        <span className="rf2-kcard__avatar">{getInitials(name)}</span>
         <span className="rf2-kcard__who"><span className="rf2-kcard__name">{name}</span>{cardRole(app) ? <span className="rf2-kcard__role">{cardRole(app)}</span> : null}</span>
       </div>
       <CardSignals app={app} preview />
@@ -434,7 +434,7 @@ function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDet
       <CardTag app={app} />
       <div className="rf2-kcard__top">
         <KanbanItemHandle asChild>
-          <span className="rf2-kcard__avatar" aria-label={`Drag ${name}`}>{initials(name)}</span>
+          <span className="rf2-kcard__avatar" aria-label={`Drag ${name}`}>{getInitials(name)}</span>
         </KanbanItemHandle>
         <div className="rf2-kcard__who">
           <Link className="rf2-kcard__name" to={withReturnTo(`/applications/${encodeURIComponent(app.id)}`, pageReturn)}>{name}</Link>

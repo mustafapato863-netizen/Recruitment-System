@@ -9,9 +9,10 @@ import * as bcrypt from 'bcryptjs';
 import type { UserRecord } from '@recruitflow/contracts';
 import type { Prisma } from '@recruitflow/database';
 import { reportIds } from './reporting-scope';
+import { normalizeUserIdentity } from '../common/user-name-normalization';
 
 type UserWithRoles = Prisma.UserGetPayload<{
-  include: { userRoles: { include: { role: true } } };
+  include: { userRoles: { include: { role: true } }; branch: true; directReports: { select: { id: true } } };
 }>;
 
 @Injectable()
@@ -26,6 +27,8 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       where: directory ? { organizationId } : { organizationId, status: 'Active' },
       include: {
+        branch: true,
+        directReports: { select: { id: true } },
         userRoles: {
           include: { role: true },
         },
@@ -33,13 +36,17 @@ export class UsersService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return users.map((user) => this.toUserRecord(user));
+    return users
+      .filter((user) => !this.isAutomatedFixtureRecord(user))
+      .map((user) => this.toUserRecord(user));
   }
 
   async getById(organizationId: string, id: string): Promise<UserRecord> {
     const user = await this.prisma.user.findFirst({
       where: { id, organizationId },
       include: {
+        branch: true,
+        directReports: { select: { id: true } },
         userRoles: {
           include: { role: true },
         },
@@ -54,6 +61,9 @@ export class UsersService {
   }
 
   async create(organizationId: string, data: CreateUserDto): Promise<UserRecord> {
+    const branchId = data.branchId === undefined || data.branchId === null
+      ? null
+      : await this.resolveBranchId(organizationId, data.branchId);
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(data.password, salt);
     const requestedRoles = Array.from(new Set((data.roles || []).map((role) => role.trim().toUpperCase()).filter(Boolean)));
@@ -77,11 +87,14 @@ export class UsersService {
         emailNormalized: data.email.toLowerCase(),
         displayName: data.displayName,
         jobTitle: data.jobTitle?.trim() || null,
+        branchId,
         passwordHash,
         organizationId,
         status: 'Active',
       },
       include: {
+        branch: true,
+        directReports: { select: { id: true } },
         userRoles: {
           include: { role: true },
         },
@@ -99,7 +112,8 @@ export class UsersService {
   }
 
   async update(organizationId: string, id: string, data: UpdateUserDto): Promise<UserRecord> {
-    const updateData: { displayName?: string; jobTitle?: string | null; status?: string; managerId?: string | null } = {};
+    await this.getById(organizationId, id);
+    const updateData: { displayName?: string; jobTitle?: string | null; status?: string; managerId?: string | null; branchId?: string | null } = {};
     if (data.displayName !== undefined) updateData.displayName = data.displayName;
     if (data.jobTitle !== undefined) updateData.jobTitle = data.jobTitle?.trim() || null;
     if (data.status !== undefined) {
@@ -109,15 +123,35 @@ export class UsersService {
     if (data.managerId !== undefined) {
       updateData.managerId = await this.resolveManagerId(organizationId, id, data.managerId);
     }
-
-    const result = await this.prisma.user.updateMany({
-      where: { id, organizationId },
-      data: updateData,
-    });
-
-    if (result.count !== 1) {
-      throw new NotFoundException('User not found');
+    if (data.branchId !== undefined) {
+      updateData.branchId = data.branchId === null ? null : await this.resolveBranchId(organizationId, data.branchId);
     }
+
+    let roleIds: string[] | null = null;
+    if (data.roleIds !== undefined) {
+      roleIds = await this.resolveRoleIds(organizationId, data.roleIds);
+    }
+
+    const applyUpdate = async (tx: Prisma.TransactionClient) => {
+      if (Object.keys(updateData).length > 0) {
+        const result = await tx.user.updateMany({
+          where: { id, organizationId },
+          data: updateData,
+        });
+        if (result.count !== 1) throw new NotFoundException('User not found');
+      }
+      if (roleIds !== null) {
+        await tx.userRole.deleteMany({ where: { userId: id } });
+        if (roleIds.length > 0) {
+          await tx.userRole.createMany({
+            data: roleIds.map((roleId) => ({ userId: id, roleId })),
+            skipDuplicates: true,
+          });
+        }
+      }
+    };
+
+    await this.prisma.$transaction(applyUpdate);
 
     return this.getById(organizationId, id);
   }
@@ -171,6 +205,8 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       where: { organizationId, status: 'Active' },
       include: {
+        branch: true,
+        directReports: { select: { id: true } },
         userRoles: {
           include: { role: true },
         },
@@ -179,7 +215,43 @@ export class UsersService {
     });
     const allowed = reportIds(users, userId);
 
-    return users.filter((user) => allowed.has(user.id)).map((user) => this.toUserRecord(user));
+    return users
+      .filter((user) => allowed.has(user.id) && !this.isAutomatedFixtureRecord(user))
+      .map((user) => this.toUserRecord(user));
+  }
+
+  private async resolveBranchId(organizationId: string, branchId: string): Promise<string> {
+    const branch = await this.prisma.branch.findFirst({
+      where: { id: branchId, organizationId },
+      select: { id: true },
+    });
+    if (!branch) {
+      throw new BadRequestException('The selected branch is not in this organization.');
+    }
+    return branch.id;
+  }
+
+  private async resolveRoleIds(organizationId: string, roleIds: string[]): Promise<string[]> {
+    const uniqueIds = Array.from(new Set(roleIds));
+    if (uniqueIds.length === 0) return [];
+    const roles = await this.prisma.role.findMany({
+      where: {
+        id: { in: uniqueIds },
+        status: 'Active',
+        OR: [{ organizationId: null }, { organizationId }],
+      },
+      select: { id: true },
+    });
+    if (roles.length !== uniqueIds.length) {
+      throw new BadRequestException('One or more roles are inactive or unavailable for this organization.');
+    }
+    return roles.map((role) => role.id);
+  }
+
+  private isAutomatedFixtureRecord(user: { displayName: string; email: string; emailNormalized?: string | null }): boolean {
+    const email = (user.emailNormalized ?? user.email).trim().toLowerCase();
+    return user.displayName.trim().toLowerCase() === 'r8 admin'
+      || email.endsWith('@t.test');
   }
 
   /**
@@ -215,11 +287,21 @@ export class UsersService {
   }
 
   private toUserRecord(user: UserWithRoles): UserRecord {
+    const identity = normalizeUserIdentity(user.displayName, user.jobTitle);
+    const roleCodes = (user.userRoles || []).map((ur) => ur.role.code);
+    const seat: 'employee' | 'manager' | 'admin' = roleCodes.includes('ADMINISTRATOR')
+      ? 'admin'
+      : roleCodes.includes('HIRING_MANAGER') || (user.directReports?.length ?? 0) > 0
+        ? 'manager'
+        : 'employee';
     return {
       id: user.id,
       email: user.email,
-      displayName: user.displayName,
-      jobTitle: user.jobTitle,
+      displayName: identity.displayName,
+      jobTitle: identity.jobTitle,
+      branchId: user.branchId ?? null,
+      branch: user.branch ? { id: user.branch.id, name: user.branch.name } : null,
+      seat,
       status: user.status,
       organizationId: user.organizationId,
       managerId: user.managerId ?? null,

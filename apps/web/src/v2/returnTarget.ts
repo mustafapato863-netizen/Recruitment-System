@@ -3,7 +3,7 @@ import { canOpenRoute, v2Redirect, type RoutePolicy } from './destinations';
 
 export type ReturnDest = {
   href: string;
-  kind: 'candidates' | 'compare' | 'my-work' | 'vacancy' | 'notifications' | 'search' | 'cv-bank' | 'import' | 'reports' | 'my-result' | 'admin';
+  kind: 'candidates' | 'compare' | 'my-work' | 'team-work' | 'vacancy' | 'notifications' | 'search' | 'cv-bank' | 'import' | 'reports' | 'my-result' | 'admin';
   vacancyId?: string;
 };
 
@@ -178,6 +178,7 @@ function sanitizeGeneralQuery(queryParams: URLSearchParams): string {
 }
 
 const OPEN_JOBS_STATUSES = new Set(['open', 'hold', 'done', 'all']);
+const TEAM_WORK_QUERY_KEYS = new Set(['tab', 'branch', 'job', 'status', 'page', 'person', 'recruiter', 'rtab', 'rq', 'rstage', 'workload', 'reassign', 'file', 'handoff', 'reassignJob', 'approval', 'offer', 'kind']);
 const REPORT_QUERY_KEYS = new Set(['tab', 'month', 'period', 'week', 'site', 'job', 'stage', 'source', 'kind', 'measure', 'report', 'override']);
 const ADMIN_RETURN_PATHS = new Set(['/users', '/roles', '/pipeline-settings', '/master-data', '/whatsapp-templates', '/audit-log', '/integrations']);
 const ADMIN_QUERY_KEYS = new Set(['user', 'drawer', 'focus', 'q', 'seat', 'role', 'section', 'tab', 'period', 'who', 'area', 'page', 'kind']);
@@ -221,7 +222,25 @@ function sanitizeOpenJobsQuery(queryParams: URLSearchParams): string | null {
   return query ? `/vacancies?${query}` : null;
 }
 
-/** Same-origin relative return targets only: /candidates, /candidates/compare, /my-work, /notifications, /search, /cv-bank, /import, /import/:dataset/:jobId, /vacancies, or /vacancies/:id, with sanitized query. */
+function sanitizeTeamWorkQuery(queryParams: URLSearchParams): string {
+  const params = new URLSearchParams();
+  for (const [key, raw] of queryParams.entries()) {
+    const value = raw.trim();
+    if (!TEAM_WORK_QUERY_KEYS.has(key) || !value || params.has(key)) continue;
+    if (key === 'tab' && !['members', 'waiting', 'activity', 'items'].includes(value)) continue;
+    if (key === 'status' && value !== 'overdue') continue;
+    if (key === 'page' && !/^[1-9]\d{0,3}$/.test(value)) continue;
+    if (key === 'rtab' && !['open', 'overdue', 'assignments', 'activity'].includes(value)) continue;
+    if (key === 'kind' && !['offers', 'scorecards'].includes(value)) continue;
+    if (key === 'handoff' && !['job', 'pick'].includes(value)) continue;
+    if (['person', 'recruiter', 'workload', 'reassign', 'file', 'reassignJob', 'approval', 'offer'].includes(key) && !TOKEN.test(value)) continue;
+    params.set(key, value);
+  }
+  const query = params.toString();
+  return query ? `/team-work?${query}` : '/team-work';
+}
+
+/** Same-origin relative return targets only: /candidates, /candidates/compare, /my-work, /team-work, /notifications, /search, /cv-bank, /import, /import/:dataset/:jobId, /vacancies, or /vacancies/:id, with sanitized query. */
 export function fileReturnTo(raw: string | null | undefined): ReturnDest | null {
   if (raw == null || typeof raw !== 'string') return null;
   const value = raw.trim();
@@ -285,6 +304,7 @@ export function fileReturnTo(raw: string | null | undefined): ReturnDest | null 
     return { href: `/search?${encodePair('q', q)}`, kind: 'search' };
   }
   if (path === '/my-work') return { href: `/my-work${sanitizeGeneralQuery(queryParams)}`, kind: 'my-work' };
+  if (path === '/team-work') return { href: sanitizeTeamWorkQuery(queryParams), kind: 'team-work' };
   if (path === '/reports') return { href: `/reports${sanitizeReportsQuery(queryParams)}`, kind: 'reports' };
   if (path === '/my-result') return { href: `/my-result${sanitizeReportsQuery(queryParams)}`, kind: 'my-result' };
   if (path === '/notifications') return { href: `/notifications${sanitizeGeneralQuery(queryParams)}`, kind: 'notifications' };

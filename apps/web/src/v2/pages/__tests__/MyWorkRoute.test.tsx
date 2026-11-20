@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 const shell = vi.hoisted(() => ({ value: null as null | { seat: string } }));
 vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => shell.value }));
 vi.mock('../MyWorkV2', () => ({ MyWorkV2: () => <p>v2 my work</p> }));
-vi.mock('../TeamWorkV2', () => ({ TeamWorkV2: () => <p>v2 team work</p> }));
 import { MyWorkRoute } from '../MyWorkRoute';
 
 const r = () => render(<MemoryRouter><Suspense fallback="…"><MyWorkRoute /></Suspense></MemoryRouter>);
@@ -16,9 +15,9 @@ describe('MyWorkRoute', () => {
     shell.value = null; r();
     expect(screen.getByText('v2 my work')).toBeInTheDocument();
   });
-  it('v2 Team work for the Manager seat (M2)', () => {
+  it('keeps /my-work as the manager’s individual work view', () => {
     shell.value = { seat: 'manager' }; r();
-    expect(screen.getByText('v2 team work')).toBeInTheDocument();
+    expect(screen.getByText('v2 my work')).toBeInTheDocument();
   });
   it('never a v1 page (Admin is redirected to /users by the shell before this renders)', () => {
     shell.value = { seat: 'admin' }; r();

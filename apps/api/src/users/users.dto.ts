@@ -25,6 +25,10 @@ export class CreateUserDto implements CreateUserInput {
   @IsArray()
   @IsString({ each: true })
   roles?: string[];
+
+  @IsOptional()
+  @IsUUID()
+  branchId?: string | null;
 }
 
 export class UpdateUserDto implements UpdateUserInput {
@@ -46,6 +50,15 @@ export class UpdateUserDto implements UpdateUserInput {
   @IsOptional()
   @IsUUID()
   managerId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  branchId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  roleIds?: string[];
 }
 
 export class CreateInvitationDto implements CreateInvitationInput {

@@ -40,18 +40,12 @@ import {
 import { compareCandidatesReturn, parseCompareIds, usePageReturn, withReturnTo } from '../returnTarget';
 import { fetchOpenJobs, jobTitle, type JobDetail } from '../api/jobs';
 import { fetchAllPages } from '../api/paged';
+import { getInitials } from '../userIdentity';
 import { formatDay } from './OpenJobsV2';
 import './jobs.css';
 import './compare-skills.css';
 
 type App = { id: string; candidateId: string; stage: string; source?: string | null };
-const initials = (n: string) =>
-  n
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('');
 
 function infoText(key: 'notice-period' | 'fit-note', cell?: CompareInfoCell) {
   if (!cell || cell.value === null || cell.value === '') return <p className="rf2-jtable__sub">Not recorded.</p>;
@@ -477,7 +471,7 @@ function LegacyE24CompareV2() {
                   <th scope="col" key={c.id}>
                     <div className="rf2-kcard__top">
                       <span className="rf2-kcard__avatar" aria-hidden="true">
-                        {initials(c.name)}
+                        {getInitials(c.name)}
                       </span>
                       <span className="rf2-jtable__name">{c.name}</span>
                     </div>
@@ -990,7 +984,7 @@ function CompareCandidatesStudio() {
                 className={`rf2-cstudio__chip-avatar rf2-cstudio__avatar--${cand.avatarTone}`}
                 aria-hidden="true"
               >
-                {initials(cand.name)}
+                {getInitials(cand.name)}
               </span>
               <span>{cand.name}</span>
               <button
@@ -1065,7 +1059,7 @@ function CompareCandidatesStudio() {
                             className={`rf2-cstudio__cand-avatar rf2-cstudio__avatar--${cand.avatarTone}`}
                             aria-hidden="true"
                           >
-                            {initials(cand.name)}
+                            {getInitials(cand.name)}
                           </span>
                           <div className="rf2-cstudio__cand-info">
                             <div className="rf2-cstudio__cand-name-row">

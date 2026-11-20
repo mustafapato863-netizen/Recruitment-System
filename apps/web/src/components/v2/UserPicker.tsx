@@ -3,6 +3,7 @@ import { ChevronDown, LoaderCircle, X } from 'lucide-react';
 import type { UserRecord } from '@recruitflow/contracts';
 import { getApi } from '@/api/client';
 import { cn } from '@/lib/utils';
+import { getInitials, splitPersonIdentity } from '../../v2/userIdentity';
 
 /** What the picker shows. Deliberately no pay or salary fields. */
 export interface UserOption {
@@ -17,17 +18,13 @@ export interface UserPickerAdapter {
   search: (query: string, signal: AbortSignal) => Promise<UserOption[]>;
 }
 
-/** First letter of the first two words, after every non-letter is stripped. "Zenah (Recruiter)" → ZR. */
-export function initials(name: string): string {
-  const words = name.trim().split(/\s+/).map((word) => word.replace(/[^\p{L}]/gu, '')).filter(Boolean);
-  if (words.length === 0) return '?';
-  return words.slice(0, 2).map((word) => word[0]!.toUpperCase()).join('');
-}
+export const initials = getInitials;
 
 /** Maps the API UserRecord to a picker option. Only id, name, role/job title. */
 export function toUserOption(u: Pick<UserRecord, 'id' | 'displayName' | 'email' | 'jobTitle' | 'roles'>): UserOption {
-  const detail = u.jobTitle?.trim() || u.roles?.[0]?.name || undefined;
-  return { id: u.id, name: u.displayName?.trim() || u.email, detail };
+  const identity = splitPersonIdentity(u.displayName?.trim() || u.email, u.jobTitle);
+  const detail = identity.jobTitle || u.roles?.[0]?.name || undefined;
+  return { id: u.id, name: identity.displayName, detail };
 }
 
 /**

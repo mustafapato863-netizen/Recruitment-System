@@ -8,6 +8,7 @@ import {
   requirementCleared,
 } from '../../components/candidate/JoiningChecklist';
 import { OnboardingChecklistDrawer, type OnboardingCase } from '../drawers/OnboardingChecklistDrawer';
+import { getInitials } from '../userIdentity';
 import './jobs.css';
 import './team.css';
 
@@ -32,14 +33,6 @@ const statusTone = (status: string): 'info' | 'success' | 'warning' | 'danger' =
       return 'info';
   }
 };
-
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
 
 export function JoiningV2() {
   const [params, setParams] = useSearchParams();
@@ -271,7 +264,7 @@ export function JoiningV2() {
                   <tr key={item.id}>
                     <td>
                       <div className="rf2-intv-mgr__cand">
-                        <span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{initials(item.candidateName)}</span>
+                        <span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{getInitials(item.candidateName)}</span>
                         <span className="rf2-jtable__name">{item.candidateName}</span>
                       </div>
                     </td>

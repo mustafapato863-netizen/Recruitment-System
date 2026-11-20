@@ -4,6 +4,7 @@ import { CalendarDays, CircleAlert, CircleCheck, Download, Info, RotateCw, Users
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { getApi } from '../../api/client';
 import { downloadErrorMessage, downloadIcs, listMyInterviews, type MyInterview } from '../../api/myInterviews';
+import { getInitials } from '../userIdentity';
 import './jobs.css';
 import './team.css';
 
@@ -25,7 +26,6 @@ interface Row {
 }
 
 const CAIRO = 'Africa/Cairo';
-const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('');
 const clock = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: CAIRO, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso));
 const statusTone = (status: string): 'danger' | 'success' | 'info' => (status === 'Cancelled' || status === 'No-show' ? 'danger' : status === 'Completed' ? 'success' : 'info');
 const dayKey = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: CAIRO, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
@@ -238,7 +238,7 @@ export function TeamInterviewsV2() {
                   {rows.map((row) => (
                     <tr key={row.id}>
                       <td><span className="rf2-intv-mgr__when"><CalendarDays aria-hidden="true" /> {clock(row.start)}</span></td>
-                      <td><div className="rf2-intv-mgr__cand"><span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{initials(row.candidate)}</span><span className="rf2-jtable__name">{row.candidate}</span></div></td>
+                      <td><div className="rf2-intv-mgr__cand"><span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{getInitials(row.candidate)}</span><span className="rf2-jtable__name">{row.candidate}</span></div></td>
                       <td><span className="rf2-intv-mgr__job">{row.job}</span></td>
                       <td><StatusChip tone={statusTone(row.status)} label={row.status} /></td>
                       <td><span className="rf2-intv-mgr__tz">{row.timezone ?? 'Not recorded'}</span></td>
@@ -260,7 +260,7 @@ export function TeamInterviewsV2() {
                     {items.map((row) => (
                       <li key={row.id} className="rf2-intv-mgr__session">
                         <span className="rf2-intv-mgr__time">{clock(row.start)}</span>
-                        <span className="rf2-intv-mgr__cand"><span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{initials(row.candidate)}</span><span>{row.candidate}</span></span>
+                        <span className="rf2-intv-mgr__cand"><span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{getInitials(row.candidate)}</span><span>{row.candidate}</span></span>
                         <span className="rf2-intv-mgr__job">{row.job}</span>
                         <StatusChip tone={statusTone(row.status)} label={row.status} />
                         <span className="rf2-intv-mgr__tz">{row.timezone ?? 'Time zone not recorded'}</span>

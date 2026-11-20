@@ -8,6 +8,7 @@ import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2
 import { fetchActiveApplications, fetchBank, OPEN_APPLICATION_STAGES, type ActiveRow, type BankRow } from '../api/matching';
 import { buildCandidatesHref, buildCompareHref, parseCompareIds, withReturnTo } from '../returnTarget';
 import { formatDay } from './OpenJobsV2';
+import { getInitials } from '../userIdentity';
 import './jobs.css';
 import './candidates.css';
 
@@ -15,7 +16,6 @@ const STAGE_LABEL: Record<string, string> = { Applied: 'Applied', Screening: 'Sc
 const STAGE_TONE: Record<string, StatusTone> = { Applied: 'neutral', Screening: 'info', Interview: 'info', Offer: 'warning', 'Pre-Hire': 'success' };
 const QUERY_KEYS = ['tab', 'search', 'job', 'source', 'stage'] as const;
 type QueryKey = (typeof QUERY_KEYS)[number];
-const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
 type Failure = { kind: 'forbidden' } | { kind: 'error'; message: string };
 type ActiveState = { kind: 'loading' } | { kind: 'ready'; rows: ActiveRow[]; truncated: boolean; loaded: number; total: number | null } | Failure;
 type BankState = { kind: 'loading' } | { kind: 'ready'; rows: BankRow[]; truncated: boolean; loaded: number; total: number | null } | Failure;
@@ -307,7 +307,7 @@ export function CandidatesV2() {
                       <td className="rf2-cand__who">
                         <div className="rf2-cand__who-split">
                           <div className="rf2-kcard__top">
-                            <span className="rf2-kcard__avatar" aria-hidden="true">{initials(row.name)}</span>
+                            <span className="rf2-kcard__avatar" aria-hidden="true">{getInitials(row.name)}</span>
                             <div>
                               <Link className="rf2-kcard__name" to={href}>{row.name}</Link>
                               {years ? <p className="rf2-jtable__sub">{years}</p> : null}
@@ -350,7 +350,7 @@ function BankPanel({ rows, truncated, loaded, total, returnTo }: { rows: BankRow
           <thead><tr><th scope="col">Name</th><th scope="col">Current title</th><th scope="col">Location</th><th scope="col">Experience</th></tr></thead>
           <tbody>{rows.map((row) => (
             <tr key={row.candidateId}>
-              <td><div className="rf2-kcard__top"><span className="rf2-kcard__avatar" aria-hidden="true">{initials(row.name)}</span><div><Link className="rf2-jtable__name" to={withReturnTo(`/candidates/${encodeURIComponent(row.candidateId)}`, returnTo)}>{row.name}</Link><p className="rf2-jtable__sub">{row.code} · <Link className="rf2-cand__doc-link" to={withReturnTo(`/candidates/${encodeURIComponent(row.candidateId)}/documents`, returnTo)} aria-label={`Documents for ${row.name}`}>Documents</Link></p></div></div></td>
+              <td><div className="rf2-kcard__top"><span className="rf2-kcard__avatar" aria-hidden="true">{getInitials(row.name)}</span><div><Link className="rf2-jtable__name" to={withReturnTo(`/candidates/${encodeURIComponent(row.candidateId)}`, returnTo)}>{row.name}</Link><p className="rf2-jtable__sub">{row.code} · <Link className="rf2-cand__doc-link" to={withReturnTo(`/candidates/${encodeURIComponent(row.candidateId)}/documents`, returnTo)} aria-label={`Documents for ${row.name}`}>Documents</Link></p></div></div></td>
               <td><span className="rf2-cand__label">Title</span>{row.title ?? '—'}</td>
               <td><span className="rf2-cand__label">Location</span>{row.location ?? '—'}</td>
               <td className="rf2-num"><span className="rf2-cand__label">Experience</span>{row.experienceYears != null ? `${row.experienceYears} yrs` : '—'}</td>

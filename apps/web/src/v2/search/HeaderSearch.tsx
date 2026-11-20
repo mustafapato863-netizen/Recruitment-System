@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { scopedSearch, type ScopedResult, type ScopedSearch } from '../api/searchNotify';
 import { usePageReturn } from '../returnTarget';
-
-const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
+import { getInitials } from '../userIdentity';
 
 /** E07 header search (ARIA combobox). Debounced GET /search, scoped client-side (see searchNotify.ts). Enter on no option → /search?q=. */
 export function HeaderSearch({ placeholder, meId }: { placeholder: string; meId: string }) {
@@ -69,7 +68,7 @@ export function HeaderSearch({ placeholder, meId }: { placeholder: string; meId:
                 {g.items.map((r) => { idx++; const i = idx; return (
                   <div key={r.key} id={`${id}-o${i}`} role="option" aria-selected={i === active} className="rf2-hsearch__opt" data-active={i === active || undefined}
                     onMouseDown={(e) => e.preventDefault()} onClick={() => go(r)} onMouseEnter={() => setActive(i)}>
-                    <span className="rf2-kcard__avatar" aria-hidden="true">{initials(r.title)}</span>
+                    <span className="rf2-kcard__avatar" aria-hidden="true">{getInitials(r.title)}</span>
                     <span className="rf2-hsearch__txt"><span className="rf2-jtable__name">{r.title}</span><span className="rf2-jtable__sub">{[r.meta, r.note].filter(Boolean).join(' · ')}</span></span>
                     {i === active ? <kbd className="rf2-hsearch__kbd" aria-hidden="true">Enter</kbd> : null}
                   </div>

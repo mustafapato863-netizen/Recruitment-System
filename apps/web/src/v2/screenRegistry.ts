@@ -52,6 +52,7 @@ export const SCREEN_ROUTE_GROUPS: readonly ScreenRouteGroup[] = [
     '/candidates/:id/documents',
   ] },
   { area: "Manager desk", surface: 'v2', paths: [
+    '/team-work',
     '/vacancy-requests',
     '/approvals',
     '/team-interviews',

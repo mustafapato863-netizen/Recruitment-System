@@ -6,6 +6,7 @@ import type { MyWorkDay } from '@recruitflow/contracts';
 import { joiningTypeForRequirement, resolveSnapshot } from '../hiring/joining-policy';
 import { ownedVacancyWhere } from '../vacancy-core/job-ownership';
 import { buildMyWork, UPCOMING_WINDOW_DAYS, type MyWorkJoiningDecisionFacts, type MyWorkJoiningInput, type MyWorkResponse } from './my-work.buckets';
+import { normalizeUserIdentity } from '../common/user-name-normalization';
 
 /** E1: the reminder worker's heartbeat (service_heartbeats, written after each sweep). */
 export const DUE_REMINDER_HEARTBEAT_SERVICE = 'due-reminders';
@@ -148,14 +149,14 @@ export class MyWorkService {
       orderBy: { displayName: 'asc' },
     });
     const per = await Promise.all(reports.map(async (r) => ({ r, w: await this.getMyWork({ ...user, userId: r.id, roleCodes: [] }, now, day) })));
-    const tag = <T>(items: T[], r: { id: string; displayName: string }) => items.map((i) => ({ ...i, owner: { id: r.id, name: r.displayName } }));
+    const tag = <T>(items: T[], r: { id: string; displayName: string }) => items.map((i) => ({ ...i, owner: { id: r.id, name: normalizeUserIdentity(r.displayName).displayName } }));
     const pick = (k: 'overdue' | 'dueToday' | 'waitingOnOthers') => per.flatMap(({ r, w }) => tag(w[k], r));
     const overdue = pick('overdue'); const dueToday = pick('dueToday'); const waitingOnOthers = pick('waitingOnOthers');
     const first = per[0]?.w;
     const empty = overdue.length + dueToday.length + waitingOnOthers.length === 0;
     return {
       timezone: first?.timezone ?? 'Africa/Cairo', day, date: first?.date ?? '', generatedAt: now.toISOString(),
-      people: reports.map((r) => ({ id: r.id, name: r.displayName })),
+      people: reports.map((r) => ({ id: r.id, name: normalizeUserIdentity(r.displayName).displayName })),
       counts: { overdue: overdue.length, today: dueToday.length, waitingOnOthers: waitingOnOthers.length },
       overdue, dueToday, waitingOnOthers,
       targets: per.flatMap(({ r, w }) => tag(w.targets, r)),

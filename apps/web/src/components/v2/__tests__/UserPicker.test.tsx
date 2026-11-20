@@ -181,9 +181,9 @@ describe('users adapter', () => {
   it('helpers', () => {
     expect(initials('Karim  Hassan')).toBe('KH');
     expect(initials('Omar')).toBe('O');
-    expect(initials('Zenah (Recruiter)')).toBe('ZR');
-    expect(initials('Lady (Nursing Recruiter)')).toBe('LN');
-    expect(initials('Sindu (Senior Recruiter)')).toBe('SS');
+    expect(initials('Zenah (Recruiter)')).toBe('Z');
+    expect(initials('Lady (Nursing Recruiter)')).toBe('L');
+    expect(initials('Sindu (Senior Recruiter)')).toBe('S');
     expect(initials('… ( )')).toBe('?');
     expect(initials('Zenah (Recruiter)')).not.toMatch(/[^A-Z]/);
     expect(toUserOption({ id: 'x', displayName: '', email: 'a@b.c', jobTitle: null, roles: [] })).toEqual({ id: 'x', name: 'a@b.c', detail: undefined });

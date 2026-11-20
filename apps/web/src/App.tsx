@@ -21,6 +21,7 @@ const JobsListRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ d
 const JobDetailRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ default: m.JobDetailRoute })));
 const ApplicationRoute = lazy(() => import('./v2/pages/ApplicationRoute').then((m) => ({ default: m.ApplicationRoute })));
 const MyWorkRoute = lazy(() => import('./v2/pages/MyWorkRoute').then((m) => ({ default: m.MyWorkRoute })));
+const TeamWorkRoute = lazy(() => import('./v2/pages/TeamWorkV2').then((m) => ({ default: m.TeamWorkV2 })));
 const MyInterviewsGate = lazy(() => import('./pages/MyInterviewsGate').then((m) => ({ default: m.MyInterviewsGate })));
 const RequisitionsRoute = lazy(() => import('./v2/pages/RequisitionsRoute').then((m) => ({ default: m.RequisitionsRoute })));
 const ApprovalsRoute = lazy(() => import('./v2/pages/ApprovalsRoute').then((m) => ({ default: m.ApprovalsRoute })));
@@ -97,6 +98,7 @@ function App() {
                 <Route element={<ProtectedRoute />}>
                   <Route element={<V2Shell />}>
                   <Route path="/my-work" element={<MyWorkRoute />} />
+                  <Route path="/team-work" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><TeamWorkRoute /></PermissionGate>} />
                   <Route path="/my-result" element={<MyResultV2 />} />
                   <Route path="/my-interviews" element={<PermissionGate requiredPermission="VACANCY_VIEW"><MyInterviewsGate /></PermissionGate>} />
                   <Route path="/search" element={<SearchV2 />} />

@@ -1,19 +1,18 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, BriefcaseBusiness, Building2, CalendarCheck, CalendarClock, CheckCircle2, ChevronsUpDown, ClipboardList, Columns3, Database, FileText, History,
-  KeyRound, ListChecks, LogOut, Menu, Moon, Sun, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users, X,
+  BarChart3, BriefcaseBusiness, CalendarCheck, CalendarClock, CheckCircle2, ClipboardList, Columns3, Database, FileText, History,
+  KeyRound, ListChecks, LogOut, Menu, Moon, Sun, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserCheck, UserRound, Users, X,
   Archive } from 'lucide-react';
 import type { UserProfile } from '@recruitflow/contracts';
 import { getApi } from '../../../api/client';
 import { BreadcrumbProvider, useBreadcrumb } from '../../../context/BreadcrumbContext';
 import { QuickGuideModal, QuickGuideProvider } from '../../../quickguide';
-import { SEAT_LABEL, type Seat } from '../../../v2/seat';
-import { canUseRequisitions, isInterviewerOnly, specialHome, isRecruiterOnly, v2Redirect } from '../../../v2/destinations';
+import { SEAT_LABEL, type Seat, availableWorkspaceSeats } from '../../../v2/seat';
+import { canUseRequisitions, isInterviewerOnly, specialHome, isRecruiterOnly, SEAT_HOME, v2Redirect } from '../../../v2/destinations';
 import { NavItem } from '../NavItem';
 import { canUseMyInterviews } from '../../../auth/interviewer';
-import { SEAT_NAV, activeNavKey, permittedNavItems, type NavIconName } from './navConfig';
-import { workspaceOptions, type WorkspaceOption } from './workspace';
+import { ADMIN_GROUP_ROUTES, SEAT_NAV, activeNavKey, permittedNavItems, type NavIconName } from './navConfig';
 import { useTheme } from '../../../theme/ThemeContext';
 import { useMediaQuery } from '../../ui/useMediaQuery';
 import { GlobalSelectEnhancer } from '../../ui/GlobalSelectEnhancer';
@@ -23,19 +22,16 @@ import './v2-shell.css';
 import { HeaderSearch } from '../../../v2/search/HeaderSearch';
 import { NotificationsBell, NOTIFICATIONS_CHANGED } from '../../../v2/search/NotificationsBell';
 import '../../../v2/search/search.css';
+import { formatPersonName, getInitials } from '../../../v2/userIdentity';
 
 const ICONS: Record<NavIconName, ReactNode> = {
   'my-work': <ListChecks />, interviews: <CalendarCheck />, 'my-interviews': <CalendarClock />, jobs: <BriefcaseBusiness />, candidates: <Users />,
-  team: <Users />, requisitions: <ClipboardList />, approvals: <CheckCircle2 />, result: <Target />,
+  team: <Users />, requisitions: <ClipboardList />, approvals: <CheckCircle2 />, joinings: <UserCheck />, result: <Target />,
   users: <UserRound />, roles: <Shield />, licenses: <KeyRound />, pipeline: <Columns3 />, 'master-data': <Database />,
   templates: <FileText />, reports: <BarChart3 />, audit: <History />, integrations: <Plug />, classic: <Archive />,
 };
 
-export function initials(name: string | undefined | null): string {
-  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  return ((parts[0][0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
-}
+export const initials = getInitials;
 
 function humanize(pathname: string): string {
   const seg = pathname.split('/').filter(Boolean)[0];
@@ -62,7 +58,13 @@ export function useUnreadCount(enabled: boolean): number {
   return count;
 }
 
-function UserMenu({ user, seat, onSignOut }: { user: UserProfile; seat: Seat; onSignOut: () => void }) {
+function UserMenu({ user, seat, availableSeats, onSignOut, onWorkspaceChange }: {
+  user: UserProfile;
+  seat: Seat;
+  availableSeats: Seat[];
+  onSignOut: () => void;
+  onWorkspaceChange: (seat: Seat) => void;
+}) {
   const { theme, toggleTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -103,14 +105,14 @@ function UserMenu({ user, seat, onSignOut }: { user: UserProfile; seat: Seat; on
       >
         <span className="rf2-avatar" aria-hidden="true">{initials(user.displayName)}</span>
         <span className="rf2-user-menu__text">
-          <span className="rf2-user-menu__name">{user.displayName}</span>
+          <span className="rf2-user-menu__name">{formatPersonName(user.displayName)}</span>
           <span className="rf2-user-menu__seat">{SEAT_LABEL[seat]}</span>
         </span>
       </button>
       {open && (
         <div ref={menuRef} id={menuId} role="menu" aria-label="Account" className="rf2-user-menu__menu" onKeyDown={onMenuKey}>
           <div className="rf2-user-menu__head" role="presentation">
-            <span className="rf2-user-menu__name">{user.displayName}</span>
+            <span className="rf2-user-menu__name">{formatPersonName(user.displayName)}</span>
             <span className="rf2-user-menu__seat">{SEAT_LABEL[seat]} · {user.email}</span>
           </div>
           <button type="button" role="menuitem" className="rf2-user-menu__item" onClick={() => { close(false); navigate('/profile'); }}>
@@ -122,6 +124,18 @@ function UserMenu({ user, seat, onSignOut }: { user: UserProfile; seat: Seat; on
           <button type="button" role="menuitem" className="rf2-user-menu__item" onClick={() => { toggleTheme(); close(); }}>
             {theme === 'light' ? <Moon aria-hidden="true" /> : <Sun aria-hidden="true" />} Switch to {theme === 'light' ? 'dark' : 'light'} mode
           </button>
+          {availableSeats.length > 1 ? (
+            <div className="rf2-user-menu__workspaces" role="group" aria-label="Workspace switcher">
+              <span className="rf2-user-menu__section">Switch workspace</span>
+              {availableSeats.map((option) => (
+                <button key={option} type="button" role="menuitem" className="rf2-user-menu__item"
+                  aria-current={option === seat ? 'page' : undefined}
+                  onClick={() => { close(); if (option !== seat) { onWorkspaceChange(option); navigate(SEAT_HOME[option]); } }}>
+                  {SEAT_LABEL[option]} workspace{option === seat ? ' · Current' : ''}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -130,7 +144,8 @@ function UserMenu({ user, seat, onSignOut }: { user: UserProfile; seat: Seat; on
 
 
 /** Which seat the v2 shell is rendering for (null outside the v2 shell). */
-const V2ShellContext = createContext<{ seat: Seat } | null>(null);
+type V2ShellContextValue = { seat: Seat; setApprovalsCount: (count: number | null) => void };
+const V2ShellContext = createContext<V2ShellContextValue | null>(null);
 export function useV2Shell() { return useContext(V2ShellContext); }
 
 /** Below 1024px the sidebar is always the icon rail, so the page keeps its width and the header title stays visible. */
@@ -166,48 +181,6 @@ export function useSidebarCollapsed(): [boolean, () => void] {
   return [collapsed, toggle];
 }
 
-/** E01 workspace block: a switcher only when /auth/me lists more than one org/department; otherwise a static label. */
-function WorkspaceBlock({ options, collapsed }: { options: WorkspaceOption[]; collapsed: boolean }) {
-  const [open, setOpen] = useState(false);
-  const listId = useId();
-  const current = options.find((o) => o.current) ?? options[0];
-  if (!current) return null;
-  if (options.length <= 1) {
-    return (
-      <div className="rf2-workspace" data-testid="workspace-label" title={collapsed ? current.label : undefined}>
-        <Building2 aria-hidden="true" />
-        <span className="rf2-workspace__text">
-          <span className="rf2-workspace__name">{current.label}</span>
-          {current.detail ? <span className="rf2-workspace__detail">{current.detail}</span> : null}
-        </span>
-      </div>
-    );
-  }
-  return (
-    <div className="rf2-workspace-switcher">
-      <button type="button" className="rf2-workspace rf2-workspace--button" aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? listId : undefined}
-        aria-label={`Workspace: ${current.label}. Change workspace`} onClick={() => setOpen((v) => !v)}
-        onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}>
-        <Building2 aria-hidden="true" />
-        <span className="rf2-workspace__text">
-          <span className="rf2-workspace__name">{current.label}</span>
-          {current.detail ? <span className="rf2-workspace__detail">{current.detail}</span> : null}
-        </span>
-        <ChevronsUpDown aria-hidden="true" />
-      </button>
-      {open && (
-        <ul id={listId} role="listbox" aria-label="Workspaces" className="rf2-workspace__list">
-          {options.map((o) => (
-            <li key={o.id} role="option" aria-selected={Boolean(o.current)} aria-disabled={!o.current}
-              title={o.current ? undefined : 'Switching workspace needs the backend; not available yet'}
-              className="rf2-workspace__option">{o.label}{o.detail ? ` · ${o.detail}` : ''}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 export interface AppShellV2Props {
   user: UserProfile;
   seat: Seat;
@@ -215,7 +188,24 @@ export interface AppShellV2Props {
   children?: ReactNode;
 }
 
-function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
+const ACTIVE_WORKSPACE_STORAGE_KEY = 'recruitflow.ui.v2.activeWorkspace';
+
+function storedWorkspaceSeat(userId: string, fallback: Seat, availableSeats: readonly Seat[]): Seat {
+  try {
+    const stored = window.localStorage.getItem(`${ACTIVE_WORKSPACE_STORAGE_KEY}.${userId}`);
+    return availableSeats.includes(stored as Seat) ? stored as Seat : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+type ShellFrameProps = AppShellV2Props & {
+  availableSeats: Seat[];
+  approvalCount: number | null;
+  onWorkspaceChange: (seat: Seat) => void;
+};
+
+function ShellFrame({ user, seat, onSignOut, children, availableSeats, approvalCount, onWorkspaceChange }: ShellFrameProps) {
   const location = useLocation();
   // B2-17/18: "/" goes to the seat's home; v1 pages the seat can't use redirect to their v2 equivalent.
   const redirectTo = v2Redirect(seat, `${location.pathname}${location.search}`, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user), permissions: user.permissions ?? [], isAdministrator: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') });
@@ -229,10 +219,15 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const sidebarItems = interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews') : allItems;
   const allNavigation = sidebarItems;
   const activeKey = activeNavKey(allNavigation, location.pathname, location.hash);
+  const activeItem = allNavigation.find((item) => item.key === activeKey);
   const canSeeNotifications = isAdministrator || (user.permissions ?? []).includes('NOTIFICATION_VIEW');
   const unread = useUnreadCount(true);
   const config = SEAT_NAV[seat];
   const title = allNavigation.find((i) => i.key === activeKey)?.label ?? customLabels[location.pathname] ?? humanize(location.pathname);
+  const adminGroup = seat === 'admin'
+    ? ADMIN_GROUP_ROUTES.find((entry) => location.pathname === entry.to || location.pathname.startsWith(`${entry.to}/`))?.group
+    : undefined;
+  const breadcrumbTitle = activeItem?.group ?? adminGroup ?? title;
   const headingId = useId();
   const sidebarId = useId();
   const menuId = useId();
@@ -245,12 +240,17 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const topNav = false;
   const compactNav = topNav && menuViewport;
   const collapsed = !topNav && (storedCollapsed || narrow);
-  const workspaces = workspaceOptions(user);
   const { theme, toggleTheme } = useTheme();
-  const activeLabel = allNavigation.find((item) => item.key === activeKey)?.label;
-  const titleEchoesNav = topNav && activeLabel === title;
   const homeTo = sidebarItems[0]?.to ?? '/my-work';
-  const pageTitle = <h1 className={`rf2-shell__title${titleEchoesNav ? ' rf2-shell__title--echo' : ''}`}>{title}</h1>;
+  const pageTitle = (
+    <nav className="rf2-shell__breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li>{SEAT_LABEL[seat]} Workspace</li>
+        <li aria-current="page">{breadcrumbTitle}</li>
+      </ol>
+    </nav>
+  );
+  const showGlobalSearch = location.pathname !== '/users';
 
   useEffect(() => { setMenuOpen(false); }, [location.pathname, location.hash]);
   useEffect(() => { if (!compactNav) setMenuOpen(false); }, [compactNav]);
@@ -276,13 +276,13 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   }, [menuOpen]);
   const headerTools = (
     <>
-      <HeaderSearch placeholder={config.searchPlaceholder} meId={user.id} />
+      {showGlobalSearch ? <HeaderSearch placeholder={config.searchPlaceholder} meId={user.id} /> : null}
       <div className="rf2-shell__actions">
         <button type="button" className="rf2-icon-button" aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={toggleTheme}>
           {theme === 'light' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
         </button>
         {canSeeNotifications ? <NotificationsBell unread={unread} /> : null}
-        <UserMenu user={user} seat={seat} onSignOut={onSignOut} />
+        <UserMenu user={user} seat={seat} availableSeats={availableSeats} onSignOut={onSignOut} onWorkspaceChange={onWorkspaceChange} />
       </div>
     </>
   );
@@ -290,7 +290,8 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
     <ul className={topNav ? 'rf2-shell__links' : 'rf2-nav-list'}>
       {sidebarItems.map((item) => (
         <li key={item.key}>
-          <NavItem asChild label={item.label} icon={ICONS[item.icon]} active={item.key === activeKey} title={collapsed ? item.label : undefined}>
+          <NavItem asChild label={item.label} icon={ICONS[item.icon]} active={item.key === activeKey} title={collapsed ? item.label : undefined}
+            badge={item.key === 'approvals' ? approvalCount ?? undefined : undefined} badgeLabel={item.key === 'approvals' ? `${approvalCount ?? 0} waiting on you` : undefined}>
             {/* Link, not NavLink: aria-current is decided once by activeNavKey (hash-aware). */}
             <Link to={item.to} />
           </NavItem>
@@ -305,11 +306,11 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
       {topNav ? null : (
       <aside className="rf2-shell__sidebar" id={sidebarId}>
         <div className="rf2-brand">
-          <Link to={homeTo} className="rf2-brand__home" aria-label="RecruitFlow, Saudi German Health">
+          <Link to={homeTo} className="rf2-brand__home" aria-label={`RecruitFlow, ${user.organizationName || 'Saudi German Health'}`}>
             <span className="rf2-brand__mark" aria-hidden="true"><SghHeartIcon size={30} /></span>
             <span className="rf2-brand__text">
               <span className="rf2-brand__name">RecruitFlow</span>
-              <span className="rf2-brand__sub">Saudi German Health</span>
+              <span className="rf2-brand__sub">{user.organizationName || 'Saudi German Health'}</span>
             </span>
           </Link>
           <button type="button" className="rf2-collapse" hidden={narrow} aria-controls={sidebarId} aria-expanded={!collapsed}
@@ -317,18 +318,10 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
             {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
           </button>
         </div>
-        {seat === 'admin' ? <WorkspaceBlock options={workspaces} collapsed={collapsed} /> : null}
         <p className="rf2-shell__heading" id={headingId}>{config.heading}</p>
         <nav aria-labelledby={headingId} className="rf2-shell__nav">
           {navLinks}
         </nav>
-        <div className="rf2-shell__account" aria-label="Signed in as">
-          <span className="rf2-avatar rf2-avatar--sm" aria-hidden="true">{initials(user.displayName)}</span>
-          <span className="rf2-shell__account-text">
-            <span className="rf2-shell__account-name">{user.displayName}</span>
-            <span className="rf2-shell__account-seat">{SEAT_LABEL[seat]}</span>
-          </span>
-        </div>
       </aside>
       )}
       <div className="rf2-shell__main">
@@ -336,11 +329,11 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
           {topNav ? (
             <>
               <div className="rf2-shell__lead">
-                <Link to={homeTo} className="rf2-brand rf2-brand--bar" aria-label="RecruitFlow, Saudi German Health">
+                <Link to={homeTo} className="rf2-brand rf2-brand--bar" aria-label={`RecruitFlow, ${user.organizationName || 'Saudi German Health'}`}>
                   <span className="rf2-brand__mark" aria-hidden="true"><SghHeartIcon size={28} /></span>
                   <span className="rf2-brand__text">
                     <span className="rf2-brand__name">RecruitFlow</span>
-                    <span className="rf2-brand__sub">Saudi German Health</span>
+                    <span className="rf2-brand__sub">{user.organizationName || 'Saudi German Health'}</span>
                   </span>
                 </Link>
                 {compactNav ? (
@@ -394,11 +387,25 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
 
 /** v2 shell (F4). Wraps the existing pages unchanged. */
 export function AppShellV2(props: AppShellV2Props) {
+  const availableSeats = useMemo(() => availableWorkspaceSeats(props.user), [props.user]);
+  const [seat, setSeat] = useState(() => storedWorkspaceSeat(props.user.id, props.seat, availableSeats));
+  const [approvalCount, setApprovalCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    setSeat(storedWorkspaceSeat(props.user.id, props.seat, availableWorkspaceSeats(props.user)));
+  }, [props.user, props.seat, availableSeats]);
+
+  const switchWorkspace = (next: Seat) => {
+    if (!availableSeats.includes(next)) return;
+    try { window.localStorage.setItem(`${ACTIVE_WORKSPACE_STORAGE_KEY}.${props.user.id}`, next); } catch { /* preference is optional */ }
+    setSeat(next);
+  };
+
   return (
     <QuickGuideProvider>
       <BreadcrumbProvider>
-        <V2ShellContext.Provider value={{ seat: props.seat }}>
-          <ShellFrame {...props} />
+        <V2ShellContext.Provider value={{ seat, setApprovalsCount: setApprovalCount }}>
+          <ShellFrame {...props} seat={seat} availableSeats={availableSeats} approvalCount={approvalCount} onWorkspaceChange={switchWorkspace} />
         </V2ShellContext.Provider>
         <GlobalSelectEnhancer />
         <QuickGuideModal />

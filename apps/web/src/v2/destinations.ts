@@ -8,7 +8,7 @@ import type { Seat } from './seat';
  * path a seat can't use redirects to its v2 equivalent (or the seat's home). The API still
  * guards the data; this is routing only.
  */
-export const SEAT_HOME: Record<Seat, string> = { employee: '/my-work', manager: '/my-work', admin: '/users' };
+export const SEAT_HOME: Record<Seat, string> = { employee: '/my-work', manager: '/team-work', admin: '/users' };
 
 /** Everyone: the shell's own menus (profile, notifications page, search). */
 const COMMON = ['/profile', '/notifications', '/search'];
@@ -18,7 +18,7 @@ export const SEAT_DESTINATIONS: Record<Seat, string[]> = {
   employee: ['/offers/:id', '/my-work', '/my-result', '/interviews', '/reports', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id', '/sourcing-match'],
   // '/interviews/:id' stays for the Manager's own scorecard (Team work → Waiting on you → Submit scorecard).
   // v2 default: '/vacancy-requests' is the list only (the drawers carry ?req= / ?req=new); detail and create URLs redirect.
-  manager: ['/offers/:id', '/my-work', '/vacancy-requests', '/approvals', '/team-interviews', '/reports', '/applications/:id', '/vacancies/:id'],
+  manager: ['/offers/:id', '/my-work', '/team-work', '/vacancy-requests', '/approvals', '/team-interviews', '/reports', '/applications/:id', '/vacancies', '/vacancies/:id', '/joinings'],
   admin: ['/users', '/roles', '/licenses', '/pipeline-settings', '/master-data', '/email-templates', '/whatsapp-templates', '/reports', '/audit-log', '/integrations'],
 };
 
@@ -69,6 +69,7 @@ export function specialHome(user: { roles?: ReadonlyArray<{ code: string }>; per
  */
 type Gate = { all?: string[]; any?: string[] };
 const ROUTE_GATES: Array<[RegExp, Gate]> = [
+  [/^\/team-work\/?$/, { all: ['APPLICATION_VIEW'] }],
   [/^\/hires\/approvals\/inbox\/?$/, { all: ['FINAL_HIRING_APPROVAL'] }],
   // GET /hiring/:id allows any of these (the final approver opens the case she approves).
   [/^\/hires\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK'] }],
@@ -221,6 +222,7 @@ export function isInterviewerOnly(user: { permissions?: readonly string[] } | nu
 }
 function resolveSeatHome(seat: Seat, opts: { home?: string | null; permissions?: readonly string[]; isAdministrator?: boolean }): string {
   const base = opts.home ?? SEAT_HOME[seat];
+  if (seat === 'manager' && opts.permissions && !opts.permissions.includes('APPLICATION_VIEW')) return '/my-work';
   if (seat === 'admin' && opts.permissions && !opts.isAdministrator && !canOpenRoute(base, opts.permissions, false)) {
     const firstPermitted = SEAT_DESTINATIONS.admin.find((p) => p !== '/email-templates' && canOpenRoute(p, opts.permissions, false));
     if (firstPermitted) return firstPermitted;
@@ -379,6 +381,7 @@ export function authorizedLanding(actor: RoutePolicy): string {
   if ((actor.permissions || actor.isAdministrator) && !canOpenRoute(preferred, actor.permissions, actor.isAdministrator)) {
     const seatHome = SEAT_HOME[actor.seat];
     if (seatHome !== preferred && canOpenRoute(seatHome, actor.permissions, actor.isAdministrator)) return seatHome;
+    if (actor.seat === 'manager' && canOpenRoute('/my-work', actor.permissions, actor.isAdministrator)) return '/my-work';
     if (actor.seat === 'admin') {
       return resolveSeatHome('admin', actor);
     }

@@ -7,13 +7,18 @@ import { axeViolations } from '../../../components/v2/__tests__/axe';
 import * as fx from '../../api/__fixtures__/teamWork';
 
 const api = vi.hoisted(() => ({ getApi: vi.fn(), postApi: vi.fn(), patchApi: vi.fn() }));
+const shellState = vi.hoisted(() => ({ setApprovalsCount: vi.fn() }));
 const authState = vi.hoisted(() => ({
   user: { id: 'u-karim', displayName: 'Karim Hassan', permissions: ['APPLICATION_VIEW'] as string[], roles: [{ code: 'HIRING_MANAGER' }] },
 }));
 vi.mock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), ...api }));
 vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: authState.user }) }));
+vi.mock('../../../components/v2/shell/AppShellV2', async () => ({
+  ...(await vi.importActual<object>('../../../components/v2/shell/AppShellV2')),
+  useV2Shell: () => ({ setApprovalsCount: shellState.setApprovalsCount }),
+}));
 import { TeamWorkV2 } from '../TeamWorkV2';
-import { interviewsThisWeekCount, reassignError, taskFor, type TeamFile } from '../../api/teamWork';
+import { cairoWeekBounds, compareTeamWorkload, interviewsThisWeekCount, reassignError, taskFor, type TeamFile } from '../../api/teamWork';
 
 let responses: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
@@ -24,12 +29,13 @@ const serve = (extra: Record<string, unknown> = {}) => {
   });
 };
 function Loc() { const l = useLocation(); return <div data-testid="loc">{l.pathname + l.search}</div>; }
-const renderAt = (path = '/my-work') => {
+const renderAt = (path = '/team-work') => {
   document.documentElement.setAttribute('data-ui', 'v2');
-  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/my-work" element={<><TeamWorkV2 /><Loc /></>} /></Routes></MemoryRouter>);
+  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/team-work" element={<><TeamWorkV2 /><Loc /></>} /></Routes></MemoryRouter>);
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  shellState.setApprovalsCount.mockReset();
   authState.user = { id: 'u-karim', displayName: 'Karim Hassan', permissions: ['APPLICATION_VIEW'], roles: [{ code: 'HIRING_MANAGER' }] };
   serve();
 });
@@ -44,6 +50,16 @@ function mariamWithExtra() {
   const base = rows.find((row) => row.id === 'a2') as Record<string, unknown>;
   const candidate = { ...(base.candidate as Record<string, unknown>), id: 'c-a8', firstName: 'Extra', lastName: 'Person' };
   rows.push({ ...base, id: 'a8', applicationCode: 'APP-A8', candidateId: 'c-a8', stage: 'Applied', followUpDate: fx.day(5), gates: [], interview: null, candidate });
+  return { data: rows, total: rows.length };
+}
+function mariamWithOpenCount(count: number) {
+  const rows = structuredClone(fx.apps['u-mariam']).filter((row) => (row as Record<string, unknown>).stage !== 'Joined') as Array<Record<string, unknown>>;
+  const base = rows[0];
+  while (rows.length < count) {
+    const id = `capacity-${rows.length + 1}`;
+    const candidate = { ...(base.candidate as Record<string, unknown>), id: `c-${id}`, firstName: 'Capacity', lastName: String(rows.length + 1) };
+    rows.push({ ...base, id, applicationCode: id, candidateId: candidate.id, candidate, stage: 'Applied', followUpDate: null, gates: [], interview: null });
+  }
   return { data: rows, total: rows.length };
 }
 
@@ -83,7 +99,7 @@ describe('Team work desk', () => {
       },
     });
     const u = userEvent.setup();
-    renderAt('/my-work?tab=waiting');
+    renderAt('/team-work?tab=waiting');
     const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
     const note = within(waiting).getByText('Nothing is waiting on your decision.');
     expect(note).toHaveTextContent(/^Nothing is waiting on your decision\.$/);
@@ -96,31 +112,37 @@ describe('Team work desk', () => {
 });
 
 describe('M2 Team work', () => {
-  it('waiting on you (my team only), one card per report A–Z, counts equal rows, closed files hidden, no pay; axe', async () => {
+  it('prioritizes urgent workload, reconciles interview totals, hides closed files and pay; axe', async () => {
     const u = userEvent.setup();
     const { container } = renderAt();
     expect(await screen.findByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
     expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
-    expect(rosterNames()).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
+    expect(rosterNames()).toEqual(['Noura Al-Dosari', 'Mariam Farag', 'Youssef Ibrahim']);
     expect(summaryItem('Team members')).toHaveTextContent('3');
     expect(summaryItem('Open items')).toHaveTextContent('8');
     expect(summaryItem('Overdue')).toHaveTextContent('3');
     expect(summaryItem('Overdue').querySelector('[data-tone="danger"]')).toBeTruthy();
-    expect(summaryItem('Interviews this week')).toHaveTextContent(String(weekInterviews()));
+    const memberInterviewTotal = Object.values(fx.apps).reduce(
+      (sum, files) => sum + (interviewsThisWeekCount(files as TeamFile[]) ?? 0),
+      0,
+    );
+    expect(weekInterviews()).toBe(memberInterviewTotal);
+    expect(summaryItem('Interviews this week')).toHaveTextContent(String(memberInterviewTotal));
     expect(summaryItem('Interviews this week')).not.toHaveTextContent('—');
+    await waitFor(() => expect(shellState.setApprovalsCount).toHaveBeenLastCalledWith(2));
     const m = memberOf('Mariam Farag');
     expect(m).toHaveTextContent('Recruiter-offshore');
     expect(m).toHaveTextContent('3 Open');
     expect(m).toHaveTextContent('1 Overdue');
-    expect(m).toHaveTextContent('1 Interview');
+    expect(m).toHaveTextContent(`${interviewsThisWeekCount(fx.apps['u-mariam'] as TeamFile[])} Interview`);
     expect(screen.queryByRole('columnheader', { name: 'Availability' })).not.toBeInTheDocument();
     expect(screen.queryByRole('table', { name: 'Team workload' })).not.toBeInTheDocument();
     expect(m).not.toHaveTextContent('Old Joiner');
     const lina = within(m).getByRole('link', { name: 'Follow-up overdue — Lina Hassan' });
-    expect(lina).toHaveAttribute('href', '/applications/a3?returnTo=%2Fmy-work');
+    expect(lina).toHaveAttribute('href', '/applications/a3?returnTo=%2Fteam-work');
     expect(lina.closest('li')).toHaveTextContent('Overdue');
     expect(lina.closest('li')).toHaveTextContent('HRIS Developer · Offshore Cairo');
-    expect(within(m).getByRole('link', { name: 'Follow up — Nourhan Sami' })).toHaveAttribute('href', '/applications/a2?returnTo=%2Fmy-work');
+    expect(within(m).getByRole('link', { name: 'Follow up — Nourhan Sami' })).toHaveAttribute('href', '/applications/a2?returnTo=%2Fteam-work');
     expect(within(m).getByRole('link', { name: 'Follow up — Nourhan Sami' }).closest('li')).toHaveTextContent('Today');
     expect(memberOf('Noura Al-Dosari')).toHaveTextContent('3 Open');
     expect(memberOf('Noura Al-Dosari')).toHaveTextContent('2 Overdue');
@@ -141,7 +163,7 @@ describe('M2 Team work', () => {
     expect(within(wait).getAllByRole('row')).toHaveLength(3);
     expect(within(wait).queryByRole('columnheader', { name: 'Site' })).toBeNull();
     expect(wait).toHaveTextContent(/Your scorecard — Ahmed Embaby, HRIS Developer.*Late/);
-    expect(within(wait).getByRole('link', { name: 'Submit scorecard: Ahmed Embaby' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=i1&returnTo=%2Fmy-work%3Ftab%3Dwaiting');
+    expect(within(wait).getByRole('link', { name: 'Submit scorecard: Ahmed Embaby' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=i1&returnTo=%2Fteam-work%3Ftab%3Dwaiting');
     expect(wait).toHaveTextContent(/Offer approval — Lina Hassan, HRIS Developer.*Offer v1 submitted by Mariam Farag/);
     expect(within(wait).getByRole('button', { name: 'Review offer: Lina Hassan' })).toBeInTheDocument();
     expect(await axeViolations(container)).toEqual([]);
@@ -151,7 +173,7 @@ describe('M2 Team work', () => {
     renderAt();
     expect(await screen.findByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
     expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
-    expect(rosterNames()).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
+    expect(rosterNames()).toEqual(['Noura Al-Dosari', 'Mariam Farag', 'Youssef Ibrahim']);
     expect(screen.getByRole('note')).toHaveTextContent(/Your reporting line appears here, including people who report through someone else/);
     expect(screen.queryByText(/Your direct reports\./)).toBeNull();
   });
@@ -166,7 +188,7 @@ describe('M2 Team work', () => {
     renderAt();
     expect(await screen.findByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
     expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
-    expect(rosterNames()).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
+    expect(rosterNames()).toEqual(['Noura Al-Dosari', 'Mariam Farag', 'Youssef Ibrahim']);
     expect(screen.getByRole('note')).toHaveTextContent(/people who report through someone else/);
     expect(screen.queryByText(/Your direct reports\./)).toBeNull();
     expect(screen.queryByText(/Your team, including indirect reports/)).toBeNull();
@@ -217,8 +239,17 @@ describe('M2 Team work', () => {
     renderAt();
     const empty = (await screen.findByRole('heading', { name: 'Hana Adel' })).closest('article')!;
     expect(empty).toHaveTextContent('No open items');
+    expect(within(empty).getByRole('button', { name: 'Reassign: Hana Adel' })).toBeDisabled();
     expect(within(empty).queryByRole('link')).not.toBeInTheDocument();
     expect(within(empty).queryByRole('button', { name: /View all/ })).not.toBeInTheDocument();
+  });
+  it.each([[9, false], [10, true]] as const)('shows high-capacity warning at the 10-item boundary (%i open)', async (open, overloaded) => {
+    serve({ '/applications?primaryRecruiterId=u-mariam&pageSize=100': mariamWithOpenCount(open) });
+    renderAt();
+    const member = (await screen.findByRole('heading', { name: 'Mariam Farag' })).closest('article')!;
+    expect(member).toHaveTextContent(`${open} Open`);
+    if (overloaded) expect(within(member).getByText('High capacity')).toBeInTheDocument();
+    else expect(within(member).queryByText('High capacity')).not.toBeInTheDocument();
   });
   it('uses letter initials and a danger pill when a gate blocks the file', async () => {
     const youssef = structuredClone(fx.apps['u-youssef']) as Array<Record<string, unknown>>;
@@ -235,13 +266,17 @@ describe('M2 Team work', () => {
       '/applications?primaryRecruiterId=u-youssef&pageSize=100': { data: youssef, total: youssef.length },
     });
     renderAt();
-    const zenah = (await screen.findByRole('heading', { name: 'Zenah (Recruiter)' })).closest('article')!;
-    const lady = screen.getByRole('heading', { name: 'Lady (Nursing Recruiter)' }).closest('article')!;
-    expect(zenah.querySelector('.rf2-team__avatar')).toHaveTextContent('ZR');
-    expect(lady.querySelector('.rf2-team__avatar')).toHaveTextContent('LN');
+    const zenah = (await screen.findByRole('heading', { name: 'Zenah' })).closest('article')!;
+    const lady = screen.getByRole('heading', { name: 'Lady' }).closest('article')!;
+    expect(zenah).toHaveTextContent('Recruiter');
+    expect(zenah).not.toHaveTextContent('Zenah (Recruiter)');
+    expect(lady).toHaveTextContent('Nursing Recruiter');
+    expect(lady).not.toHaveTextContent('Lady (Nursing Recruiter)');
+    expect(zenah.querySelector('.rf2-team__avatar')).toHaveTextContent('Z');
+    expect(lady.querySelector('.rf2-team__avatar')).toHaveTextContent('L');
     expect(zenah.querySelector('.rf2-team__avatar')?.textContent).not.toMatch(/[^A-Z?]/);
     const blocked = screen.getByRole('link', { name: 'Offer not accepted yet — Hossam Nabil' }).closest('li')!;
-    expect(blocked).toHaveTextContent('Needs review');
+    expect(blocked.querySelector('.rf2-chip')).toHaveTextContent('Needs review');
     expect(blocked.querySelector('.rf2-chip')).toHaveAttribute('data-tone', 'danger');
     expect(blocked.querySelector('.rf2-team__ticon')).toHaveAttribute('data-tone', 'danger');
     expect(blocked.querySelector('.rf2-chip svg')).toHaveClass('lucide-circle-alert');
@@ -314,13 +349,36 @@ describe('M2 Team work', () => {
     await u.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('Mariam Farag')).toBeInTheDocument();
   });
-  it('task rules: overdue › gate › offer › today › interview › next', () => {
+  it('task rules and age: overdue › gate › offer › today › interview › next', () => {
     const base: TeamFile = { id: 'f', code: 'F', candidate: 'X', vacancyId: 'v', job: 'J', site: 'S', stage: 'Screening', followUpDate: null };
     const t = '2026-10-10';
-    expect(taskFor({ ...base, followUpDate: '2026-10-09', stage: 'Offer' }, t)).toMatchObject({ kind: 'followup-overdue', tone: 'overdue' });
+    expect(taskFor({ ...base, followUpDate: '2026-10-09', stage: 'Offer', updatedAt: '2026-10-06T12:00:00.000Z' }, t))
+      .toMatchObject({ kind: 'followup-overdue', tone: 'overdue', meta: 'J · S · 1d overdue' });
     expect(taskFor({ ...base, stage: 'Offer' }, t)).toMatchObject({ kind: 'offer', tone: 'waiting' });
     expect(taskFor({ ...base, followUpDate: t }, t)).toMatchObject({ kind: 'followup', tone: 'today' });
     expect(taskFor({ ...base, stage: 'Applied' }, t)).toMatchObject({ kind: 'next', tone: null, title: 'Applied — X' });
+    expect(taskFor({ ...base, updatedAt: '2026-10-06T12:00:00.000Z' }, t).meta).toBe('J · S · 4d since update');
+    expect(taskFor(base, t).meta).toBe('J · S');
+  });
+  it('counts current-week interviews on Cairo Sunday–Saturday boundaries', () => {
+    expect(cairoWeekBounds('2026-10-10')).toEqual({ start: '2026-10-04', end: '2026-10-10' });
+    expect(interviewsThisWeekCount([
+      { interview: { startAt: '2026-10-03T22:30:00.000Z' } },
+      { interview: { startAt: '2026-10-10T20:59:59.000Z' } },
+      { interview: { startAt: '2026-10-10T21:00:00.000Z' } },
+      { interview: null },
+    ], '2026-10-10')).toBe(2);
+    expect(interviewsThisWeekCount([{ interview: undefined }], '2026-10-10')).toBeNull();
+  });
+  it('sorts the team workload by overdue, open, current-week interviews and name', () => {
+    const members = [
+      { name: 'Sarah', overdueCount: 2, openCount: 12, interviewsCount: 1 },
+      { name: 'Zayd', overdueCount: 2, openCount: 12, interviewsCount: 2 },
+      { name: 'Amina', overdueCount: 2, openCount: 12, interviewsCount: 2 },
+      { name: 'Sindu', overdueCount: 1, openCount: 5, interviewsCount: 0 },
+      { name: 'Mona', overdueCount: 0, openCount: 0, interviewsCount: 0 },
+    ];
+    expect([...members].sort(compareTeamWorkload).map((member) => member.name)).toEqual(['Amina', 'Zayd', 'Sarah', 'Sindu', 'Mona']);
   });
 });
 
@@ -348,7 +406,7 @@ describe('Compact workload review', () => {
   it('preselects the reviewed job and keeps the review open when reassignment conflicts', async () => {
     const u = userEvent.setup();
     api.postApi.mockRejectedValue(new ApiError(409, 'Conflict', { code: 'REASSIGN_CONFLICT', message: 'Conflict' }, { code: 'REASSIGN_CONFLICT' }));
-    renderAt('/my-work?workload=u-mariam');
+    renderAt('/team-work?workload=u-mariam');
     const workload = await screen.findByRole('dialog', { name: 'Mariam Farag' });
     await u.click(within(workload).getByRole('button', { name: 'Move applications: HRIS Developer' }));
     const dialog = screen.getByRole('dialog', { name: 'Redistribute applications' });
@@ -368,7 +426,7 @@ describe('Compact workload review', () => {
   it('does not report a successful handoff when the server omits its result', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({});
-    renderAt('/my-work?reassign=u-noura&handoff=job');
+    renderAt('/team-work?reassign=u-noura&handoff=job');
     const dialog = await screen.findByRole('dialog', { name: 'Redistribute applications' });
     await u.selectOptions(within(dialog).getByLabelText(/^New primary recruiter/), 'u-mariam');
     await u.type(within(dialog).getByLabelText(/^Reason/), 'Share workload');
@@ -379,7 +437,7 @@ describe('Compact workload review', () => {
   });
 
   it('blocks a workload deep link outside the loaded team without showing another person’s files', async () => {
-    renderAt('/my-work?workload=outside-team');
+    renderAt('/team-work?workload=outside-team');
     const dialog = await screen.findByRole('dialog', { name: 'Recruiter workload' });
     expect(within(dialog).queryByRole('button', { name: /Move applications/ })).not.toBeInTheDocument();
     expect(within(dialog).getByText(/permission|access/i)).toBeInTheDocument();
@@ -413,7 +471,7 @@ describe('M06 Reassign (B7 POST /files/reassign)', () => {
   it('redistributes one job’s applications only after choosing a source and reviewing the handoff', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({ batchId: 'b', toUserId: 'u-mariam', moved: [{ applicationId: 'n1' }, { applicationId: 'n2' }, { applicationId: 'n3' }], unchanged: [] });
-    renderAt('/my-work?handoff=pick');
+    renderAt('/team-work?handoff=pick');
     const picker = await screen.findByRole('dialog', { name: 'Redistribute work' });
     expect(screen.getByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
     expect(screen.queryByRole('table', { name: 'Team workload' })).not.toBeInTheDocument();
@@ -439,7 +497,7 @@ describe('M06 Reassign (B7 POST /files/reassign)', () => {
   it('whole job → that report’s open files on the job; all their files → fromUserId', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({ batchId: 'b', toUserId: 'u-mariam', moved: [{ applicationId: 'n1' }, { applicationId: 'n2' }, { applicationId: 'n3' }], unchanged: [] });
-    renderAt('/my-work?reassign=u-noura');
+    renderAt('/team-work?reassign=u-noura');
     const d = await screen.findByRole('dialog', { name: 'Reassign files on Radiology Technician' });
     expect(within(d).getByRole('button', { name: 'All files on a job' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(d).getByRole('note')).toHaveTextContent('3 open files move');
@@ -464,7 +522,7 @@ describe('M06 Reassign (B7 POST /files/reassign)', () => {
     const err = (status: number, code: string, message: string) => new ApiError(status, message, { code, message }, { code });
     api.postApi.mockRejectedValueOnce(err(400, 'REASSIGN_TARGET_INELIGIBLE', 'The target must be an active, non-admin user.'))
       .mockRejectedValueOnce(err(409, 'REASSIGN_FILE_CLOSED', 'File APP-A1 is closed.'));
-    renderAt('/my-work?reassign=u-mariam&file=a1');
+    renderAt('/team-work?reassign=u-mariam&file=a1');
     const d = await screen.findByRole('dialog', { name: 'Reassign Ahmed Embaby' });
     await u.selectOptions(within(d).getByLabelText(/^New primary recruiter/), 'u-noura');
     await u.type(within(d).getByLabelText(/^Reason/), 'Balance');
@@ -512,7 +570,7 @@ describe('M2 CoS follow-ups', () => {
     const u = userEvent.setup();
     serve({ '/master-data/catalog/reassign-reasons': fx.reassignReasons });
     api.postApi.mockResolvedValue({ batchId: 'b', toUserId: 'u-youssef', moved: [{ applicationId: 'n1' }], unchanged: [] });
-    renderAt('/my-work?reassign=u-noura&file=n1');
+    renderAt('/team-work?reassign=u-noura&file=n1');
     const d = await screen.findByRole('dialog');
     const sel = await within(d).findByRole('combobox', { name: /^Reason/ });
     expect(within(sel).queryByRole('option', { name: 'Old reason' })).toBeNull();
@@ -529,7 +587,7 @@ describe('M2 CoS follow-ups', () => {
     serve({ '/master-data/catalog/reassign-reasons': fx.reassignReasons });
     api.postApi.mockRejectedValueOnce(new ApiError(400, '"Other" needs a short note.', { statusCode: 400, code: 'REASON_REQUIRED', message: '"Other" needs a short note.' }, { code: 'REASON_REQUIRED' }))
       .mockResolvedValue({ batchId: 'b', toUserId: 'u-youssef', moved: [{ applicationId: 'n1' }], unchanged: [] });
-    renderAt('/my-work?reassign=u-noura&file=n1');
+    renderAt('/team-work?reassign=u-noura&file=n1');
     const d = await screen.findByRole('dialog');
     const sel = await within(d).findByRole('combobox', { name: /^Reason/ });
     await u.selectOptions(within(d).getByLabelText(/^New primary recruiter/), 'u-youssef');
@@ -631,11 +689,11 @@ describe('M01 recruiter details and M03 drilldown', () => {
     expect(screen.getByText('Chronological authorized activity feed; no activity-based scoring.')).toBeInTheDocument();
     await u.click(screen.getByRole('button', { name: 'Back to Team work' }));
     expect(screen.getByTestId('loc').textContent).not.toMatch(/recruiter=/);
-    expect(rosterNames()).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
+    expect(rosterNames()).toEqual(['Noura Al-Dosari', 'Mariam Farag', 'Youssef Ibrahim']);
   });
 
   it('says when the recruiter is outside the reporting line, and names an indirect report', async () => {
-    const first = renderAt('/my-work?recruiter=u-missing');
+    const first = renderAt('/team-work?recruiter=u-missing');
     expect(await screen.findByRole('alert')).toHaveTextContent('This recruiter is not in your reporting line.');
     await userEvent.setup().click(screen.getByRole('button', { name: 'Back to Team work' }));
     expect(screen.getByTestId('loc').textContent).not.toMatch(/recruiter=/);
@@ -647,7 +705,7 @@ describe('M01 recruiter details and M03 drilldown', () => {
         { id: 'u-noura', displayName: 'Noura Al-Dosari', status: 'Active', managerId: 'u-mariam', roles: [{ code: 'ROLE_003', name: 'Recruiter-clinical' }] },
       ],
     });
-    renderAt('/my-work?recruiter=u-noura');
+    renderAt('/team-work?recruiter=u-noura');
     expect(await screen.findByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
     expect(screen.getByText('Recruiter-clinical · Indirect report (reporting line)')).toBeInTheDocument();
   });
@@ -657,7 +715,7 @@ describe('M04 reassignment review', () => {
   it('reviews the move, keeps the selection, and confirms through the same reassign call', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({ batchId: 'b1', toUserId: 'u-youssef', moved: [{ applicationId: 'a1', fromUserId: 'u-mariam' }], unchanged: [] });
-    renderAt('/my-work?reassign=u-mariam&file=a1');
+    renderAt('/team-work?reassign=u-mariam&file=a1');
     const d = await screen.findByRole('dialog', { name: 'Reassign Ahmed Embaby' });
     await u.click(within(d).getByRole('button', { name: 'Review reassignment' }));
     expect(within(d).getByText(/A reason is required/)).toBeInTheDocument();
@@ -682,7 +740,7 @@ describe('M04 reassignment review', () => {
 describe('M02 waiting queue and M10 approval decision', () => {
   it('keeps summary chips out of the heading list and previews a disabled decision', async () => {
     const u = userEvent.setup();
-    renderAt('/my-work?tab=waiting&approval=sample');
+    renderAt('/team-work?tab=waiting&approval=sample');
     const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
     expect(within(waiting).getAllByRole('heading')).toHaveLength(1);
     expect(within(waiting).getByText('Pending approvals 0')).toBeInTheDocument();
@@ -704,7 +762,7 @@ describe('M02 waiting queue and M10 approval decision', () => {
     serve({ '/vacancy-requests': [pendingReq, changesReq] });
     api.postApi.mockResolvedValue({ ...pendingReq, status: 'Changes Requested' });
     const u = userEvent.setup();
-    renderAt('/my-work?tab=waiting');
+    renderAt('/team-work?tab=waiting');
     const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
     expect(await within(waiting).findByText('Ward Nurse (REQ-1) · SGH Jeddah')).toBeInTheDocument();
     expect(within(waiting).queryByText('Lab Tech (REQ-2) · SGH Jeddah')).toBeNull();
@@ -763,7 +821,7 @@ describe('M01 to M03 to M04', () => {
 describe('M02 to M10', () => {
   it('opens a live approval from Waiting on you, requires a reason, and links the requisition', async () => {
     const u = userEvent.setup();
-    const sample = renderAt('/my-work?tab=waiting&approval=sample');
+    const sample = renderAt('/team-work?tab=waiting&approval=sample');
     const preview = await screen.findByRole('region', { name: 'Approval decision' });
     expect(preview).toHaveTextContent('SAMPLE / preview mode — Nothing is currently waiting in your live approval queue');
     expect(within(preview).getByRole('button', { name: 'Return for changes' })).toBeDisabled();
@@ -772,7 +830,7 @@ describe('M02 to M10', () => {
 
     authState.user = { ...authState.user, permissions: ['APPLICATION_VIEW', 'VACANCY_REQUEST_VIEW'] };
     serve({ '/vacancy-requests': [pendingReq] });
-    renderAt('/my-work?tab=waiting');
+    renderAt('/team-work?tab=waiting');
     const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
     expect(await within(waiting).findByText('Ward Nurse (REQ-1) · SGH Jeddah')).toBeInTheDocument();
     await u.click(within(waiting).getByRole('button', { name: 'Review' }));

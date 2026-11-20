@@ -16,8 +16,8 @@ describe('#21 B2-3: Recruiter role has no requisitions', () => {
     expect(canUseRequisitions({ roles: HM, permissions: [] })).toBe(false);
     expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, true).map((i) => i.key)).not.toContain('requisitions');
     expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, false).map((i) => i.key)).toContain('requisitions');
-    expect(v2Redirect('manager', '/vacancy-requests', { requisitions: false })).toBe('/my-work');
-    expect(v2Redirect('manager', '/vacancy-requests/r1', { requisitions: false })).toBe('/my-work');
+    expect(v2Redirect('manager', '/vacancy-requests', { requisitions: false })).toBe('/team-work');
+    expect(v2Redirect('manager', '/vacancy-requests/r1', { requisitions: false })).toBe('/team-work');
     expect(v2Redirect('manager', '/vacancy-requests', { requisitions: true })).toBeNull();
   });
 });
