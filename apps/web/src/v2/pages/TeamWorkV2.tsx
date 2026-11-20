@@ -69,7 +69,10 @@ export function TeamWorkV2() {
   const [pickId, setPickId] = useState<string | null>(null);
   const [reqBox, setReqBox] = useState<ReqBox>({ status: 'ready', pending: [], changes: 0, ctx: null });
   const rootRef = useRef<HTMLDivElement>(null);
-  useKeyboardListTriage(rootRef, '.rf2-team__name, .rf2-team__items a.rf2-link');
+  useKeyboardListTriage(
+    rootRef,
+    '.rf2-team__name, .rf2-team__items a.rf2-link, .rf2-team__waiting tbody button:not([disabled]), .rf2-team__waiting tbody a, .rf2-team__detail tbody a',
+  );
 
   useEffect(() => {
     document.documentElement.setAttribute('data-team-work-surface', '');

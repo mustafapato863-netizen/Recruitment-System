@@ -22,13 +22,14 @@ export function JobAnalyticsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [vacancy, setVacancy] = useState<VacancyDetailView | null>(null);
-  const [applications, setApplications] = useState<Application[]>([]);
+  const [rawApplications, setApplications] = useState<Application[]>([]);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [interviewers, setInterviewers] = useState<InterviewerUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [redactedJob, setRedactedJob] = useState<RedactedVacancy | null>(null);
   const [isForbidden, setIsForbidden] = useState(false);
   const [dateRange, setDateRange] = useState('All Time');
+  const [refreshTick, setRefreshTick] = useState(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -67,7 +68,7 @@ export function JobAnalyticsPage() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [id]);
+  }, [id, refreshTick]);
 
   const jobTitle = vacancy?.position?.title || vacancy?.title || 'No position';
   useSetBreadcrumbTitle(jobTitle && jobTitle !== 'No position' ? `${jobTitle} Analytics` : 'Job Analytics');
@@ -88,14 +89,23 @@ export function JobAnalyticsPage() {
     : null;
   const recruiterName = recruiterUser?.displayName || recruiterUser?.name || 'Unassigned';
 
+  const applications = rawApplications.filter((a) => {
+    if (dateRange === 'All Time') return true;
+    const windowDays = dateRange === 'This Month' ? 30 : 90;
+    const timestamp = new Date(a.appliedAt || a.createdAt).getTime();
+    if (Number.isNaN(timestamp)) return true;
+    return Date.now() - timestamp <= windowDays * 24 * 60 * 60 * 1000;
+  });
   const appIds = new Set(applications.map((a) => a.id));
   const vacancyInterviews = interviews.filter((i) => appIds.has(i.applicationId));
 
-  const totalApps = vacancy?.funnelCounts?.applied ?? applications.length;
+  const totalApps = dateRange === 'All Time' ? (vacancy?.funnelCounts?.applied ?? applications.length) : applications.length;
   const qualifiedApps = applications.filter((a) => !['Applied', 'New', 'Rejected', 'Withdrawn'].includes(a.stage)).length;
-  const interviewCount = vacancy?.funnelCounts?.interviews ?? vacancyInterviews.length;
-  const offerCount = vacancy?.funnelCounts?.offer ?? applications.filter((a) => a.stage === 'Offer').length;
-  const hireCount = vacancy?.joinedHeadcount ?? vacancy?.funnelCounts?.joined ?? applications.filter((a) => a.stage === 'Joined' || (a as unknown as { stage?: string; status?: string }).stage === 'Hired' || (a as unknown as { status?: string }).status === 'HIRED').length;
+  const interviewCount = dateRange === 'All Time' ? (vacancy?.funnelCounts?.interviews ?? vacancyInterviews.length) : vacancyInterviews.length;
+  const offerCount = dateRange === 'All Time' ? (vacancy?.funnelCounts?.offer ?? applications.filter((a) => a.stage === 'Offer').length) : applications.filter((a) => a.stage === 'Offer').length;
+  const hireCount = dateRange === 'All Time'
+    ? (vacancy?.joinedHeadcount ?? vacancy?.funnelCounts?.joined ?? applications.filter((a) => a.stage === 'Joined' || (a as unknown as { stage?: string; status?: string }).stage === 'Hired' || (a as unknown as { status?: string }).status === 'HIRED').length)
+    : applications.filter((a) => a.stage === 'Joined' || (a as unknown as { stage?: string; status?: string }).stage === 'Hired' || (a as unknown as { status?: string }).status === 'HIRED').length;
   const daysOpen = vacancy?.openedAt || vacancy?.createdAt
     ? Math.max(0, Math.floor((Date.now() - new Date(vacancy.openedAt || vacancy.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
@@ -168,11 +178,15 @@ export function JobAnalyticsPage() {
 
           <button
             type="button"
-            onClick={() => showToast('Analytics options: Refresh metrics, Schedule automated weekly report')}
+            onClick={() => {
+              setRefreshTick((n) => n + 1);
+              showToast('Job analytics refreshed.');
+            }}
             className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 hover:text-slate-900 shadow-xs cursor-pointer"
-            title="More options"
+            title="Refresh metrics"
+            aria-label="Refresh metrics"
           >
-            <Icon name="more-horizontal" size={15} />
+            <Icon name="refresh-cw" size={15} />
           </button>
 
           <button
@@ -730,7 +744,7 @@ export function JobAnalyticsPage() {
                             <td className="py-2.5 text-right">
                               <button
                                 type="button"
-                                onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
+                                onClick={() => navigate(`/applications/${encodeURIComponent(app.id)}`)}
                                 className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
                               >
                                 Review
@@ -746,7 +760,7 @@ export function JobAnalyticsPage() {
                 <div className="text-center pt-2 border-t border-slate-100 dark:border-slate-800">
                   <button
                     type="button"
-                    onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
+                    onClick={() => navigate(`/vacancies/${encodeURIComponent(id || '')}`)}
                     className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                   >
                     View all ({needingAction.length})

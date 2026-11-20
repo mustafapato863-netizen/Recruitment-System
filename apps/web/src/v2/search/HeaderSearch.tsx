@@ -19,7 +19,7 @@ export function HeaderSearch({ placeholder, meId }: { placeholder: string; meId:
   const flat: ScopedResult[] = res.kind === 'ready' ? res.data.groups.flatMap((g) => g.items) : [];
 
   useEffect(() => {
-    if (q.trim().length < 2) { setRes({ kind: 'idle' }); return undefined; }
+    if (q.trim().length < 2) { setRes({ kind: 'idle' }); setActive(-1); return undefined; }
     const sig = { aborted: false };
     setRes({ kind: 'loading' });
     const t = window.setTimeout(() => {
@@ -32,6 +32,7 @@ export function HeaderSearch({ placeholder, meId }: { placeholder: string; meId:
     const onDoc = (e: MouseEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
     const onGlobalKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return;
         e.preventDefault();
         setOpen(true);
         inputRef.current?.focus();

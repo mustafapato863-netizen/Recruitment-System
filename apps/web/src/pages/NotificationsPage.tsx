@@ -86,6 +86,7 @@ export function NotificationsPage() {
   const pageReturn = usePageReturn();
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [total, setTotal] = useState(0);
+  const [allTotal, setAllTotal] = useState<number | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +124,9 @@ export function NotificationsPage() {
       ]);
       setNotifications(result.data);
       setTotal(result.total);
+      if (activeCategory !== 'unread') {
+        setAllTotal(result.total);
+      }
       setUnreadCount(unreadResult.unreadCount);
     } catch (err: unknown) {
       setError((err as Error).message ?? 'Failed to load notifications.');
@@ -198,7 +202,7 @@ export function NotificationsPage() {
 
   const totalPages = Math.ceil(total / pageSize);
   const filters: TabV2Item[] = [
-    { key: 'all', label: 'All Notifications', count: total },
+    { key: 'all', label: 'All Notifications', count: allTotal ?? total },
     { key: 'unread', label: 'Unread Only', count: unreadCount },
     { key: 'alerts', label: 'System Alerts', count: systemAlertsCount },
     { key: 'approvals', label: 'Pending Approvals', count: pendingApprovalsCount },

@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { useRef } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { axeViolations } from '../../components/v2/__tests__/axe';
 import { permittedNavItems } from '../../components/v2/shell/navConfig';
@@ -11,6 +12,7 @@ import { stripPay } from '../api/paySafety';
 import { CAPACITY_WARNING_THRESHOLD, interviewsThisWeekCount } from '../api/teamWork';
 import { authorizedLanding, canOpenRoute, routeActor, v2Redirect } from '../destinations';
 import { SCREEN_ROUTES } from '../screenRegistry';
+import { HeaderSearch } from '../search/HeaderSearch';
 import { availableWorkspaceSeats, resolveSeat } from '../seat';
 import { useKeyboardListTriage } from '../useKeyboardListTriage';
 import { formatPersonName, getInitials, splitPersonIdentity } from '../userIdentity';
@@ -18,7 +20,7 @@ import { formatPersonName, getInitials, splitPersonIdentity } from '../userIdent
 const appSource = readFileSync(resolve(__dirname, '../../App.tsx'), 'utf8');
 const role = (code: string) => ({ id: code, name: code, code });
 
-function TriageHarness() {
+function TriageHarness({ dialogOpen = false }: { dialogOpen?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useKeyboardListTriage(ref, '[data-triage-item]');
   return (
@@ -30,15 +32,24 @@ function TriageHarness() {
         <li><a href="#item-2" data-triage-item>Review scorecard — Candidate Two</a></li>
         <li><button type="button" data-triage-item>Open workload — Recruiter Three</button></li>
       </ul>
+      <details>
+        <summary>Collapsed applications</summary>
+        <a href="#hidden-item" data-triage-item>Collapsed item</a>
+      </details>
+      {dialogOpen ? (
+        <div role="dialog" aria-modal="true" aria-label="Active drawer">
+          <button type="button">Drawer action</button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-describe('QA Release Matrix — 1. Complete V2 Route Adoption & Zero Legacy Imports', () => {
-  it('enforces 64 registered routes with zero retained V1 screens and zero ./pages/* imports in App.tsx', () => {
+describe('QA Release Matrix — 1. Complete 64-Route V2 Registry & Zero Legacy App.tsx Imports', () => {
+  it('enforces 64 registered routes (30 native V2, 9 retained, 12 public, 13 redirect) and zero ./pages/* imports in App.tsx', () => {
     expect(SCREEN_ROUTES).toHaveLength(64);
-    expect(SCREEN_ROUTES.filter((r) => r.surface === 'retained')).toHaveLength(0);
-    expect(SCREEN_ROUTES.filter((r) => r.surface === 'v2')).toHaveLength(39);
+    expect(SCREEN_ROUTES.filter((r) => r.surface === 'v2')).toHaveLength(30);
+    expect(SCREEN_ROUTES.filter((r) => r.surface === 'retained')).toHaveLength(9);
     expect(SCREEN_ROUTES.filter((r) => r.surface === 'public')).toHaveLength(12);
     expect(SCREEN_ROUTES.filter((r) => r.surface === 'redirect')).toHaveLength(13);
     expect(appSource).not.toMatch(/import\(['"]\.\/pages\//);
@@ -89,6 +100,28 @@ describe('QA Release Matrix — 2. Seven-Persona RBAC & IDOR Route Boundary Matr
     for (const blockedPath of ['/users', '/roles', '/master-data', '/hires/approvals/inbox']) {
       expect(v2Redirect(seat, blockedPath, actor), `Manager must redirect from ${blockedPath}`).toBe('/team-work');
     }
+  });
+
+  it('Administrator persona: lands on /users, reaches all Admin desks, redirects classic admin routes to V2 equivalents', () => {
+    const admin = {
+      roles: [role('ADMINISTRATOR')],
+      permissions: ['USERS_VIEW', 'ROLES_VIEW', 'MASTER_DATA_VIEW', 'AUDIT_VIEW', 'APPLICATION_VIEW'],
+    };
+    const seat = resolveSeat(admin);
+    expect(seat).toBe('admin');
+    const actor = routeActor(seat, admin);
+    expect(v2Redirect(seat, '/', actor)).toBe('/users');
+
+    for (const allowedPath of [
+      '/users', '/roles', '/licenses', '/master-data', '/pipeline-settings',
+      '/whatsapp-templates', '/reports', '/audit-log', '/integrations',
+    ]) {
+      expect(v2Redirect(seat, allowedPath, actor), `Admin should reach ${allowedPath}`).toBeNull();
+    }
+    expect(v2Redirect(seat, '/access-control', actor)).toBe('/roles');
+    expect(v2Redirect(seat, '/settings', actor)).toBe('/master-data');
+    expect(v2Redirect(seat, '/classic/master-data', actor)).toBe('/master-data');
+    expect(v2Redirect(seat, '/classic/pipeline-settings', actor)).toBe('/pipeline-settings');
   });
 
   it('Interviewer-only persona: confined to /my-work, /my-interviews, and shell pages; redirected from files and bank', () => {
@@ -183,7 +216,7 @@ describe('QA Release Matrix — 3. Pay-Safety Redaction, Identity & Workload Gov
 
   it('reconciles Cairo week interview counts and enforces capacity warning threshold boundary', () => {
     expect(CAPACITY_WARNING_THRESHOLD).toBe(10);
-    const today = '2026-11-18'; // Wednesday in Cairo week 2026-11-15 (Sun) .. 2026-11-21 (Sat)
+    const today = '2026-11-18';
     expect(
       interviewsThisWeekCount(
         [
@@ -199,10 +232,10 @@ describe('QA Release Matrix — 3. Pay-Safety Redaction, Identity & Workload Gov
   });
 });
 
-describe('QA Release Matrix — 4. Keyboard J/K List Triage & Accessibility', () => {
-  it('cycles focus with j and k keys, ignores keystrokes inside inputs, and has zero axe violations', async () => {
+describe('QA Release Matrix — 4. Keyboard J/K Triage, Ctrl+K Focus-Trap Guard & Accessibility', () => {
+  it('cycles focus with j/k, skips closed <details>, ignores inputs and active dialogs, and has zero axe violations', async () => {
     const u = userEvent.setup();
-    const { container } = render(<TriageHarness />);
+    const { container, rerender } = render(<TriageHarness />);
     expect(await axeViolations(container)).toEqual([]);
 
     const item1 = screen.getByRole('link', { name: 'Follow up — Candidate One' });
@@ -216,12 +249,30 @@ describe('QA Release Matrix — 4. Keyboard J/K List Triage & Accessibility', ()
     expect(item2).toHaveFocus();
     await u.keyboard('j');
     expect(item3).toHaveFocus();
+    // Next 'j' wraps back to item1, skipping the link inside closed <details>
+    await u.keyboard('j');
+    expect(item1).toHaveFocus();
     await u.keyboard('k');
-    expect(item2).toHaveFocus();
+    expect(item3).toHaveFocus();
 
     await u.click(input);
     await u.keyboard('jk');
     expect(input).toHaveFocus();
     expect(input).toHaveValue('jk');
+
+    // When a modal dialog is open, J/K triage and Ctrl+K global search do not steal focus from the dialog
+    rerender(
+      <MemoryRouter>
+        <HeaderSearch placeholder="Search candidates and jobs" meId="u-1" />
+        <TriageHarness dialogOpen />
+      </MemoryRouter>,
+    );
+    const drawerBtn = screen.getByRole('button', { name: 'Drawer action' });
+    drawerBtn.focus();
+    expect(drawerBtn).toHaveFocus();
+    await u.keyboard('j');
+    expect(drawerBtn).toHaveFocus();
+    await u.keyboard('{Control>}k{/Control}');
+    expect(drawerBtn).toHaveFocus();
   });
 });

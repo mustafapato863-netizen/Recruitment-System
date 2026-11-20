@@ -15,10 +15,10 @@ or if a supported sidebar/admin destination has no declared route.
 | Scope | Registered paths | State |
 |---|---:|---|
 | Public authentication, self-schedule, candidate portal and careers | 12 | Outside authenticated V2 shell; separate responsive and privacy validation required |
-| Native V2 recruiter, manager, admin and hiring workflows | 39 | All signed-in routes routed through `apps/web/src/v2/` |
-| Retained V1 components / old staff workflows | 0 | **100% migrated or retired to redirects** |
+| Native V2 recruiter, manager, admin and hiring workflows | 30 | Native V2 primitives (`apps/web/src/v2/` & `components/v2/`) |
+| Retained V1 components / old staff workflows | 9 | Routed via `apps/web/src/v2/pages/*V2.tsx` adapters inside V2 shell; full native UI rewrite pending |
 | Supported aliases and catch-all | 13 | Redirects with intentional destination; no independent screen |
-| **Total** | **64** | **100% route-level V2 adoption** |
+| **Total** | **64** | **100% route-level inventory, 13 classic routes retired to redirects** |
 
 ## Changes in this UI/UX enhancement branch
 
@@ -69,7 +69,7 @@ For **every real rendered screen**, record evidence of the following (mark as un
 **P1:** job analytics, full settings/targets and role-aware admin usability; polished candidate portal, interviewer's scorecard; reporting deep links.  
 **P2:** optional density preference, advanced search shortcuts, explanatory microcopy and finer mobile touch interactions after P0/P1.
 
-**No-go:** This audit proves route-level enumeration and a shared implementation change. It does **not** certify that every 63 route has passed UAT or that V1 can be removed. Follow the R0–R9 owner sign-off and documented rollback requirements before production cutover.
+**No-go:** This audit proves route-level enumeration and a shared implementation change. It does **not** certify that every 64 route has passed UAT or that V1 can be removed. Follow the R0–R9 owner sign-off and documented rollback requirements before production cutover.
 
 
-**Classic route retirement:** `/classic/candidates` and `/classic/vacancies` now permission-gate then redirect to their functional V2 lists. Their Excel export buttons/handlers have been removed from the old source; the candidate V2 intake continues to create candidates only from CV uploads. Import templates and failed-import reports remain downloadable as workflow utilities.
+**Classic route retirement:** `/classic/candidates`, `/classic/vacancies`, `/access-control`, `/settings`, `/settings/targets`, `/classic/master-data`, and `/classic/pipeline-settings` now permission-gate then redirect to their functional V2 destinations (`/candidates`, `/vacancies`, `/roles`, `/master-data`, `/pipeline-settings`). Their Excel/CSV export buttons/handlers (including on `JobAnalyticsPage.tsx`) have been removed; the candidate V2 intake continues to create candidates only from CV uploads. Import templates and failed-import reports remain downloadable as workflow utilities.

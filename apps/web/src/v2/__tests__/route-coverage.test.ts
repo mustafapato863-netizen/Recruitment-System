@@ -33,16 +33,19 @@ describe('all public and signed-in screen paths are inventoried', () => {
     )).toBe(true);
   });
 
-  it('classifies every registered route with zero remaining legacy retained screens', () => {
+  it('classifies every registered route and keeps remaining retained views explicit', () => {
     expect(SCREEN_ROUTES.every((screen) =>
       ['public', 'v2', 'retained', 'redirect'].includes(screen.surface))).toBe(true);
-    expect(SCREEN_ROUTES.filter((screen) => screen.surface === 'retained')).toHaveLength(0);
+    expect(SCREEN_ROUTES.filter((screen) => screen.surface === 'retained')).toHaveLength(9);
+    for (const path of ['/hires/:id', '/candidates/:id', '/cv-bank', '/import', '/import/:dataset/:jobId', '/sourcing-match', '/my-interviews', '/vacancies/:id/analytics', '/profile']) {
+      expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('retained');
+    }
     for (const path of ['/classic/candidates', '/classic/vacancies', '/access-control', '/settings', '/settings/targets', '/classic/master-data', '/classic/pipeline-settings']) {
       expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('redirect');
     }
     expect(app).toContain('<Navigate to="/candidates" replace />');
     expect(app).toContain('<Navigate to="/vacancies" replace />');
-    for (const path of ['/offers', '/hires', '/hires/:id', '/hires/approvals/inbox', '/joinings', '/candidates/:id', '/candidates/:id/documents', '/cv-bank', '/sourcing-match', '/import', '/import/:dataset/:jobId', '/my-interviews', '/vacancies/:id/analytics', '/profile', '/notifications']) {
+    for (const path of ['/team-work', '/offers', '/hires', '/hires/approvals/inbox', '/joinings', '/candidates/:id/documents', '/notifications']) {
       expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('v2');
     }
   });
