@@ -6,7 +6,7 @@
 
 ## What “all screens” means
 
-The **source-of-truth list of all 63 registered routes** lives at
+The **source-of-truth list of all 64 registered routes** lives at
 [`apps/web/src/v2/screenRegistry.ts`](../apps/web/src/v2/screenRegistry.ts).
 `apps/web/src/v2/__tests__/route-coverage.test.ts` fails CI if a screen is
 added/removed in `App.tsx` without an intentional update to this catalog,
@@ -15,10 +15,10 @@ or if a supported sidebar/admin destination has no declared route.
 | Scope | Registered paths | State |
 |---|---:|---|
 | Public authentication, self-schedule, candidate portal and careers | 12 | Outside authenticated V2 shell; separate responsive and privacy validation required |
-| Native V2 recruiter, manager, admin and hiring workflows | 28 | Shared V2 polish proposed; functional acceptance varies by screen |
-| Retained V1 components / old staff workflows | 15 | Coherent styling via V2 shell proposed, **not yet native V2 equivalents** |
-| Supported aliases and catch-all | 8 | Redirects with intentional destination; no independent screen |
-| **Total** | **63** | **100% route-level inventory, not 100% UX/UAT completion** |
+| Native V2 recruiter, manager, admin and hiring workflows | 39 | All signed-in routes routed through `apps/web/src/v2/` |
+| Retained V1 components / old staff workflows | 0 | **100% migrated or retired to redirects** |
+| Supported aliases and catch-all | 13 | Redirects with intentional destination; no independent screen |
+| **Total** | **64** | **100% route-level V2 adoption** |
 
 ## Changes in this UI/UX enhancement branch
 

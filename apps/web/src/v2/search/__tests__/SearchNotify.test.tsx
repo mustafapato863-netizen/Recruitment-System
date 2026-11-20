@@ -151,6 +151,14 @@ describe('E07 header search', () => {
     await u.type(screen.getByRole('combobox'), 'Ahmed');
     expect(await screen.findByRole('alert')).toHaveTextContent('Your role does not include search.');
   });
+  it('focuses the global search combobox on Ctrl+K shortcut', async () => {
+    const u = userEvent.setup();
+    renderUI();
+    const box = screen.getByRole('combobox', { name: 'Search candidates and jobs' });
+    expect(box).not.toHaveFocus();
+    await u.keyboard('{Control>}k{/Control}');
+    expect(box).toHaveFocus();
+  });
 });
 
 describe('E06 notifications panel', () => {

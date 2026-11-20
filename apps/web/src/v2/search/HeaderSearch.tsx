@@ -13,6 +13,7 @@ export function HeaderSearch({ placeholder, meId }: { placeholder: string; meId:
   const [active, setActive] = useState(-1);
   const id = useId();
   const wrap = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const pageReturn = usePageReturn();
   const flat: ScopedResult[] = res.kind === 'ready' ? res.data.groups.flatMap((g) => g.items) : [];
@@ -29,8 +30,19 @@ export function HeaderSearch({ placeholder, meId }: { placeholder: string; meId:
   }, [q, meId, pageReturn]);
   useEffect(() => {
     const onDoc = (e: MouseEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
+    const onGlobalKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setOpen(true);
+        inputRef.current?.focus();
+      }
+    };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onGlobalKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onGlobalKey);
+    };
   }, []);
   const go = (r: ScopedResult) => { if (!r.href) return; setOpen(false); setQ(''); navigate(r.href); };
   const onKey = (e: React.KeyboardEvent) => {
@@ -49,9 +61,11 @@ export function HeaderSearch({ placeholder, meId }: { placeholder: string; meId:
     <div className="rf2-hsearch" ref={wrap}>
       <div className="rf2-search-entry rf2-hsearch__box">
         <Search aria-hidden="true" />
-        <input role="combobox" aria-label={placeholder} placeholder={placeholder} aria-expanded={show} aria-controls={`${id}-list`} aria-autocomplete="list"
+        <input ref={inputRef} role="combobox" aria-label={placeholder} placeholder={placeholder} aria-expanded={show} aria-controls={`${id}-list`} aria-autocomplete="list"
           aria-activedescendant={show && active >= 0 ? `${id}-o${active}` : undefined}
+          aria-keyshortcuts="Control+K Meta+K"
           value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onKeyDown={onKey} />
+        {!q ? <kbd className="rf2-hsearch__kbd" aria-hidden="true">Ctrl K</kbd> : null}
       </div>
       {show ? (
         <div className="rf2-popover rf2-hsearch__pop">
