@@ -33,18 +33,16 @@ describe('all public and signed-in screen paths are inventoried', () => {
     )).toBe(true);
   });
 
-  it('classifies every registered route and keeps legacy parity gaps explicit', () => {
+  it('classifies every registered route with zero remaining legacy retained screens', () => {
     expect(SCREEN_ROUTES.every((screen) =>
       ['public', 'v2', 'retained', 'redirect'].includes(screen.surface))).toBe(true);
-    for (const path of ['/hires/:id', '/candidates/:id', '/cv-bank', '/import']) {
-      expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('retained');
-    }
-    for (const path of ['/classic/candidates', '/classic/vacancies']) {
+    expect(SCREEN_ROUTES.filter((screen) => screen.surface === 'retained')).toHaveLength(0);
+    for (const path of ['/classic/candidates', '/classic/vacancies', '/access-control', '/settings', '/settings/targets', '/classic/master-data', '/classic/pipeline-settings']) {
       expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('redirect');
     }
     expect(app).toContain('<Navigate to="/candidates" replace />');
     expect(app).toContain('<Navigate to="/vacancies" replace />');
-    for (const path of ['/offers', '/hires', '/hires/approvals/inbox', '/joinings', '/candidates/:id/documents']) {
+    for (const path of ['/offers', '/hires', '/hires/:id', '/hires/approvals/inbox', '/joinings', '/candidates/:id', '/candidates/:id/documents', '/cv-bank', '/sourcing-match', '/import', '/import/:dataset/:jobId', '/my-interviews', '/vacancies/:id/analytics', '/profile', '/notifications']) {
       expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('v2');
     }
   });
@@ -98,7 +96,10 @@ describe('native V2 routes are actually reachable after seat routing', () => {
     const native = SCREEN_ROUTES.filter((route) => route.surface === 'v2');
     expect(native.length).toBeGreaterThan(20);
     for (const route of native) {
-      const actualPath = route.path.replace(':id', 'test-record-id');
+      const actualPath = route.path
+        .replace(':id', 'test-record-id')
+        .replace(':dataset', 'candidates')
+        .replace(':jobId', 'test-job-id');
       const reachable = (['employee', 'manager', 'admin'] as const).some((seat) =>
         v2Redirect(seat, actualPath, {
           permissions: fullPermissions,

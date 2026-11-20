@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { CandidatesPage } from '../CandidatesPage';
 import { VacantListPage } from '../VacantListPage';
+import { JobAnalyticsV2 } from '../../v2/pages/JobAnalyticsV2';
 import { ToastProvider } from '../../components/ui/ToastContext';
 import { downloadApi, fetchApi, getApi } from '../../api/client';
 
@@ -52,5 +53,19 @@ describe('No Excel export actions in the V2 migration', () => {
     expect(screen.getByText('Upload job description')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /export xlsx|export.*excel/i })).not.toBeInTheDocument();
     expect(downloadApi).not.toHaveBeenCalled();
+  });
+
+  it('does not offer CSV or Excel export on JobAnalyticsV2', async () => {
+    vi.mocked(fetchApi).mockResolvedValue({ id: 'v1', title: 'ICU Nurse', status: 'Open' });
+    vi.mocked(getApi).mockResolvedValue({ data: [], total: 0 });
+    render(
+      <MemoryRouter initialEntries={['/vacancies/v1/analytics']}>
+        <Routes>
+          <Route path="/vacancies/:id/analytics" element={<JobAnalyticsV2 />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('heading', { name: 'ICU Nurse' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /export/i })).not.toBeInTheDocument();
   });
 });

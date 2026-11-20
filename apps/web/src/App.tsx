@@ -22,7 +22,7 @@ const JobDetailRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ 
 const ApplicationRoute = lazy(() => import('./v2/pages/ApplicationRoute').then((m) => ({ default: m.ApplicationRoute })));
 const MyWorkRoute = lazy(() => import('./v2/pages/MyWorkRoute').then((m) => ({ default: m.MyWorkRoute })));
 const TeamWorkRoute = lazy(() => import('./v2/pages/TeamWorkV2').then((m) => ({ default: m.TeamWorkV2 })));
-const MyInterviewsGate = lazy(() => import('./pages/MyInterviewsGate').then((m) => ({ default: m.MyInterviewsGate })));
+const MyInterviewsGate = lazy(() => import('./v2/pages/MyInterviewsV2').then((m) => ({ default: m.MyInterviewsV2 })));
 const RequisitionsRoute = lazy(() => import('./v2/pages/RequisitionsRoute').then((m) => ({ default: m.RequisitionsRoute })));
 const ApprovalsRoute = lazy(() => import('./v2/pages/ApprovalsRoute').then((m) => ({ default: m.ApprovalsRoute })));
 const TeamInterviewsRoute = lazy(() => import('./v2/pages/TeamInterviewsV2').then((m) => ({ default: m.TeamInterviewsV2 })));
@@ -42,26 +42,21 @@ const TemplatesRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => (
 const AuditRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.AuditRoute })));
 const IntegrationsRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.IntegrationsRoute })));
 const RolesRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.RolesRoute })));
-const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
-const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const NotificationsPage = lazy(() => import('./v2/pages/NotificationsV2').then((m) => ({ default: m.NotificationsV2 })));
+const ProfilePage = lazy(() => import('./v2/pages/ProfileV2').then((m) => ({ default: m.ProfileV2 })));
 const EntityLinkRoute = lazy(() => import('./v2/pages/EntityLinkRoute').then((m) => ({ default: m.EntityLinkRoute })));
-// Classic (v1) pages. Same PermissionGate as v1. A signed-out request never reaches these routes.
+// Native V2 hiring, candidate, CV bank, matching, analytics, and import workflows.
 const HireManagementPage = lazy(() => import('./v2/pages/HiresV2').then((m) => ({ default: m.HiresV2 })));
-const HiringCasePage = lazy(() => import('./pages/HiringCasePage').then((m) => ({ default: m.HiringCasePage })));
+const HiringCasePage = lazy(() => import('./v2/pages/HiringCaseDetailV2').then((m) => ({ default: m.HiringCaseDetailV2 })));
 const FinalApprovalInboxPage = lazy(() => import('./v2/pages/FinalApprovalInboxV2').then((m) => ({ default: m.FinalApprovalInboxV2 })));
 const OffersPage = lazy(() => import('./v2/pages/OffersV2').then((m) => ({ default: m.OffersV2 })));
-const JobAnalyticsPage = lazy(() => import('./pages/JobAnalyticsPage').then((m) => ({ default: m.JobAnalyticsPage })));
-const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage').then((m) => ({ default: m.CandidateDetailPage })));
+const JobAnalyticsPage = lazy(() => import('./v2/pages/JobAnalyticsV2').then((m) => ({ default: m.JobAnalyticsV2 })));
+const CandidateDetailPage = lazy(() => import('./v2/pages/CandidateProfileV2').then((m) => ({ default: m.CandidateProfileV2 })));
 // Native V2 document vault retains the stable candidate URL and audited document APIs.
-const CandidateDocumentsPage = lazy(() => import('./pages/CandidateDocumentsPage').then((m) => ({ default: m.CandidateDocumentsPage })));
-const CVBankPage = lazy(() => import('./pages/CVBankPage').then((m) => ({ default: m.CVBankPage })));
-const TalentPoolPage = lazy(() => import('./pages/TalentPoolPage').then((m) => ({ default: m.TalentPoolPage })));
-const BulkImportPage = lazy(() => import('./pages/BulkImportPage').then((m) => ({ default: m.BulkImportPage })));
-const PositionLevelTargetSettingsPage = lazy(() => import('./pages/PositionLevelTargetSettingsPage').then((m) => ({ default: m.PositionLevelTargetSettingsPage })));
-const UsersRolesPage = lazy(() => import('./pages/UsersRolesPage').then((m) => ({ default: m.UsersRolesPage })));
-const MasterDataGridPage = lazy(() => import('./pages/MasterDataGridPage').then((m) => ({ default: m.MasterDataGridPage })));
-const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
-const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage').then((m) => ({ default: m.PipelineSettingsPage })));
+const CandidateDocumentsPage = lazy(() => import('./v2/pages/CandidateDocumentsV2').then((m) => ({ default: m.CandidateDocumentsV2 })));
+const CVBankPage = lazy(() => import('./v2/pages/CvBankV2').then((m) => ({ default: m.CvBankV2 })));
+const TalentPoolPage = lazy(() => import('./v2/pages/MatchSkillsV2').then((m) => ({ default: m.MatchSkillsV2 })));
+const BulkImportPage = lazy(() => import('./v2/pages/BulkImportV2').then((m) => ({ default: m.BulkImportV2 })));
 const V2Shell = lazy(() => import('./layout/V2Shell').then((m) => ({ default: m.V2Shell })));
 
 const ForgotPasswordPage = lazy(() => import('./auth/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
@@ -71,7 +66,7 @@ const VerifyEmailPage = lazy(() => import('./auth/VerifyEmailPage').then((m) => 
 const PublicJobsPage = lazy(() => import('./public/PublicJobsPage').then((m) => ({ default: m.PublicJobsPage })));
 const PublicJobDetailPage = lazy(() => import('./public/PublicJobDetailPage').then((m) => ({ default: m.PublicJobDetailPage })));
 const PublicApplyPage = lazy(() => import('./public/PublicApplyPage').then((m) => ({ default: m.PublicApplyPage })));
-const CandidateSelfSchedulePage = lazy(() => import('./pages/CandidateSelfSchedulePage').then((m) => ({ default: m.CandidateSelfSchedulePage })));
+const CandidateSelfSchedulePage = lazy(() => import('./public/CandidateSelfScheduleV2').then((m) => ({ default: m.CandidateSelfScheduleV2 })));
 const CandidatePortalPage = lazy(() => import('./public/CandidatePortalPage').then((m) => ({ default: m.CandidatePortalPage })));
 
 function App() {
@@ -151,11 +146,11 @@ function App() {
                   <Route path="/import/:dataset/:jobId" element={<PermissionGate requiredAnyPermission={['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW']}><BulkImportPage /></PermissionGate>} />
                   <Route path="/classic/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><Navigate to="/candidates" replace /></PermissionGate>} />
                   <Route path="/classic/vacancies" element={<PermissionGate requiredPermission="VACANCY_VIEW"><Navigate to="/vacancies" replace /></PermissionGate>} />
-                  <Route path="/settings/targets" element={<PermissionGate requiredAnyPermission={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW']}><PositionLevelTargetSettingsPage /></PermissionGate>} />
-                  <Route path="/access-control" element={<PermissionGate requiredPermission="USERS_VIEW"><UsersRolesPage /></PermissionGate>} />
-                  <Route path="/classic/master-data" element={<PermissionGate requiredPermission="MASTER_DATA_VIEW"><MasterDataGridPage /></PermissionGate>} />
-                  <Route path="/settings" element={<PermissionGate requiredAnyPermission={['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW']}><SettingsPage /></PermissionGate>} />
-                  <Route path="/classic/pipeline-settings" element={<PermissionGate requiredPermission="OVERRIDE_WORKFLOW"><PipelineSettingsPage /></PermissionGate>} />
+                  <Route path="/settings/targets" element={<PermissionGate requiredAnyPermission={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW']}><Navigate to="/master-data" replace /></PermissionGate>} />
+                  <Route path="/access-control" element={<PermissionGate requiredPermission="USERS_VIEW"><Navigate to="/roles" replace /></PermissionGate>} />
+                  <Route path="/classic/master-data" element={<PermissionGate requiredPermission="MASTER_DATA_VIEW"><Navigate to="/master-data" replace /></PermissionGate>} />
+                  <Route path="/settings" element={<PermissionGate requiredAnyPermission={['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW']}><Navigate to="/master-data" replace /></PermissionGate>} />
+                  <Route path="/classic/pipeline-settings" element={<PermissionGate requiredPermission="OVERRIDE_WORKFLOW"><Navigate to="/pipeline-settings" replace /></PermissionGate>} />
                   <Route path="/joining" element={<Navigate to="/joinings" replace />} />
                   <Route path="/talent-pool" element={<Navigate to="/sourcing-match" replace />} />
 

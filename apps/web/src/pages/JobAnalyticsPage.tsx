@@ -56,10 +56,12 @@ export function JobAnalyticsPage() {
           setApplications(appsRes.value.data);
         }
         if (intsRes.status === 'fulfilled' && intsRes.value) {
-          setInterviews(intsRes.value);
+          const rows = Array.isArray(intsRes.value) ? intsRes.value : ((intsRes.value as { data?: Interview[] })?.data ?? []);
+          setInterviews(Array.isArray(rows) ? rows : []);
         }
         if (usersRes.status === 'fulfilled' && usersRes.value) {
-          setInterviewers(usersRes.value);
+          const rows = Array.isArray(usersRes.value) ? usersRes.value : ((usersRes.value as { data?: InterviewerUser[] })?.data ?? []);
+          setInterviewers(Array.isArray(rows) ? rows : []);
         }
       })
       .finally(() => {
@@ -97,29 +99,6 @@ export function JobAnalyticsPage() {
   const daysOpen = vacancy?.openedAt || vacancy?.createdAt
     ? Math.max(0, Math.floor((Date.now() - new Date(vacancy.openedAt || vacancy.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
-
-  const handleExportCsv = () => {
-    const csvContent = [
-      'Metric,Value',
-      `Job Title,"${jobTitle}"`,
-      `Department,"${departmentName}"`,
-      `Location,"${locationText}"`,
-      `Total Applications,${totalApps}`,
-      `Qualified Candidates,${qualifiedApps}`,
-      `Interviews,${interviewCount}`,
-      `Offers,${offerCount}`,
-      `Hires,${hireCount}`,
-      `Days Open,${daysOpen}`,
-    ].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `job-analytics-${id || 'export'}-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast('✓ Job analytics metrics exported to CSV!');
-  };
 
   if (isLoading && !vacancy) {
     return (
@@ -185,15 +164,6 @@ export function JobAnalyticsPage() {
           >
             <Icon name="arrow-left" size={13} />
             <span>Back to reports</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
-          >
-            <Icon name="download" size={13} className="text-slate-400" />
-            <span>Export</span>
           </button>
 
           <button

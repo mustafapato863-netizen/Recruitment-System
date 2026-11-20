@@ -31,6 +31,7 @@ import { PageState } from '../components/ui/PageState';
 import { Select } from '../components/ui/Select';
 import { useToast } from '../components/ui/ToastContext';
 import { useTheme } from '../theme/ThemeContext';
+import { getInitials } from '../v2/userIdentity';
 import './PageEnhancementsV2.css';
 
 type TabKey = 'profile' | 'preferences' | 'security' | 'notifications' | 'accessibility';
@@ -55,13 +56,8 @@ const preferenceLabels: Array<{
 ];
 
 function initialsFor(displayName: string) {
-  return displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase() || 'U';
+  const value = getInitials(displayName);
+  return value === '?' ? 'U' : value;
 }
 
 function formatLastLogin(value: string | null) {

@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import type { NotificationRecord, PaginatedResult } from '@recruitflow/contracts';
 import { getApi, patchApi, postApi } from '../api/client';
 import { notificationHref } from '../v2/api/searchNotify';
+import { NOTIFICATIONS_CHANGED } from '../v2/search/NotificationsBell';
 import type { IconName } from '../components/Icon';
 import { Alert } from '../components/ui/Alert';
 import { Pagination } from '../components/ui/Pagination';
@@ -140,6 +141,7 @@ export function NotificationsPage() {
       const updated = await patchApi<NotificationRecord>(`/notifications/${id}/read`);
       setNotifications((previous) => previous.map((n) => (n.id === id ? updated : n)));
       setUnreadCount((count) => Math.max(0, count - 1));
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED));
     } catch (err: unknown) {
       setError((err as Error).message ?? 'Failed to mark the notification as read.');
     } finally {
@@ -152,6 +154,7 @@ export function NotificationsPage() {
     try {
       await postApi('/notifications/read-all');
       setUnreadCount(0);
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED));
       await load();
     } catch (err: unknown) {
       setError((err as Error).message ?? 'Failed to mark all as read.');
