@@ -301,6 +301,7 @@ export function CVBankPage() {
 
   useEffect(() => {
     void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appliedSearch]);
 
   const allRows = useMemo(() => buildRows(documents, candidates), [documents, candidates]);
@@ -314,7 +315,7 @@ export function CVBankPage() {
     let cancelled = false;
     let localBlob: string | null = null;
 
-    if (!viewingRow || !documentId || documentId.startsWith('cand-only-')) {
+    if (!documentId || documentId.startsWith('cand-only-')) {
       setDocUrl(null);
       setDocUrlError('');
       setDocUrlLoading(false);
@@ -330,14 +331,14 @@ export function CVBankPage() {
         let nextUrl: string | null = null;
         try {
           const payload = await getApi<{ downloadUrl?: string; url?: string }>(
-            `/documents/${encodeURIComponent(viewingRow.documentId)}/download`,
+            `/documents/${encodeURIComponent(documentId)}/download`,
           );
           nextUrl = (payload?.downloadUrl || payload?.url || '').trim() || null;
         } catch {
           nextUrl = null;
         }
         if (!nextUrl) {
-          const blob = await downloadApi(`/documents/${encodeURIComponent(viewingRow.documentId)}/download`);
+          const blob = await downloadApi(`/documents/${encodeURIComponent(documentId)}/download`);
           if (!(blob instanceof Blob) || blob.size === 0) throw new Error('Could not load the CV file.');
           localBlob = URL.createObjectURL(blob);
           nextUrl = localBlob;

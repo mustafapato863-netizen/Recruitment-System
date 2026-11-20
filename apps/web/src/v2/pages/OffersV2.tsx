@@ -81,7 +81,7 @@ export function OffersV2() {
     return () => { active = false; };
   }, [refresh]);
 
-  const available = state.kind === 'ready' ? state.offers : [];
+  const available = useMemo(() => (state.kind === 'ready' ? state.offers : []), [state]);
   const scoped = useMemo(
     () => available.filter((offer) => !vacancyId || offer.vacancyId === vacancyId),
     [available, vacancyId],

@@ -27,6 +27,8 @@ import { splitPersonIdentity } from '../userIdentity';
 const enc = encodeURIComponent;
 const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
 export const CLOSED_STAGES = ['Joined', 'Rejected', 'Withdrawn'] as const;
+/** Open-file count at which a recruiter card displays a subtle High capacity warning chip. */
+export const CAPACITY_WARNING_THRESHOLD = 10;
 
 export interface RawTeamApp {
   id: string; applicationCode: string; vacancyId: string; stage: string; primaryRecruiterId?: string | null;

@@ -188,8 +188,8 @@ export function CommentsThread({
     <div className="comments-thread">
       <style>{`
         .mention-highlight {
-          background-color: var(--color-rf-action-soft, rgba(37, 99, 235, 0.12));
-          color: var(--color-rf-action, #2563eb);
+          background-color: var(--color-rf-action-soft);
+          color: var(--color-rf-action);
           font-weight: 600;
           border-radius: 4px;
           padding: 0 3px;

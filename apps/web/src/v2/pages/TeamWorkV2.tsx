@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageReturn, withReturnTo } from '../returnTarget';
+import { useKeyboardListTriage } from '../useKeyboardListTriage';
 import { ArrowLeft, ArrowLeftRight, BarChart3, Briefcase, CalendarDays, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, Clock, Copy, Eye, FileText, Folder, Info, Pause, RotateCw, Users, XCircle } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, TabsV2, TextareaV2 } from '../../components/v2';
 import { useV2Shell } from '../../components/v2/shell/AppShellV2';
 import type { StatusTone } from '../../components/v2';
 import { useAuth } from '../../auth/AuthContext';
-import { compareTeamWorkload, fetchTeamJobs, fetchTeamWork, fileHref, interviewsThisWeekCount, teamJobDetail, type ReportWork, type TeamFile, type TeamJob, type TaskTone, type TeamTask, type TeamWork, type WaitingOffer, type WaitingScorecard } from '../api/teamWork';
+import { CAPACITY_WARNING_THRESHOLD, compareTeamWorkload, fetchTeamJobs, fetchTeamWork, fileHref, interviewsThisWeekCount, teamJobDetail, type ReportWork, type TeamFile, type TeamJob, type TaskTone, type TeamTask, type TeamWork, type WaitingOffer, type WaitingScorecard } from '../api/teamWork';
 import { ReassignDrawer } from '../drawers/ReassignDrawer';
 import { OfferDecisionDrawer } from '../drawers/OfferDecisionDrawer';
 import { canSeePay } from '../api/offerDecision';
@@ -67,6 +68,8 @@ export function TeamWorkV2() {
   const [jobAction, setJobAction] = useState<{ job: TeamJob; action: JobAction } | null>(null);
   const [pickId, setPickId] = useState<string | null>(null);
   const [reqBox, setReqBox] = useState<ReqBox>({ status: 'ready', pending: [], changes: 0, ctx: null });
+  const rootRef = useRef<HTMLDivElement>(null);
+  useKeyboardListTriage(rootRef, '.rf2-team__name, .rf2-team__items a.rf2-link');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-team-work-surface', '');
@@ -219,7 +222,7 @@ export function TeamWorkV2() {
   const activityOwners = new Map(activityRows.map((row) => [row.file.id, row.owner]));
 
   return (
-    <div className="rf2-jobs rf2-team">
+    <div ref={rootRef} className="rf2-jobs rf2-team">
       {toast ? <p className="rf2-inline-note" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {toast}</p> : null}
       {state.kind === 'loading' ? <SkeletonV2 lines={6} label="Loading team work…" /> : null}
       {state.kind === 'forbidden' ? <ForbiddenStateV2 body="Your role does not include your team’s files." /> : null}
@@ -476,7 +479,7 @@ function MemberCard({ row, tasks, open, overdue, interviews, returnTo, onOpen, o
           </h2>
           {row.person.detail ? <p className="rf2-jtable__sub">{row.person.detail}</p> : null}
         </div>
-        {open >= 10 ? <StatusChip tone="warning" label="High capacity" /> : null}
+        {open >= CAPACITY_WARNING_THRESHOLD ? <StatusChip tone="warning" label="High capacity" /> : null}
         <ButtonV2 kind="tertiary" size="sm" icon={<ArrowLeftRight />} aria-label={`Reassign: ${row.person.name}`} disabled={open === 0}
           title={open === 0 ? 'No open items to reassign' : undefined} onClick={onReassign}>Reassign</ButtonV2>
       </div>

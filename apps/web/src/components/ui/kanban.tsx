@@ -458,7 +458,7 @@ export interface KanbanColumnContentProps {
 
 function KanbanColumnContent({ value, className, children }: KanbanColumnContentProps) {
   const { columns, getItemId } = React.useContext(KanbanContext);
-  const items = columns[value] ?? [];
+  const items = React.useMemo(() => columns[value] ?? [], [columns, value]);
 
   const itemIds = React.useMemo(() => items.map((item: any) => getItemId(item)), [items, getItemId]);
 

@@ -86,13 +86,13 @@ export function Drawer({
   return (
     <div className={['drawer-scrim', sheetClass].filter(Boolean).join(' ')} onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="presentation">
       <div
-        className={['drawer-demo', 'ui-drawer', widthClass, sheetClass, 'bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100'].filter(Boolean).join(' ')}
+        className={['drawer-demo', 'ui-drawer', widthClass, sheetClass, 'bg-rf-surface border-l border-rf-border text-rf-ink'].filter(Boolean).join(' ')}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         ref={drawerRef}
       >
-        <header className="drawer-header border-b border-slate-200 dark:border-slate-800">
+        <header className="drawer-header border-b border-rf-border">
           <div>
             <b id={titleId}>{title}</b>
             {subtitle && <small>{subtitle}</small>}
@@ -104,7 +104,7 @@ export function Drawer({
 
         <div className="drawer-body rf-scrollbar">{children}</div>
 
-        {footer && <footer className="drawer-footer bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">{footer}</footer>}
+        {footer && <footer className="drawer-footer bg-rf-surface border-t border-rf-border">{footer}</footer>}
       </div>
     </div>
   );

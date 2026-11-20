@@ -220,6 +220,7 @@ export function CandidatesPage() {
 
   useEffect(() => {
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, statusFilter, sourceFilter]);
 
   const handleSearchSubmit = (e: FormEvent) => {

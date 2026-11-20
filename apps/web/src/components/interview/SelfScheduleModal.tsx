@@ -50,8 +50,8 @@ export function SelfScheduleModal({
     if (isOpen) {
       if (initialApplicationId) {
         setSelectedAppId(initialApplicationId);
-      } else if (applications.length > 0 && !selectedAppId) {
-        setSelectedAppId(applications[0].id);
+      } else if (applications.length > 0) {
+        setSelectedAppId((current) => current || applications[0].id);
       }
       setGeneratedLink(null);
       setError(null);
@@ -63,8 +63,8 @@ export function SelfScheduleModal({
         .then((res) => {
           const userList = Array.isArray(res) ? res : res?.data || [];
           setAvailableUsers(userList.filter((u) => u.status === 'Active'));
-          if (userList.length > 0 && selectedInterviewerIds.length === 0) {
-            setSelectedInterviewerIds([userList[0].id]);
+          if (userList.length > 0) {
+            setSelectedInterviewerIds((current) => (current.length === 0 ? [userList[0].id] : current));
           }
         })
         .catch(() => {

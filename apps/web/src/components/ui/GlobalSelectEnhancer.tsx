@@ -88,12 +88,13 @@ export function GlobalSelectEnhancer() {
   const [place, setPlace] = React.useState<MenuPlace | null>(null);
 
   React.useEffect(() => {
+    const currentOwnerId = ownerId.current;
     if (mountedOwner === null) {
-      mountedOwner = ownerId.current;
+      mountedOwner = currentOwnerId;
       setIsOwner(true);
     }
     return () => {
-      if (mountedOwner === ownerId.current) {
+      if (mountedOwner === currentOwnerId) {
         mountedOwner = null;
       }
     };

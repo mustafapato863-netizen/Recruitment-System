@@ -50,7 +50,7 @@ export function SuggestJobsDrawer({
     return () => {
       active = false;
     };
-  }, [candidateId]);
+  }, [candidateId, isDrawerOpen]);
 
   const handleApply = async (rec: CandidateJobRecommendation) => {
     setApplying((prev) => ({ ...prev, [rec.vacancyId]: true }));

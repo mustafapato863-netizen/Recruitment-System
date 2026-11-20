@@ -130,6 +130,7 @@ export function ProfilePage() {
 
   useEffect(() => {
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasPersistedMotionPreference, hasPersistedThemePreference, setReducedMotion, setTheme]);
 
   const saveProfile = async (event: FormEvent) => {

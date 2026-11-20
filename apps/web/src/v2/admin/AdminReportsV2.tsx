@@ -209,7 +209,7 @@ export function AdminReportsV2() {
     setParams(n);
   };
 
-  const allJobs = jobsState.kind === 'ready' ? jobsState.data : [];
+  const allJobs = useMemo(() => (jobsState.kind === 'ready' ? jobsState.data : []), [jobsState]);
   const sites = useMemo(() => [...new Set(allJobs.map((j) => j.site).filter(Boolean) as string[])].sort(), [allJobs]);
   const jobs = allJobs.filter((j) => site === 'all' || j.site === site).sort((a, b) => a.title.localeCompare(b.title));
   const overriding = allJobs.find((j) => j.id === params.get('override')) ?? null;

@@ -83,6 +83,7 @@ export function AccessPolicyManager({ roles, onRolesChanged }: AccessPolicyManag
 
   useEffect(() => {
     void loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -90,7 +91,7 @@ export function AccessPolicyManager({ roles, onRolesChanged }: AccessPolicyManag
     if (navScope === 'role' && selectedRole?.code) {
       void loadNavigation(selectedRole.code);
     }
-  }, [selectedRole?.id, selectedRole?.code, navScope, loadNavigation]);
+  }, [selectedRole?.id, selectedRole?.code, selectedRole?.name, navScope, loadNavigation]);
 
   const updateNavigationItem = (key: string, changes: Partial<NavigationItemRecord>) => {
     setNavigation((items) => items.map((item) => (item.key === key ? { ...item, ...changes } : item)));

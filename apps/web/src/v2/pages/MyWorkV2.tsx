@@ -19,6 +19,7 @@ import { MyWorkTargets } from './MyWorkTargets';
 import { MyWorkActivity } from './MyWorkActivity';
 import { canUseMyInterviews } from '../../auth/interviewer';
 import { usePageReturn } from '../returnTarget';
+import { useKeyboardListTriage } from '../useKeyboardListTriage';
 import {
   completeTask, fileActionHref, getMyWork, joiningCaseHref, rescheduleTask, taskRecordHref, upcomingInterviewHref, waitingBlockerPhrase, waitingOfferTitle,
   type HrefContext, type JoiningSoon, type MyWorkAction, type MyWorkDay, type MyWorkResponse, type MyWorkResult,
@@ -597,6 +598,8 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
   });
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useKeyboardListTriage(rootRef, '.rf2-task a, .rf2-task button:not([disabled]), .rf2-mywork__mini-intv[href]');
 
   useEffect(() => {
     let alive = true;
@@ -633,7 +636,7 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
 
 
   return (
-    <div className="rf2-mywork">
+    <div ref={rootRef} className="rf2-mywork">
       <div className="rf2-mywork__hero">
         <div className="rf2-mywork__hero-copy">
           <p className="rf2-mywork__welcome"><Sparkles aria-hidden="true" />{welcomeLine(user?.displayName)}</p>

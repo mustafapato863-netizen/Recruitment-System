@@ -221,6 +221,7 @@ export function CandidateDetailPage() {
 
   useEffect(() => {
     void loadAllData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, canViewApplications, canViewInterviews, canAssign]);
 
   // ─── Individual Tab Retry Handlers ────────────────────────────
