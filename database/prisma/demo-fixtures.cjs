@@ -257,7 +257,7 @@ async function linkDemoSkills(tx, orgId) {
   for (const c of candidates) for (const s of c.skills) { const id = byKey.get(key(s)); if (id) links.push({ organizationId: orgId, candidateId: c.id, skillId: id }); }
   if (links.length) await tx.candidateSkill.createMany({ data: links, skipDuplicates: true });
   const byEmail = new Map(candidates.map((c) => [c.email, c.id]));
-  // VAC-2026-001 required skills are 5. Evidence is spread so Match Skills shows 5/5, 4/5, 3/5, 2/5, and 0/5.
+  // VAC-DEMO-2026-001 required skills are 5. Evidence is spread so Match Skills shows 5/5, 4/5, 3/5, 2/5, and 0/5.
   const evidencePlan = [
     ['nour.ali@sample.com', 'DHA/MOH License', 'CV_TEXT', 'demo-cv', 'DHA/MOH License listed on the uploaded CV.'],
     ['nour.ali@sample.com', 'Clinical Experience', 'SCREENING_NOTE', 'demo-screen', 'Clinical Experience confirmed during screening.'],
@@ -558,22 +558,22 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
 
   // ── 5. Real Vacancy Requisitions ───────────────────────────
   const requestSeeds = [
-    { id: fixtureId(301), code: 'VR-2026-001', pos: positions.staffNurse, br: branches.dubai, req: hiringManagerOmarH, status: 'Approved', headcount: 8, empType: 'Full-time', reason: 'ICU Wing 3 Expansion', budget: 'Budgeted', crit: 'Critical', startDays: 15 },
-    { id: fixtureId(302), code: 'VR-2026-002', pos: positions.radTech, br: branches.dubai, req: hiringManagerHassan, status: 'Approved', headcount: 3, empType: 'Full-time', reason: 'MRI Suite 24/7 Coverage', budget: 'Budgeted', crit: 'High', startDays: 30 },
-    { id: fixtureId(303), code: 'VR-2026-003', pos: positions.pharmacist, br: branches.ajman, req: recruiterSindu, status: 'Approved', headcount: 2, empType: 'Full-time', reason: 'Inpatient Pharmacy Backfill', budget: 'Budgeted', crit: 'Normal', startDays: 35 },
-    { id: fixtureId(304), code: 'VR-2026-004', pos: positions.psychiatrist, br: branches.mentalHealth, req: recruiterZenah, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Outpatient Psychiatry Expansion', budget: 'Budgeted', crit: 'Critical', startDays: 20 },
-    { id: fixtureId(305), code: 'VR-2026-005', pos: positions.counselor, br: branches.mentalHealth, req: recruiterZenah, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Child & Adolescent Counseling', budget: 'Budgeted', crit: 'Normal', startDays: 45 },
-    { id: fixtureId(306), code: 'VR-2026-006', pos: positions.urologist, br: branches.dubai, req: recruiterZenah, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Replacement for Dr. Sherif', budget: 'Budgeted', crit: 'Critical', startDays: 10 },
-    { id: fixtureId(307), code: 'VR-2026-007', pos: positions.itSupport, br: branches.group, req: recruiterSindu, status: 'Pending Approval', headcount: 2, empType: 'Full-time', reason: 'HIS Infrastructure Rollout', budget: 'Budgeted', crit: 'Normal', startDays: 40 },
-    { id: fixtureId(308), code: 'VR-2026-008', pos: positions.midwife, br: branches.ajman, req: recruiterLady, status: 'Approved', headcount: 2, empType: 'Full-time', reason: 'LDU Shift Coverage', budget: 'Budgeted', crit: 'Critical', startDays: 14 },
-    { id: fixtureId(309), code: 'VR-2026-009', pos: positions.medCoder, br: branches.dubai, req: recruiterSarah, status: 'Approved', headcount: 2, empType: 'Full-time', reason: 'Insurance Revenue Cycle', budget: 'Budgeted', crit: 'Normal', startDays: 60 },
-    { id: fixtureId(310), code: 'VR-2026-010', pos: positions.hrSpec, br: branches.group, req: admin, status: 'Draft', headcount: 1, empType: 'Full-time', reason: 'Talent Acquisition Team', budget: 'Budgeted', crit: 'Normal', startDays: 90 },
-    { id: fixtureId(311), code: 'VR-2026-011', pos: positions.cardioSpec, br: branches.dubai, req: talentManagerMona ?? hiringManagerHassan, status: 'Pending Approval', headcount: 2, empType: 'Full-time', reason: 'Cardiology coverage for two suites', budget: 'Budgeted', crit: 'Critical', startDays: 21 },
-    { id: fixtureId(312), code: 'VR-2026-012', pos: positions.dermatologist, br: branches.dubai, req: talentManagerMona ?? hiringManagerHassan, status: 'Changes Requested', headcount: 1, empType: 'Full-time', reason: 'Laser clinic expansion', budget: 'Budgeted', crit: 'High', startDays: 40 },
-    { id: fixtureId(313), code: 'VR-2026-013', pos: positions.cyberSec, br: branches.group, req: talentManagerMona ?? hiringManagerHassan, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Security operations hire', budget: 'Budgeted', crit: 'High', startDays: 30 },
-    { id: fixtureId(314), code: 'VR-2026-014', pos: positions.dentAsst, br: branches.sharjah, req: recruiterLady, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Dental chair coverage', budget: 'Budgeted', crit: 'Normal', startDays: 25 },
-    { id: fixtureId(315), code: 'VR-2026-015', pos: positions.csrLead, br: branches.dubai, req: admin, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'CSR team backfill (closed before opening)', budget: 'Budgeted', crit: 'Normal', startDays: 30 },
-    { id: fixtureId(316), code: 'VR-2026-016', pos: positions.obsGyn, br: branches.dubai, req: demoMulti, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Obstetrics coverage owned by Demo Multi-Role Lead', budget: 'Budgeted', crit: 'High', startDays: 21 },
+    { id: fixtureId(301), code: 'VR-DEMO-2026-001', pos: positions.staffNurse, br: branches.dubai, req: hiringManagerOmarH, status: 'Approved', headcount: 8, empType: 'Full-time', reason: 'ICU Wing 3 Expansion', budget: 'Budgeted', crit: 'Critical', startDays: 15 },
+    { id: fixtureId(302), code: 'VR-DEMO-2026-002', pos: positions.radTech, br: branches.dubai, req: hiringManagerHassan, status: 'Approved', headcount: 3, empType: 'Full-time', reason: 'MRI Suite 24/7 Coverage', budget: 'Budgeted', crit: 'High', startDays: 30 },
+    { id: fixtureId(303), code: 'VR-DEMO-2026-003', pos: positions.pharmacist, br: branches.ajman, req: recruiterSindu, status: 'Approved', headcount: 2, empType: 'Full-time', reason: 'Inpatient Pharmacy Backfill', budget: 'Budgeted', crit: 'Normal', startDays: 35 },
+    { id: fixtureId(304), code: 'VR-DEMO-2026-004', pos: positions.psychiatrist, br: branches.mentalHealth, req: recruiterZenah, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Outpatient Psychiatry Expansion', budget: 'Budgeted', crit: 'Critical', startDays: 20 },
+    { id: fixtureId(305), code: 'VR-DEMO-2026-005', pos: positions.counselor, br: branches.mentalHealth, req: recruiterZenah, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Child & Adolescent Counseling', budget: 'Budgeted', crit: 'Normal', startDays: 45 },
+    { id: fixtureId(306), code: 'VR-DEMO-2026-006', pos: positions.urologist, br: branches.dubai, req: recruiterZenah, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Replacement for Dr. Sherif', budget: 'Budgeted', crit: 'Critical', startDays: 10 },
+    { id: fixtureId(307), code: 'VR-DEMO-2026-007', pos: positions.itSupport, br: branches.group, req: recruiterSindu, status: 'Pending Approval', headcount: 2, empType: 'Full-time', reason: 'HIS Infrastructure Rollout', budget: 'Budgeted', crit: 'Normal', startDays: 40 },
+    { id: fixtureId(308), code: 'VR-DEMO-2026-008', pos: positions.midwife, br: branches.ajman, req: recruiterLady, status: 'Approved', headcount: 2, empType: 'Full-time', reason: 'LDU Shift Coverage', budget: 'Budgeted', crit: 'Critical', startDays: 14 },
+    { id: fixtureId(309), code: 'VR-DEMO-2026-009', pos: positions.medCoder, br: branches.dubai, req: recruiterSarah, status: 'Approved', headcount: 2, empType: 'Full-time', reason: 'Insurance Revenue Cycle', budget: 'Budgeted', crit: 'Normal', startDays: 60 },
+    { id: fixtureId(310), code: 'VR-DEMO-2026-010', pos: positions.hrSpec, br: branches.group, req: admin, status: 'Draft', headcount: 1, empType: 'Full-time', reason: 'Talent Acquisition Team', budget: 'Budgeted', crit: 'Normal', startDays: 90 },
+    { id: fixtureId(311), code: 'VR-DEMO-2026-011', pos: positions.cardioSpec, br: branches.dubai, req: talentManagerMona ?? hiringManagerHassan, status: 'Pending Approval', headcount: 2, empType: 'Full-time', reason: 'Cardiology coverage for two suites', budget: 'Budgeted', crit: 'Critical', startDays: 21 },
+    { id: fixtureId(312), code: 'VR-DEMO-2026-012', pos: positions.dermatologist, br: branches.dubai, req: talentManagerMona ?? hiringManagerHassan, status: 'Changes Requested', headcount: 1, empType: 'Full-time', reason: 'Laser clinic expansion', budget: 'Budgeted', crit: 'High', startDays: 40 },
+    { id: fixtureId(313), code: 'VR-DEMO-2026-013', pos: positions.cyberSec, br: branches.group, req: talentManagerMona ?? hiringManagerHassan, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Security operations hire', budget: 'Budgeted', crit: 'High', startDays: 30 },
+    { id: fixtureId(314), code: 'VR-DEMO-2026-014', pos: positions.dentAsst, br: branches.sharjah, req: recruiterLady, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Dental chair coverage', budget: 'Budgeted', crit: 'Normal', startDays: 25 },
+    { id: fixtureId(315), code: 'VR-DEMO-2026-015', pos: positions.csrLead, br: branches.dubai, req: admin, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'CSR team backfill (closed before opening)', budget: 'Budgeted', crit: 'Normal', startDays: 30 },
+    { id: fixtureId(316), code: 'VR-DEMO-2026-016', pos: positions.obsGyn, br: branches.dubai, req: demoMulti, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Obstetrics coverage owned by Demo Multi-Role Lead', budget: 'Budgeted', crit: 'High', startDays: 21 },
   ];
 
   const reqMap = {};
@@ -604,48 +604,48 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
 
   // ── 6. Real Vacancies ──────────────────────────────────────
   const vacancySeeds = [
-    { id: fixtureId(401), code: 'VAC-2026-001', reqCode: 'VR-2026-001', pos: positions.staffNurse, br: branches.dubai, target: 8, days: 45 },
-    { id: fixtureId(402), code: 'VAC-2026-002', reqCode: 'VR-2026-002', pos: positions.radTech, br: branches.dubai, target: 3, days: 62 },
-    { id: fixtureId(403), code: 'VAC-2026-003', reqCode: 'VR-2026-003', pos: positions.pharmacist, br: branches.ajman, target: 2, days: 35 },
-    { id: fixtureId(404), code: 'VAC-2026-004', reqCode: 'VR-2026-004', pos: positions.psychiatrist, br: branches.mentalHealth, target: 1, days: 125 },
-    { id: fixtureId(405), code: 'VAC-2026-005', reqCode: 'VR-2026-005', pos: positions.counselor, br: branches.mentalHealth, target: 1, days: 125 },
-    { id: fixtureId(406), code: 'VAC-2026-006', reqCode: 'VR-2026-006', pos: positions.urologist, br: branches.dubai, target: 1, days: 106 },
-    { id: fixtureId(407), code: 'VAC-2026-007', reqCode: 'VR-2026-008', pos: positions.midwife, br: branches.ajman, target: 2, days: 30 },
-    { id: fixtureId(408), code: 'VAC-2026-008', reqCode: 'VR-2026-009', pos: positions.medCoder, br: branches.dubai, target: 2, days: 36 },
-    { id: fixtureId(409), code: 'VAC-2026-009', reqCode: 'VR-2026-014', pos: positions.dentAsst, br: branches.sharjah, target: 1, days: 12, status: 'On Hold', holdUntil: dateFromNow(14) },
-    { id: fixtureId(410), code: 'VAC-2026-010', reqCode: 'VR-2026-015', pos: positions.csrLead, br: branches.dubai, target: 1, days: 20, status: 'Closed' },
-    { id: fixtureId(411), code: 'VAC-2026-011', reqCode: 'VR-2026-016', pos: positions.obsGyn, br: branches.dubai, target: 1, days: 5 },
+    { id: fixtureId(401), code: 'VAC-DEMO-2026-001', reqCode: 'VR-DEMO-2026-001', pos: positions.staffNurse, br: branches.dubai, target: 8, days: 45 },
+    { id: fixtureId(402), code: 'VAC-DEMO-2026-002', reqCode: 'VR-DEMO-2026-002', pos: positions.radTech, br: branches.dubai, target: 3, days: 62 },
+    { id: fixtureId(403), code: 'VAC-DEMO-2026-003', reqCode: 'VR-DEMO-2026-003', pos: positions.pharmacist, br: branches.ajman, target: 2, days: 35 },
+    { id: fixtureId(404), code: 'VAC-DEMO-2026-004', reqCode: 'VR-DEMO-2026-004', pos: positions.psychiatrist, br: branches.mentalHealth, target: 1, days: 125 },
+    { id: fixtureId(405), code: 'VAC-DEMO-2026-005', reqCode: 'VR-DEMO-2026-005', pos: positions.counselor, br: branches.mentalHealth, target: 1, days: 125 },
+    { id: fixtureId(406), code: 'VAC-DEMO-2026-006', reqCode: 'VR-DEMO-2026-006', pos: positions.urologist, br: branches.dubai, target: 1, days: 106 },
+    { id: fixtureId(407), code: 'VAC-DEMO-2026-007', reqCode: 'VR-DEMO-2026-008', pos: positions.midwife, br: branches.ajman, target: 2, days: 30 },
+    { id: fixtureId(408), code: 'VAC-DEMO-2026-008', reqCode: 'VR-DEMO-2026-009', pos: positions.medCoder, br: branches.dubai, target: 2, days: 36 },
+    { id: fixtureId(409), code: 'VAC-DEMO-2026-009', reqCode: 'VR-DEMO-2026-014', pos: positions.dentAsst, br: branches.sharjah, target: 1, days: 12, status: 'On Hold', holdUntil: dateFromNow(14) },
+    { id: fixtureId(410), code: 'VAC-DEMO-2026-010', reqCode: 'VR-DEMO-2026-015', pos: positions.csrLead, br: branches.dubai, target: 1, days: 20, status: 'Closed' },
+    { id: fixtureId(411), code: 'VAC-DEMO-2026-011', reqCode: 'VR-DEMO-2026-016', pos: positions.obsGyn, br: branches.dubai, target: 1, days: 5 },
   ];
 
   const requiredSkillsByVacancy = {
-    'VAC-2026-001': ['DHA/MOH License', 'Clinical Experience', 'ICU', 'BLS/ACLS', 'IV Therapy'],
-    'VAC-2026-002': ['DHA/MOH License', 'MRI', 'CT Scan', 'PACS'],
-    'VAC-2026-003': ['DHA/MOH License', 'Clinical Pharmacy', 'Dispensing'],
-    'VAC-2026-004': ['DHA/MOH License', 'Psychiatry', 'Clinical Experience'],
-    'VAC-2026-005': ['DHA/MOH License', 'CBT', 'Clinical Experience'],
-    'VAC-2026-006': ['DHA/MOH License', 'Endourology', 'Robotic Tele-Console (Unmapped)'],
-    'VAC-2026-007': ['DHA/MOH License', 'Labor & Delivery', 'Fetal Monitoring'],
-    'VAC-2026-008': ['ICD-10', 'CPT', 'Revenue Cycle'],
-    'VAC-2026-009': ['Clinical Experience'],
-    'VAC-2026-010': ['Clinical Experience'],
-    'VAC-2026-011': ['DHA/MOH License', 'Labor & Delivery', 'Fetal Monitoring'],
+    'VAC-DEMO-2026-001': ['DHA/MOH License', 'Clinical Experience', 'ICU', 'BLS/ACLS', 'IV Therapy'],
+    'VAC-DEMO-2026-002': ['DHA/MOH License', 'MRI', 'CT Scan', 'PACS'],
+    'VAC-DEMO-2026-003': ['DHA/MOH License', 'Clinical Pharmacy', 'Dispensing'],
+    'VAC-DEMO-2026-004': ['DHA/MOH License', 'Psychiatry', 'Clinical Experience'],
+    'VAC-DEMO-2026-005': ['DHA/MOH License', 'CBT', 'Clinical Experience'],
+    'VAC-DEMO-2026-006': ['DHA/MOH License', 'Endourology', 'Robotic Tele-Console (Unmapped)'],
+    'VAC-DEMO-2026-007': ['DHA/MOH License', 'Labor & Delivery', 'Fetal Monitoring'],
+    'VAC-DEMO-2026-008': ['ICD-10', 'CPT', 'Revenue Cycle'],
+    'VAC-DEMO-2026-009': ['Clinical Experience'],
+    'VAC-DEMO-2026-010': ['Clinical Experience'],
+    'VAC-DEMO-2026-011': ['DHA/MOH License', 'Labor & Delivery', 'Fetal Monitoring'],
   };
   const ownerByVacancy = {
-    'VAC-2026-001': recruiterSarah,
-    'VAC-2026-002': recruiterSindu,
-    'VAC-2026-003': recruiterSindu,
-    'VAC-2026-004': recruiterZenah,
-    'VAC-2026-005': recruiterZenah,
-    'VAC-2026-006': recruiterZenah,
-    'VAC-2026-007': recruiterLady,
-    'VAC-2026-008': recruiterSarah,
-    'VAC-2026-009': recruiterSarah,
-    'VAC-2026-010': recruiterSarah,
+    'VAC-DEMO-2026-001': recruiterSarah,
+    'VAC-DEMO-2026-002': recruiterSindu,
+    'VAC-DEMO-2026-003': recruiterSindu,
+    'VAC-DEMO-2026-004': recruiterZenah,
+    'VAC-DEMO-2026-005': recruiterZenah,
+    'VAC-DEMO-2026-006': recruiterZenah,
+    'VAC-DEMO-2026-007': recruiterLady,
+    'VAC-DEMO-2026-008': recruiterSarah,
+    'VAC-DEMO-2026-009': recruiterSarah,
+    'VAC-DEMO-2026-010': recruiterSarah,
     // R5 (rules pack): a vacancy's primaryRecruiter must never hold
-    // ADMINISTRATOR, so VAC-2026-011 is primarily recruited by Karim
+    // ADMINISTRATOR, so VAC-DEMO-2026-011 is primarily recruited by Karim
     // (pure RECRUITER, Team B). demo.multi still requested the
-    // requisition (VR-2026-016) and owns its applications below.
-    'VAC-2026-011': karimRecruiter,
+    // requisition (VR-DEMO-2026-016) and owns its applications below.
+    'VAC-DEMO-2026-011': karimRecruiter,
   };
 
   const vacMap = {};
@@ -666,8 +666,8 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     await tx.vacancyRequest.update({ where: { id: vr.id }, data: { status: 'Converted to Vacancy' } });
   }
 
-  if (vacMap['VAC-2026-009']) {
-    const held = vacMap['VAC-2026-009'];
+  if (vacMap['VAC-DEMO-2026-009']) {
+    const held = vacMap['VAC-DEMO-2026-009'];
     const holdHistory = await tx.vacancyStatusHistory.findFirst({ where: { vacancyId: held.id, toStatus: 'On Hold' } });
     if (!holdHistory) {
       await tx.vacancyStatusHistory.create({
@@ -679,10 +679,10 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     }
   }
 
-  // Closed vacancy (VAC-2026-010): opened then closed, with history, so the
+  // Closed vacancy (VAC-DEMO-2026-010): opened then closed, with history, so the
   // Closed state is demonstrable alongside Open / On Hold / Filled.
-  if (vacMap['VAC-2026-010']) {
-    const closed = vacMap['VAC-2026-010'];
+  if (vacMap['VAC-DEMO-2026-010']) {
+    const closed = vacMap['VAC-DEMO-2026-010'];
     const closeHistory = await tx.vacancyStatusHistory.findFirst({ where: { vacancyId: closed.id, toStatus: 'Closed' } });
     if (!closeHistory) {
       await tx.vacancyStatusHistory.create({
@@ -723,7 +723,7 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     }
     assignmentSeq += 1;
   }
-  const radVacForSupport = vacMap['VAC-2026-002'];
+  const radVacForSupport = vacMap['VAC-DEMO-2026-002'];
   if (radVacForSupport) {
     const support = await tx.vacancyAssignment.findFirst({
       where: { vacancyId: radVacForSupport.id, userId: recruiterSarah.id, roleCode: 'RECRUITER', assignmentKind: 'SUPPORT', isActive: true },
@@ -740,10 +740,10 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
 
   const approverMona = talentManagerMona ?? hiringManagerHassan;
   const approvalSeeds = [
-    { id: fixtureId(321), code: 'VR-2026-007', status: 'Pending', comment: null, decidedAt: null, assigneeId: approverMona.id },
-    { id: fixtureId(322), code: 'VR-2026-011', status: 'Pending', comment: null, decidedAt: null, assigneeId: hiringManagerHassan.id },
-    { id: fixtureId(323), code: 'VR-2026-012', status: 'Changes Requested', comment: 'Please clarify laser equipment certification requirement and shift coverage before approval.', decidedAt: dateFromNow(-1), assigneeId: hiringManagerHassan.id },
-    { id: fixtureId(324), code: 'VR-2026-013', status: 'Approved', comment: 'Approved. Ready to set the hiring target.', decidedAt: dateFromNow(-2), assigneeId: hiringManagerHassan.id },
+    { id: fixtureId(321), code: 'VR-DEMO-2026-007', status: 'Pending', comment: null, decidedAt: null, assigneeId: approverMona.id },
+    { id: fixtureId(322), code: 'VR-DEMO-2026-011', status: 'Pending', comment: null, decidedAt: null, assigneeId: hiringManagerHassan.id },
+    { id: fixtureId(323), code: 'VR-DEMO-2026-012', status: 'Changes Requested', comment: 'Please clarify laser equipment certification requirement and shift coverage before approval.', decidedAt: dateFromNow(-1), assigneeId: hiringManagerHassan.id },
+    { id: fixtureId(324), code: 'VR-DEMO-2026-013', status: 'Approved', comment: 'Approved. Ready to set the hiring target.', decidedAt: dateFromNow(-2), assigneeId: hiringManagerHassan.id },
   ];
   for (const approval of approvalSeeds) {
     const request = reqMap[approval.code];
@@ -762,15 +762,15 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   }
 
   // ── 7. Real Applications ───────────────────────────────────
-  const nurseVacId = vacMap['VAC-2026-001']?.id ?? fixtureId(401);
-  const radVacId = vacMap['VAC-2026-002']?.id ?? fixtureId(402);
-  const pharmVacId = vacMap['VAC-2026-003']?.id ?? fixtureId(403);
-  const psychVacId = vacMap['VAC-2026-004']?.id ?? fixtureId(404);
-  const counsVacId = vacMap['VAC-2026-005']?.id ?? fixtureId(405);
-  const urolVacId = vacMap['VAC-2026-006']?.id ?? fixtureId(406);
-  const midwifeVacId = vacMap['VAC-2026-007']?.id ?? fixtureId(407);
-  const medCoderVacId = vacMap['VAC-2026-008']?.id ?? fixtureId(408);
-  const demoVacId = vacMap['VAC-2026-011']?.id ?? fixtureId(411);
+  const nurseVacId = vacMap['VAC-DEMO-2026-001']?.id ?? fixtureId(401);
+  const radVacId = vacMap['VAC-DEMO-2026-002']?.id ?? fixtureId(402);
+  const pharmVacId = vacMap['VAC-DEMO-2026-003']?.id ?? fixtureId(403);
+  const psychVacId = vacMap['VAC-DEMO-2026-004']?.id ?? fixtureId(404);
+  const counsVacId = vacMap['VAC-DEMO-2026-005']?.id ?? fixtureId(405);
+  const urolVacId = vacMap['VAC-DEMO-2026-006']?.id ?? fixtureId(406);
+  const midwifeVacId = vacMap['VAC-DEMO-2026-007']?.id ?? fixtureId(407);
+  const medCoderVacId = vacMap['VAC-DEMO-2026-008']?.id ?? fixtureId(408);
+  const demoVacId = vacMap['VAC-DEMO-2026-011']?.id ?? fixtureId(411);
 
   const appSeeds = [
     // Interview
@@ -804,8 +804,8 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     // Exit stages (were missing: all other 6 stages already had coverage)
     { id: fixtureId(523), code: 'APP-100206', email: 'farida.nabil@sample.com', vacId: nurseVacId, stage: 'Rejected', src: 'Upload' },
     { id: fixtureId(524), code: 'APP-100207', email: 'walid.gamal@sample.com', vacId: pharmVacId, stage: 'Withdrawn', src: 'Upload' },
-    // Demo Multi-Role Lead's requisition (VAC-2026-011, requested via
-    // VR-2026-016); the vacancy's primary recruiter is Karim (R5), while
+    // Demo Multi-Role Lead's requisition (VAC-DEMO-2026-011, requested via
+    // VR-DEMO-2026-016); the vacancy's primary recruiter is Karim (R5), while
     // demo.multi owns these two applications on it.
     { id: fixtureId(525), code: 'APP-100208', email: 'rania.kamel@sample.com', vacId: demoVacId, stage: 'Applied', src: 'Upload' },
     { id: fixtureId(526), code: 'APP-100209', email: 'tariq.mansour@sample.com', vacId: demoVacId, stage: 'Screening', src: 'Upload' },
@@ -1254,7 +1254,7 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
 
   // Notifications for the new demo personas (the §10 loop only notifies admin).
   const personaNotifs = [
-    { id: fixtureId(908), recipient: demoMulti, type: 'TaskAssigned', title: 'Task assigned: Review requisition VR-2026-016', message: 'Hassan Ali assigned you an approval review for the Specialist Obs/Gyn requisition (VR-2026-016).' },
+    { id: fixtureId(908), recipient: demoMulti, type: 'TaskAssigned', title: 'Task assigned: Review requisition VR-DEMO-2026-016', message: 'Hassan Ali assigned you an approval review for the Specialist Obs/Gyn requisition (VR-DEMO-2026-016).' },
     { id: fixtureId(909), recipient: newEmployee, type: 'PasswordChangeRequired', title: 'Set your RecruitFlow password', message: 'Your administrator created your account. Sign in with your temporary password and set a new password (minimum 10 characters) to continue.' },
   ];
   for (const n of personaNotifs) {
@@ -1273,7 +1273,7 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   // ComplianceCheck, and OfferReview for the new personas and the
   // approved-but-unsent offer.
   const taskSeeds = [
-    { id: fixtureId(961), assignee: demoMulti, creator: hiringManagerHassan, type: 'ApprovalReview', title: 'Review requisition VR-2026-016 — Specialist Obs/Gyn', description: 'Approval review for the Obs/Gyn requisition owned by the Demo Multi-Role Lead.', priority: 'High', status: 'Open', entityType: 'VacancyRequest', entityId: reqMap['VR-2026-016']?.id ?? null, dueDays: 3 },
+    { id: fixtureId(961), assignee: demoMulti, creator: hiringManagerHassan, type: 'ApprovalReview', title: 'Review requisition VR-DEMO-2026-016 — Specialist Obs/Gyn', description: 'Approval review for the Obs/Gyn requisition owned by the Demo Multi-Role Lead.', priority: 'High', status: 'Open', entityType: 'VacancyRequest', entityId: reqMap['VR-DEMO-2026-016']?.id ?? null, dueDays: 3 },
     { id: fixtureId(962), assignee: newEmployee, creator: demoMulti, type: 'ComplianceCheck', title: 'Complete SCFHS license verification for Tasabeeh Mustafa', description: 'First task for the new starter; SCFHS check on the hiring case awaiting final approval.', priority: 'Normal', status: 'In Progress', entityType: 'HiringCase', entityId: tasabeehCase.id, dueDays: 5 },
     { id: fixtureId(963), assignee: recruiterSarah, creator: talentManagerMona ?? hiringManagerHassan, type: 'OfferReview', title: 'Send approved offer OFF-2026-0150 to Christina Beatric', description: 'Offer approved within the Grade 6 band; send it to the candidate.', priority: 'Normal', status: 'Open', entityType: 'Offer', entityId: christinaOffer.offer.id, dueDays: 2 },
   ];

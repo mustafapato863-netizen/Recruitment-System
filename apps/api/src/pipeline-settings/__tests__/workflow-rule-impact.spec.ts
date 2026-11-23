@@ -19,19 +19,19 @@ describe('workflow rule impact', () => {
       currentProfile: 'clinical',
       proposedProfile: 'technical',
       vacancies: [
-        { id: 'v1', code: 'VAC-2026-011', status: 'Partially Filled', approvedHeadcount: 2, joinedHeadcount: 1 },
+        { id: 'v1', code: 'VAC-DEMO-2026-011', status: 'Partially Filled', approvedHeadcount: 2, joinedHeadcount: 1 },
         { id: 'v2', code: 'VAC-2026-099', status: 'Open', approvedHeadcount: 1, joinedHeadcount: 0 },
       ],
       applications: [
-        { id: 'a1', code: 'APP-1', stage: 'Joined', vacancyCode: 'VAC-2026-011', hasSnapshot: true },
-        { id: 'a2', code: 'APP-2', stage: 'Applied', vacancyCode: 'VAC-2026-011', hasSnapshot: false },
+        { id: 'a1', code: 'APP-1', stage: 'Joined', vacancyCode: 'VAC-DEMO-2026-011', hasSnapshot: true },
+        { id: 'a2', code: 'APP-2', stage: 'Applied', vacancyCode: 'VAC-DEMO-2026-011', hasSnapshot: false },
       ],
     });
     expect(impact.applyAllowed).toBe(false);
-    expect(impact.protectedVacancyCodes).toEqual(['VAC-2026-011']);
+    expect(impact.protectedVacancyCodes).toEqual(['VAC-DEMO-2026-011']);
     expect(impact.preservedSnapshots).toBe(1);
     expect(impact.openCasesAdoptingProfile.map((row) => row.code)).toEqual(['APP-2']);
-    expect(impact.vacancies.find((row) => row.code === 'VAC-2026-011')).toMatchObject({ status: 'Partially Filled', approvedHeadcount: 2, joinedHeadcount: 1 });
+    expect(impact.vacancies.find((row) => row.code === 'VAC-DEMO-2026-011')).toMatchObject({ status: 'Partially Filled', approvedHeadcount: 2, joinedHeadcount: 1 });
     expect(impact.message).toMatch(/preview/);
   });
 
@@ -57,7 +57,7 @@ describe('workflow rule impact', () => {
       },
       vacancy: {
         findMany: async () => [{
-          id: 'v1', vacancyCode: 'VAC-2026-011', status: 'Partially Filled', approvedHeadcount: 2, joinedHeadcount: 1,
+          id: 'v1', vacancyCode: 'VAC-DEMO-2026-011', status: 'Partially Filled', approvedHeadcount: 2, joinedHeadcount: 1,
           applications: [{ id: 'a1', applicationCode: 'APP-2026-021', stage: 'Applied', hiringCase: null }],
         }],
       },

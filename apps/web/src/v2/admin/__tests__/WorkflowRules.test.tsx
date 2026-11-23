@@ -12,7 +12,7 @@ vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u-a
 import { PipelineV2 } from '../PipelineV2';
 
 const dev: WorkflowPosition = { id: 'dev-1', code: 'POS-DEV', title: 'HRIS Developer', profile: 'technical', vacancies: [{ code: 'VAC-2026-100', status: 'Open' }] };
-const nurse: WorkflowPosition = { id: 'nur-1', code: 'POS-NUR', title: 'Staff Nurse — ICU', profile: 'clinical', vacancies: [{ code: 'VAC-2026-011', status: 'Partially Filled' }] };
+const nurse: WorkflowPosition = { id: 'nur-1', code: 'POS-NUR', title: 'Staff Nurse — ICU', profile: 'clinical', vacancies: [{ code: 'VAC-DEMO-2026-011', status: 'Partially Filled' }] };
 const reception: WorkflowPosition = { id: 'open-1', code: 'POS-REC', title: 'Reception', profile: null, vacancies: [] };
 const seed = [nurse, dev, reception];
 
@@ -29,7 +29,7 @@ function snapshot(rows = currentPositions): WorkflowPosition[] {
 }
 function impactFor(positionId: string, profile: 'technical' | 'clinical'): WorkflowImpact {
   const row = currentPositions.find((item) => item.id === positionId) ?? dev;
-  const protectedCode = row.vacancies.find((vacancy) => vacancy.code === 'VAC-2026-011')?.code;
+  const protectedCode = row.vacancies.find((vacancy) => vacancy.code === 'VAC-DEMO-2026-011')?.code;
   return {
     positionId,
     positionTitle: row.title,
@@ -39,7 +39,7 @@ function impactFor(positionId: string, profile: 'technical' | 'clinical'): Workf
     protectedVacancyCodes: protectedCode ? [protectedCode] : [],
     preservedSnapshots: 1,
     openCasesAdoptingProfile: [{ code: 'APP-2', vacancyCode: protectedCode ?? row.vacancies[0]?.code ?? 'VAC-2026-100', stage: 'Applied' }],
-    vacancies: row.vacancies.map((vacancy) => ({ code: vacancy.code, status: vacancy.status, approvedHeadcount: 2, joinedHeadcount: 1, protected: vacancy.code === 'VAC-2026-011' })),
+    vacancies: row.vacancies.map((vacancy) => ({ code: vacancy.code, status: vacancy.status, approvedHeadcount: 2, joinedHeadcount: 1, protected: vacancy.code === 'VAC-DEMO-2026-011' })),
     message: protectedCode ? `This position includes ${protectedCode}. This stays a preview.` : `${row.title} can take the profile.`,
   };
 }
@@ -127,7 +127,7 @@ describe('joining rule review and save', () => {
     await user.click(await screen.findByRole('button', { name: 'Review impact' }));
     const dialog = await screen.findByRole('dialog', { name: 'Review joining-rule changes' });
     expect(within(dialog).queryByRole('button', { name: 'Confirm rule change' })).toBeNull();
-    expect(within(dialog).getByText('This position includes VAC-2026-011. This stays a preview.')).toBeInTheDocument();
+    expect(within(dialog).getByText('This position includes VAC-DEMO-2026-011. This stays a preview.')).toBeInTheDocument();
     expect(within(dialog).getByRole('cell', { name: 'Preview only' })).toBeInTheDocument();
     expect(within(dialog).queryByText(/Saving needs the master-data manage permission/)).toBeNull();
     expect(applyCalls()).toHaveLength(0);
@@ -306,7 +306,7 @@ describe('joining rule review and save', () => {
   });
 
   it('shows the server refusal and does not reload or show saved', async () => {
-    const refusal = 'This position includes VAC-2026-011. This stays a preview.';
+    const refusal = 'This position includes VAC-DEMO-2026-011. This stays a preview.';
     api.postApi.mockImplementation(async (path: string, body: { positionId: string; profile: 'technical' | 'clinical' }) => {
       if (path === '/workflow-rules/preview') return impactFor(body.positionId, body.profile);
       throw new ApiError(409, refusal, { statusCode: 409, code: 'CONFLICT', message: refusal }, { code: 'CONFLICT' });
