@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { UserProfile, LoginRequest } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
+import { clearViewCache, setViewCacheUser } from '../v2/api/viewCache';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -22,7 +23,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     const profile = await fetchApi<UserProfile>('/auth/me');
-    if (profile?.id) setUser(profile);
+    if (profile?.id) {
+      setViewCacheUser(profile.id);
+      setUser(profile);
+    }
   }, []);
 
   useEffect(() => {
@@ -47,6 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // A cold /login page performs an initial /auth/me probe. Its expected
       // 401 must not log out a login submitted before that probe settles.
       if (isMounted && !initialSessionCheckPending.current && !loginInFlight.current) {
+        clearViewCache();
+        setViewCacheUser(null);
         setUser(null);
       }
     };
@@ -69,6 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (loginVersion !== authRequestVersion.current) return;
       if (result?.user) {
+        clearViewCache();
+        setViewCacheUser(result.user.id);
         setUser(result.user);
       } else {
         await refreshUser();
@@ -80,6 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     authRequestVersion.current += 1;
+    clearViewCache();
+    setViewCacheUser(null);
     try {
       await fetchApi('/auth/logout', { method: 'POST' });
     } catch {

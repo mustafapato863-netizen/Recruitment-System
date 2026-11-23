@@ -1,6 +1,6 @@
 import { toFormErrs } from './formErrors';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, CircleCheck, Info, MessageCircle, Plus, RotateCw, Save } from 'lucide-react';
+import { Archive, CircleCheck, Info, MessageCircle, Plus, RotateCw, Save, Search } from 'lucide-react';
 import { ButtonV2, DangerConfirmButton, EmptyStateV2, InputV2, SelectV2, SkeletonV2, TextareaV2 } from '../../components/v2';
 import { CATEGORIES, VARIABLES, archiveTemplate, fetchTemplates, render, saveTemplate, unknownVars, type MessageTemplate } from './configApi';
 import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
@@ -20,6 +20,7 @@ export function TemplatesV2() {
   const [errs, setErrs] = useState<Record<string, string>>({});
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
   const body = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     let live = true; setItems(null); setError(null);
@@ -58,6 +59,11 @@ export function TemplatesV2() {
     } catch (x) { setErrs(toFormErrs(x, {}, 'Could not archive.')); } finally { setBusy(false); }
   };
   const used = (c: string) => CATEGORIES.whatsapp.find(([k]) => k === c)?.[1] ?? c;
+  const visibleItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items ?? [];
+    return (items ?? []).filter((t) => `${t.name} ${used(t.category)} ${t.bodyTemplate}`.toLowerCase().includes(q));
+  }, [items, search]);
   return (
     <div className="rf2-jobs rf2-admin">
       <AdminWorkspaceHeader
@@ -72,50 +78,59 @@ export function TemplatesV2() {
         <div className="rf2-admin__split">
           <nav className="rf2-panel rf2-admin__card" aria-label="WhatsApp templates">
             <div className="rf2-row-between rf2-admin__head"><h2 className="rf2-jtable__name">WhatsApp templates</h2>
-              <ButtonV2 kind="tertiary" size="sm" icon={<Plus />} onClick={() => { setDraft(blank()); setNote(null); }}>New</ButtonV2></div>
+              <ButtonV2 kind="secondary" size="sm" icon={<Plus />} onClick={() => { setDraft(blank()); setNote(null); }}>New</ButtonV2></div>
+            <div className="rf2-admin__tpl-search">
+              <InputV2 label="Search templates" fieldClassName="rf2-sr-label" placeholder="Search templates…" leadingIcon={<Search />} value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
             <ul className="rf2-admin__tpls">
-              {items.map((t) => (
+              {visibleItems.map((t) => (
                 <li key={t.id}><button type="button" className="rf2-admin__tpl" aria-current={draft.id === t.id || undefined} onClick={() => { setDraft(toDraft(t)); setErrs({}); setNote(null); }}>
                   <MessageCircle aria-hidden="true" /><span><span className="rf2-jtable__name">{t.name}</span><span className="rf2-jtable__sub">{used(t.category)}</span></span>
                 </button></li>
               ))}
-              {items.length === 0 ? <li className="rf2-jtable__sub rf2-admin__pad">No templates yet.</li> : null}
+              {visibleItems.length === 0 ? <li className="rf2-jtable__sub rf2-admin__pad">{items.length === 0 ? 'No templates yet.' : 'No templates match your search.'}</li> : null}
             </ul>
           </nav>
-          <section className="rf2-panel rf2-admin__editor" aria-label="Template editor">
-            <div className="rf2-req__row">
-              <InputV2 label="Name" required value={draft.name} onChange={(e) => set('name')(e.target.value)} error={errs.name} />
-              <SelectV2 label="Used by" value={draft.category} onChange={(e) => set('category')(e.target.value)} error={errs.category}>
-                {CATEGORIES.whatsapp.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-              </SelectV2>
-            </div>
-            <TextareaV2 ref={body} label="Body" required rows={8} value={draft.bodyTemplate} onChange={(e) => set('bodyTemplate')(e.target.value)} error={errs.body} />
-            <div><p className="rf2-field__label">Insert variable</p>
-              <div className="rf2-admin__vars">{VARIABLES.map((v) => <button key={v} type="button" className="rf2-admin__var" onClick={() => insert(v)}>{`{{${v}}}`}</button>)}</div>
-              {unknown.length ? <p className="rf2-inline-note" data-tone="warning"><Info aria-hidden="true" /> Not filled by the server, sent as typed: {unknown.map((u) => `{{${u}}}`).join(', ')}</p> : null}
-            </div>
-            <div className="rf2-admin__preview" aria-label="Preview">
-              <div className="wa-phone">
-                <div className="wa-phone-bar">
-                  <span className="wa-phone-avatar" aria-hidden="true" />
-                  <span className="wa-phone-id">
-                    <span className="wa-phone-name">{render('{{candidateName}}')}</span>
-                    <span className="wa-phone-sub">WhatsApp live preview</span>
-                  </span>
+          <section className="rf2-panel rf2-admin__card rf2-admin__editor" aria-label="Template editor">
+            <div className="rf2-admin__editor-layout">
+              <div className="rf2-admin__editor-main">
+                <div className="rf2-req__row">
+                  <InputV2 label="Name" required value={draft.name} onChange={(e) => set('name')(e.target.value)} error={errs.name} />
+                  <SelectV2 label="Used by" value={draft.category} onChange={(e) => set('category')(e.target.value)} error={errs.category}>
+                    {CATEGORIES.whatsapp.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                  </SelectV2>
                 </div>
-                <div className="wa-preview-shell">
-                  <div className="wa-bubble">
-                    <p className="rf2-field__label">Preview — {render('{{candidateName}}')}</p>
-                    <p className="rf2-admin__pre">{render(draft.bodyTemplate) || '—'}</p>
-                    <time>Now</time>
+                <TextareaV2 ref={body} label="Body" required rows={8} value={draft.bodyTemplate} onChange={(e) => set('bodyTemplate')(e.target.value)} error={errs.body} />
+                <div><p className="rf2-field__label">Insert variable</p>
+                  <div className="rf2-admin__vars">{VARIABLES.map((v) => <button key={v} type="button" className="rf2-admin__var" onClick={() => insert(v)}>{`{{${v}}}`}</button>)}</div>
+                  {unknown.length ? <p className="rf2-inline-note" data-tone="warning"><Info aria-hidden="true" /> Not filled by the server, sent as typed: {unknown.map((u) => `{{${u}}}`).join(', ')}</p> : null}
+                </div>
+                {errs.form ? <p className="rf2-form-error" role="alert">{errs.form}</p> : null}
+                <div className="rf2-admin__actions">
+                  <ButtonV2 icon={<Save />} loading={busy} onClick={() => void save()}>{draft.id ? 'Save template' : 'Create template'}</ButtonV2>
+                  {draft.id && draft.isDefault ? <p className="rf2-jtable__sub" data-testid="default-no-archive">Default templates can’t be archived.</p> : draft.id ? <DangerConfirmButton icon={<Archive />} confirmLabel="Confirm archive" disabled={busy} onConfirm={() => void archive()}>Archive</DangerConfirmButton> : null}
+                </div>
+              </div>
+              <div className="rf2-admin__editor-side">
+                <div className="rf2-admin__preview" aria-label="Preview">
+                  <div className="wa-phone">
+                    <div className="wa-phone-bar">
+                      <span className="wa-phone-avatar" aria-hidden="true" />
+                      <span className="wa-phone-id">
+                        <span className="wa-phone-name">{render('{{candidateName}}')}</span>
+                        <span className="wa-phone-sub">WhatsApp live preview</span>
+                      </span>
+                    </div>
+                    <div className="wa-preview-shell">
+                      <div className="wa-bubble">
+                        <p className="rf2-field__label">Preview — {render('{{candidateName}}')}</p>
+                        <p className="rf2-admin__pre">{render(draft.bodyTemplate) || '—'}</p>
+                        <time>Now</time>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            {errs.form ? <p className="rf2-form-error" role="alert">{errs.form}</p> : null}
-            <div className="rf2-admin__actions">
-              <ButtonV2 icon={<Save />} loading={busy} onClick={() => void save()}>{draft.id ? 'Save template' : 'Create template'}</ButtonV2>
-              {draft.id && draft.isDefault ? <p className="rf2-jtable__sub" data-testid="default-no-archive">Default templates can’t be archived.</p> : draft.id ? <DangerConfirmButton icon={<Archive />} confirmLabel="Confirm archive" disabled={busy} onConfirm={() => void archive()}>Archive</DangerConfirmButton> : null}
             </div>
           </section>
         </div>

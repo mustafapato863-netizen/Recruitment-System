@@ -292,9 +292,9 @@ describe('header', () => {
     expect(screen.queryByRole('button', { name: /Notifications/ })).not.toBeInTheDocument();
   });
 
-  it('hides global search on the Users directory, which has its own search toolbar', () => {
+  it('renders global search on the Users directory consistent with other roles', () => {
     renderShell('admin', user(ALL, ['ADMINISTRATOR']), '/users');
-    expect(screen.queryByRole('combobox', { name: 'Search users and settings' })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Search users and settings' })).toBeInTheDocument();
   });
 
   it('user menu shows name and seat, navigates with keys and signs out', async () => {

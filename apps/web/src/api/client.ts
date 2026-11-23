@@ -1,3 +1,5 @@
+import { clearViewCache, invalidateViewCache } from '../v2/api/viewCache';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 
 export interface ErrorFieldErrors {
@@ -204,6 +206,15 @@ export async function fetchApi<T>(path: string, options?: RequestInit, allowRefr
 
   if (!response.ok) {
     return handleResponseError(response, path);
+  }
+
+  const method = (options?.method ?? 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') {
+    if (path.startsWith('/auth/login') || path.startsWith('/auth/logout')) {
+      clearViewCache();
+    } else {
+      invalidateViewCache();
+    }
   }
 
   const text = await response.text();

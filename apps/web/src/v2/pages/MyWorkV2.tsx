@@ -20,6 +20,7 @@ import { MyWorkActivity } from './MyWorkActivity';
 import { canUseMyInterviews } from '../../auth/interviewer';
 import { usePageReturn } from '../returnTarget';
 import { useKeyboardListTriage } from '../useKeyboardListTriage';
+import { useCachedResource } from '../api/useCachedResource';
 import {
   completeTask, fileActionHref, getMyWork, joiningCaseHref, rescheduleTask, taskRecordHref, upcomingInterviewHref, waitingBlockerPhrase, waitingOfferTitle,
   type HrefContext, type JoiningSoon, type MyWorkAction, type MyWorkDay, type MyWorkResponse, type MyWorkResult,
@@ -86,8 +87,13 @@ function panelId(tab: WorkTab): string {
 }
 
 function welcomeLine(displayName: string | null | undefined): string {
-  const first = displayName?.trim().split(/\s+/)[0];
-  return first ? `Welcome back, ${first}.` : 'Welcome back.';
+  const parts = displayName?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (parts.length === 0) return 'Welcome back.';
+  const isHonorific = /^(dr|prof|eng|mr|ms|mrs)\.?$/i.test(parts[0]);
+  const target = isHonorific && parts[1]
+    ? `${parts[0].replace(/\.?$/, '.')} ${parts[1]}`
+    : parts[0];
+  return `Welcome back, ${target.replace(/\.+$/, '')}.`;
 }
 
 function dueText(item: WorkItem, bucket: Bucket, day: MyWorkDay, f: Format): string | null {
@@ -596,34 +602,26 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
     if (next) p.set('filter', next);
     else p.delete('filter');
   });
-  const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   useKeyboardListTriage(rootRef, '.rf2-task a, .rf2-task button:not([disabled]), .rf2-mywork__mini-intv[href]');
 
-  useEffect(() => {
-    let alive = true;
-    setState({ kind: 'loading' });
-    load(day)
-      .then((result) => { if (alive) setState({ kind: 'ready', result }); })
-      .catch((error: unknown) => {
-        if (!alive) return;
-        if (error instanceof ApiError && error.statusCode === 403) setState({ kind: 'forbidden' });
-        else setState({ kind: 'error', message: error instanceof Error && error.message ? error.message : 'Could not load your work.' });
-      });
-    return () => { alive = false; };
-  }, [load, attempt, day]);
+  const workRes = useCachedResource<MyWorkResult>({
+    key: `my-work:${day}`,
+    attempt,
+    userId: user?.id ?? null,
+    revalidateOnVisible: true,
+    fetcher: () => load(day),
+  });
 
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible') return;
-      void load(day)
-        .then((result) => setState({ kind: 'ready', result }))
-        .catch(() => undefined);
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [load, day]);
+  const state: LoadState =
+    workRes.kind === 'loading'
+      ? { kind: 'loading' }
+      : workRes.kind === 'error'
+        ? (workRes.error instanceof ApiError && workRes.error.statusCode === 403
+            ? { kind: 'forbidden' }
+            : { kind: 'error', message: workRes.error instanceof Error && workRes.error.message ? workRes.error.message : 'Could not load your work.' })
+        : { kind: 'ready', result: workRes.data };
 
   const data = state.kind === 'ready' ? state.result.data : null;
   const f = makeFormat(data?.timezone || 'Africa/Cairo');

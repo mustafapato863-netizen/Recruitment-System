@@ -107,7 +107,7 @@ function measurePlace(box: HTMLElement | null, menu: HTMLElement | null): MenuPl
  * list instead of the operating-system menu.
  */
 export const SelectV2 = React.forwardRef<HTMLSelectElement, SelectV2Props>(function SelectV2(
-  { id, label, hint, error, warning, success, fieldClassName, placeholder, required, disabled, className, children, onChange, onKeyDown, onMouseDown, onPointerDown, ...rest },
+  { id, label, hint, error, warning, success, fieldClassName, placeholder, required, disabled, className, style, children, onChange, onKeyDown, onMouseDown, onPointerDown, ...rest },
   ref,
 ) {
   const autoId = React.useId();
@@ -307,6 +307,7 @@ export const SelectV2 = React.forwardRef<HTMLSelectElement, SelectV2Props>(funct
             ref={setRefs}
             id={selectId}
             className={cn('rf2-field__control', className)}
+            style={{ appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', backgroundImage: 'none', ...style }}
             required={required}
             disabled={disabled}
             aria-hidden={open || undefined}

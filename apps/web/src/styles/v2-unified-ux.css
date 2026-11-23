@@ -36,17 +36,30 @@
   line-height: 1.55;
 }
 
-/* Surface rhythm: white/off-white, clear boundaries, no glass or heavy shadow. */
+/* Surface rhythm: crisp enterprise card elevation, clear borders, harmonious in light & dark mode. */
 [data-ui='v2'] .rf2-shell__content :is(
   .rf2-panel, .rf2-card, .rf2-jobhead, .rf2-team__kpis > li,
   .rf2-team__summary-cards > li, .rf2-cand__intake-banner,
   .rf2-mywork__card, .rf2-mywork__group, .rf2-team__member,
-  .rf2-admin__card
+  .rf2-admin__card, .rf2-cvb__kpi, .rf2-cvb__card, .rf2-rep-kpi
 ) {
   background: var(--rf2-card);
   border: 1px solid var(--rf2-divider);
   border-radius: var(--rf2-radius-card);
-  box-shadow: none;
+  box-shadow: var(--rf2-card-shadow);
+  transition: border-color var(--rf2-motion-fast) var(--rf2-ease), box-shadow var(--rf2-motion-fast) var(--rf2-ease), transform var(--rf2-motion-fast) var(--rf2-ease);
+}
+
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf2-team__kpis > li, .rf2-team__summary-cards > li, .rf2-cvb__kpi, .rf2-team__member, .rf2-rep-kpi
+):hover {
+  border-color: color-mix(in srgb, var(--rf2-action) 34%, var(--rf2-divider));
+  box-shadow: var(--rf2-card-shadow-hover);
+}
+
+/* Balanced KPI grids: prevent orphan 3rd or 5th cards across Approvals, Joinings, and Team Work. */
+[data-ui='v2'] .rf2-shell__content :is(.rf2-team__summary-cards, .rf2-team__kpis) {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 
 [data-ui='v2'] .rf2-shell__content :is(
@@ -54,6 +67,7 @@
 ) {
   border-color: var(--rf2-divider);
   border-radius: var(--rf2-radius-card);
+  box-shadow: var(--rf2-card-shadow);
 }
 
 /* Compact data tables with readable row separation and safe horizontal scroll. */
@@ -82,6 +96,16 @@
   background: var(--rf2-neutral-tint);
   white-space: nowrap;
   font-weight: 600;
+  font-size: var(--rf2-text-caption);
+  letter-spacing: 0.02em;
+}
+
+[data-ui='v2'] .rf2-shell__content .rf2-jtable tbody tr {
+  transition: background-color var(--rf2-motion-fast) var(--rf2-ease);
+}
+
+[data-ui='v2'] .rf2-shell__content .rf2-jtable tbody tr:hover td {
+  background: color-mix(in srgb, var(--rf2-info-tint) 38%, var(--rf2-card));
 }
 
 [data-ui='v2'] .rf2-shell__content .rf2-jtable tbody tr:last-child td {
@@ -217,11 +241,6 @@
 @media (max-width: 1023px) {
   [data-ui='v2'] .rf2-shell__content :is(.rf2-jobs, .rf2-team) {
     padding: var(--rf2-space-2);
-  }
-  [data-ui='v2'] .rf2-shell__content :is(
-    .rf2-team__kpis, .rf2-team__summary-cards
-  ) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 640px) {

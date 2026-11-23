@@ -11,6 +11,17 @@ const api = vi.hoisted(() => ({ getApi: vi.fn(), patchApi: vi.fn(), postApi: vi.
 vi.mock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), ...api }));
 const shell = vi.hoisted(() => ({ value: { seat: 'admin' } as null | { seat: string } }));
 vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => shell.value }));
+vi.mock('../../../auth/AuthContext', () => ({
+  useAuth: () => ({
+    user: {
+      id: 'admin-1',
+      displayName: 'Admin User',
+      email: 'admin@sgh.com',
+      roles: [{ id: 'r1', name: 'Administrator', code: 'ADMINISTRATOR' }],
+      permissions: ['USERS_VIEW', 'USERS_MANAGE'],
+    },
+  }),
+}));
 import { RolesRoute, UsersRoute } from '../AdminRoutes';
 import { buildTree, flatten, isDescendant, ownedWork } from '../usersApi';
 
@@ -45,7 +56,8 @@ describe('A02 Users', () => {
     expect(within(table).queryByRole('columnheader', { name: 'Email' })).toBeNull();
     expect(within(table).getByRole('columnheader', { name: 'Branch' })).toBeInTheDocument();
     expect(screen.getByText('Showing 1–1 of 1 users')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reporting tree' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Visual Org Chart & Reporting Tree/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reporting tree' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Invite user' })).toBeInTheDocument();
     expect(screen.getByText(/Interviewer is not a role/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).toBeNull();
@@ -269,10 +281,11 @@ describe('A02 Users', () => {
     await u.click(within(d).getByRole('button', { name: 'Send invitation' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/users/invitations', { displayName: 'Sara Ali', email: 'sara@recruitflow.app', roleIds: ['r-rec'] }));
   });
-  it('shows the branch name, otherwise the legacy site, otherwise an em dash', async () => {
+  it('shows the branch name, otherwise nested branch.name, otherwise the legacy site, otherwise an em dash', async () => {
     serve({
       '/users?directory=1&page=1&pageSize=100': [
         { ...fx.users[6], branchName: 'SGH Cairo', site: 'Ignored' },
+        { ...fx.users[1], branchName: null, branch: { id: 'b-dubai', name: 'SGH Dubai Hospital' }, site: null },
         { ...fx.users[0], branchName: '', site: 'Jeddah' },
         { ...fx.users[8], branchName: null, site: null },
       ],
@@ -282,6 +295,7 @@ describe('A02 Users', () => {
     const site = (name: RegExp) => within(within(table).getByRole('row', { name })).getAllByRole('cell')[2];
     expect(site(/Ahmed Fathy/)).toHaveTextContent('SGH Cairo');
     expect(site(/Ahmed Fathy/)).not.toHaveTextContent('Ignored');
+    expect(site(/Karim Hassan/)).toHaveTextContent('SGH Dubai Hospital');
     expect(within(table).getByRole('row', { name: /Ahmed Fathy/ })).toHaveTextContent('ahmed.fathy@recruitflow.app');
     expect(site(/Omar Khalil/)).toHaveTextContent('Jeddah');
     expect(site(/Old Leaver/)).toHaveTextContent('—');
@@ -305,26 +319,6 @@ describe('#23 400 fields inline (admin forms)', () => {
 });
 
 describe('A03 Reporting tree', () => {
-  it('builds the tree (inactive hidden), edits one line via PATCH managerId; no loops offered', async () => {
-    const u = userEvent.setup();
-    api.patchApi.mockResolvedValue({});
-    const { baseElement } = renderAt('/users?drawer=tree');
-    const d = await screen.findByRole('dialog', { name: 'Who reports to whom' });
-    const items = within(within(d).getByRole('list', { name: 'Reporting tree' })).getAllByRole('button').map((b) => b.textContent);
-    expect(items.map((t) => t!.slice(2).split('Employee')[0].split('Manager')[0].split('Admin')[0])).toEqual(['Hala Mostafa', 'Ahmed Fathy', 'Karim Hassan', 'Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim', 'Rasha Nabil', 'Omar Khalil']);
-    expect(within(d).getByRole('button', { name: /Karim Hassan/ })).toHaveTextContent('3 direct reports');
-    expect(within(d).getByRole('button', { name: 'Save reporting line' })).toBeDisabled();
-    await u.click(within(d).getByRole('button', { name: /^Hala Mostafa/ }));
-    expect(within(within(d).getByLabelText('Hala Mostafa reports to')).queryByRole('option', { name: /Karim Hassan/ })).toBeNull();
-    await u.click(within(d).getByRole('button', { name: /^Mariam Farag/ }));
-    const sel = within(d).getByLabelText('Mariam Farag reports to');
-    expect(sel).toHaveValue('u-karim');
-    await u.selectOptions(sel, 'u-hala');
-    await u.click(within(d).getByRole('button', { name: 'Save reporting line' }));
-    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/users/u-mariam', { managerId: 'u-hala' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('Mariam Farag now reports to Hala Mostafa.');
-    expect(baseElement).toBeTruthy();
-  });
   it('helpers: cycles are cut, descendants detected, ownedWork reads counts', () => {
     const cyc = [{ ...fx.users[1], managerId: 'u-mariam' }, { ...fx.users[3], managerId: 'u-karim' }] as never[];
     expect(flatten(buildTree(cyc))).toHaveLength(2);
@@ -332,6 +326,23 @@ describe('A03 Reporting tree', () => {
     expect(isDescendant(fx.users as never[], 'u-mariam', 'u-hala')).toBe(false);
     expect(ownedWork(new ApiError(409, 'x', { code: 'USER_OWNS_OPEN_WORK' }, { code: 'USER_OWNS_OPEN_WORK' }))).toEqual({ openApplicationsPrimary: 0, openApplicationsTaskOwner: 0, openJobsPrimary: 0, openRequisitions: 0, countsUnknown: true });
     expect(ownedWork(new ApiError(409, 'x', { code: 'OTHER' }, { code: 'OTHER' }))).toBeNull();
+  });
+
+  it('navigates to visual org chart from table orphan button', async () => {
+    const u = userEvent.setup();
+    serve({
+      '/users?directory=1&page=1&pageSize=100': [
+        { ...fx.users[0] },
+        { ...fx.users[1] },
+        { ...fx.users[6], managerId: null },
+      ],
+    });
+    renderAt();
+    const table = await screen.findByRole('table', { name: 'Users' });
+    const orphanBtn = within(table).getByRole('button', { name: /Assign manager for Ahmed Fathy/ });
+    expect(orphanBtn).toBeInTheDocument();
+    await u.click(orphanBtn);
+    expect(await screen.findByRole('heading', { name: /Users & Reporting Hierarchy/i })).toBeInTheDocument();
   });
 });
 

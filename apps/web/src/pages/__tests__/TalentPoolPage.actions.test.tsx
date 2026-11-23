@@ -315,4 +315,82 @@ describe('TalentPoolPage employee actions', () => {
       jobSummary: 'Build internal tools.',
     }));
   });
+
+  it('paginates candidates at 15 rows per page, syncs page in URL, resets on filter change, and caches next page', async () => {
+    const user = userEvent.setup();
+    const manyPeople = Array.from({ length: 35 }, (_, idx) =>
+      person(`cand-${idx + 1}`, `Candidate${String(idx + 1).padStart(2, '0')}`),
+    );
+    api.getApi.mockImplementation((url: string) => {
+      if (String(url).includes('/suggestions')) return Promise.resolve(null);
+      return Promise.resolve({ data: manyPeople, total: 35 });
+    });
+
+    mount();
+    await screen.findByRole('heading', { name: 'Candidate01 Synthetic' });
+
+    // Page 1 caps rendered rows at 15 and pre-caches next page
+    expect(screen.getAllByRole('article')).toHaveLength(15);
+    expect(screen.getByText('15 per page')).toBeInTheDocument();
+    expect(screen.getByText('Next page cached')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Candidate16 Synthetic' })).not.toBeInTheDocument();
+
+    // Go to Page 2
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(await screen.findByRole('heading', { name: 'Candidate16 Synthetic' })).toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(15);
+    expect(new URLSearchParams(screen.getByTestId('query').textContent ?? '').get('page')).toBe('2');
+
+    // Go to Page 3 (remaining 5 rows)
+    await user.click(screen.getByRole('button', { name: 'Page 3' }));
+    expect(await screen.findByRole('heading', { name: 'Candidate31 Synthetic' })).toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(5);
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+
+    // Changing search resets back to page 1
+    await user.type(screen.getByLabelText('Search candidates by name, skill, or keyword'), 'Candidate02');
+    expect(await screen.findByRole('heading', { name: 'Candidate02 Synthetic' })).toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(new URLSearchParams(screen.getByTestId('query').textContent ?? '').get('page')).toBeNull();
+  });
+
+  it('caches per-vacancy server suggestions when switching jobs back and prefetches next server batch near end', async () => {
+    const user = userEvent.setup();
+    api.fetchVacancyList.mockResolvedValue({
+      full: [job, { ...job, id: 'v2', vacancyCode: 'JOB-2', title: 'Backend Engineer' }],
+      redacted: [],
+    });
+    const batch1 = Array.from({ length: 100 }, (_, idx) => person(`b1-${idx + 1}`, `BatchOne${idx + 1}`));
+    const batch2 = Array.from({ length: 20 }, (_, idx) => person(`b2-${idx + 1}`, `BatchTwo${idx + 1}`));
+
+    api.getApi.mockImplementation((url: string) => {
+      const path = String(url);
+      if (path === '/vacancies/v1/suggestions') {
+        return Promise.resolve({ vacancyId: 'v1', requiredSkills: [{ id: 's1', name: 'SQL' }], unmappedRequiredSkills: [], suggestions: [] });
+      }
+      if (path === '/vacancies/v2/suggestions') {
+        return Promise.resolve({ vacancyId: 'v2', requiredSkills: [{ id: 's1', name: 'SQL' }], unmappedRequiredSkills: [], suggestions: [] });
+      }
+      if (path.includes('page=2')) {
+        return Promise.resolve({ data: batch2, total: 120 });
+      }
+      return Promise.resolve({ data: batch1, total: 120 });
+    });
+
+    mount();
+    await screen.findByRole('heading', { name: 'BatchOne1 Synthetic' });
+    await waitFor(() => expect(api.getApi).toHaveBeenCalledWith('/vacancies/v1/suggestions'));
+
+    // Switch to v2 then back to v1 — v1 suggestions served from cache without duplicate request
+    await user.selectOptions(screen.getByLabelText('Job to match against'), 'v2');
+    await waitFor(() => expect(api.getApi).toHaveBeenCalledWith('/vacancies/v2/suggestions'));
+    await user.selectOptions(screen.getByLabelText('Job to match against'), 'v1');
+    const v1Calls = api.getApi.mock.calls.filter(([u]) => u === '/vacancies/v1/suggestions').length;
+    expect(v1Calls).toBe(1);
+
+    // Jump near end of batch 1 (page 7 -> rows 91–100) triggers background prefetch for server page 2
+    await user.click(screen.getByRole('button', { name: 'Page 7' }));
+    await waitFor(() => expect(api.getApi).toHaveBeenCalledWith('/candidates?pageSize=100&page=2'));
+    expect(await screen.findByRole('button', { name: 'Page 8' })).toBeInTheDocument();
+  });
 });

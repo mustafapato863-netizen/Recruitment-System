@@ -17,7 +17,7 @@ export interface AdminUser {
   id: string; email: string; displayName: string; jobTitle?: string | null; status: string; managerId: string | null;
   roles: Array<{ id: string; code: string; name: string }>; lastLoginAt: string | null;
   /** B10 may send the seat per user; else derived from role codes (provisional table). */
-  seat?: string | null; branchId?: string | null; branchName?: string | null; site?: string | null;
+  seat?: string | null; branchId?: string | null; branchName?: string | null; branch?: { id: string; name: string } | null; site?: string | null;
 }
 export interface AdminUserUpdate {
   managerId?: string | null;
@@ -37,7 +37,12 @@ export const isActive = (u: AdminUser) => u.status === 'Active';
 export const statusTone = (s: string) => (s === 'Active' ? 'success' : s === 'Invited' || s === 'Pending' ? 'info' : 'neutral') as 'success' | 'info' | 'neutral';
 
 export async function fetchUsers(): Promise<AdminUser[]> {
-  return (await fetchAllPages<AdminUser>('/users?directory=1')).map((u) => ({ ...u, roles: u.roles ?? [], managerId: u.managerId ?? null }));
+  return (await fetchAllPages<AdminUser>('/users?directory=1')).map((u) => ({
+    ...u,
+    roles: u.roles ?? [],
+    managerId: u.managerId ?? null,
+    branchName: u.branchName || u.branch?.name || null,
+  }));
 }
 export const updateUser = (id: string, update: AdminUserUpdate) => patchApi<AdminUser>(`/users/${encodeURIComponent(id)}`, update);
 export const setStatus = (id: string, status: 'Active' | 'Inactive') => updateUser(id, { status });
@@ -74,6 +79,31 @@ export function buildTree(users: AdminUser[]): TreeNode[] {
   return roots;
 }
 export const flatten = (nodes: TreeNode[]): TreeNode[] => nodes.flatMap((n) => [n, ...flatten(n.children)]);
+
+/** Flatten hierarchy forest into BFS level rows (Level 1, Level 2, ...) for visual chart layout. */
+export function flattenLevels(forest: TreeNode[]): TreeNode[][] {
+  const levels: TreeNode[][] = [];
+  const seen = new Set<string>();
+  let current = forest.filter((node) => {
+    if (seen.has(node.user.id)) return false;
+    seen.add(node.user.id);
+    return true;
+  });
+  while (current.length > 0) {
+    levels.push(current);
+    const next: TreeNode[] = [];
+    for (const node of current) {
+      for (const child of node.children) {
+        if (!seen.has(child.user.id)) {
+          seen.add(child.user.id);
+          next.push(child);
+        }
+      }
+    }
+    current = next;
+  }
+  return levels;
+}
 /** Would `managerId` sit under `userId`? (picking a descendant would make a loop) */
 export function isDescendant(users: AdminUser[], userId: string, managerId: string): boolean {
   const byId = new Map(users.map((u) => [u.id, u]));

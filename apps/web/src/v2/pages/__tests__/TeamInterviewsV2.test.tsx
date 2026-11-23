@@ -82,4 +82,79 @@ describe('Manager interviews', () => {
     expect(await screen.findByText('You cannot open the team interview list.')).toBeInTheDocument();
     expect(screen.queryByText(/That is an empty list/)).toBeNull();
   });
+
+  it('routes past-due Scheduled team interviews into Needs feedback and lets empty mine view switch to Team interviews', async () => {
+    api.getApi.mockImplementation(async (path: string) => {
+      if (path.startsWith('/me/interviews')) return { data: [] };
+      if (path === '/interviews') {
+        return {
+          data: [
+            { id: 'i-past', scheduledStart: '2020-01-01T09:00:00.000Z', scheduledEnd: '2020-01-01T09:30:00.000Z', candidateName: 'Omar Tariq', positionTitle: 'Charge Nurse', status: 'Scheduled', applicationId: 'a-past' },
+            { id: 'i-done', scheduledStart: '2020-01-02T09:00:00.000Z', scheduledEnd: '2020-01-02T09:30:00.000Z', candidateName: 'Dina Adel', positionTitle: 'ICU Nurse', status: 'Completed', applicationId: 'a-done' },
+          ],
+        };
+      }
+      throw new ApiError(404, 'nf');
+    });
+    const u = userEvent.setup();
+    renderAt();
+    await u.click(await screen.findByRole('button', { name: 'View Team interviews' }));
+    await u.click(screen.getByRole('tab', { name: /Needs feedback/ }));
+    expect(await screen.findByText('Omar Tariq')).toBeInTheDocument();
+    expect(screen.queryByText('Dina Adel')).toBeNull();
+    await u.click(screen.getByRole('tab', { name: /Completed/ }));
+    expect(await screen.findByText('Dina Adel')).toBeInTheDocument();
+    expect(screen.queryByText('Omar Tariq')).toBeNull();
+  });
+
+  it('renders Microsoft Outlook-style calendar with Month, Week views, navigation and filters', async () => {
+    api.getApi.mockImplementation(async (path: string) => {
+      if (path === '/me/interviews?scope=upcoming') {
+        return {
+          data: [
+            interview({ id: 'i1', candidateName: 'Lina Hassan', positionTitle: 'Ward Nurse', scheduledStart: '2099-06-01T09:00:00.000Z', scheduledEnd: '2099-06-01T09:30:00.000Z' }),
+            interview({ id: 'i2', candidateName: 'Amr Khaled', positionTitle: 'Cardiologist', scheduledStart: '2099-06-15T14:00:00.000Z', scheduledEnd: '2099-06-15T15:00:00.000Z' }),
+          ],
+        };
+      }
+      if (path.startsWith('/me/interviews')) return { data: [] };
+      if (path === '/interviews') return { data: [] };
+      throw new ApiError(404, 'nf');
+    });
+    const u = userEvent.setup();
+    renderAt('/team-interviews?view=calendar');
+
+    // Calendar is rendered with Microsoft Outlook grid
+    expect(await screen.findByRole('grid', { name: 'Month view' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /June 2099/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Sun' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Mon' })).toBeInTheDocument();
+
+    // Day inspector displays candidate and details
+    expect(screen.getByText('Lina Hassan')).toBeInTheDocument();
+    expect(screen.getAllByText('Ward Nurse').length).toBeGreaterThanOrEqual(1);
+
+    // Switch to Week view
+    await u.click(screen.getByRole('button', { name: 'Week' }));
+    expect(await screen.findByRole('grid', { name: 'Week view' })).toBeInTheDocument();
+    expect(screen.getByText('9:00 AM')).toBeInTheDocument();
+
+    // Switch back to Month view
+    await u.click(screen.getByRole('button', { name: 'Month' }));
+    expect(await screen.findByRole('grid', { name: 'Month view' })).toBeInTheDocument();
+
+    // Navigation: Next month
+    await u.click(screen.getByRole('button', { name: 'Next month' }));
+    expect(screen.getByRole('heading', { level: 2, name: /July 2099/ })).toBeInTheDocument();
+
+    // Navigation: Today
+    await u.click(screen.getByRole('button', { name: 'Today' }));
+    const currentYear = String(new Date().getFullYear());
+    expect(screen.getByRole('heading', { level: 2, name: new RegExp(currentYear) })).toBeInTheDocument();
+
+    // Filter pills
+    await u.click(screen.getByRole('button', { name: /Completed/ }));
+    expect(screen.getByRole('grid', { name: 'Month view' })).toBeInTheDocument();
+  });
 });

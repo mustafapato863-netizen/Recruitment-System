@@ -196,4 +196,16 @@ export class VacanciesController {
   ) {
     return this.vacancyDocuments.updateVacancyCriteria(user.organizationId, id, criteria, user);
   }
+
+  @Post(':id/jd-text')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_VIEW')
+  saveJdText(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('text') text: string,
+    @Body('fileName') fileName?: string,
+  ) {
+    if (!text || typeof text !== 'string') throw new BadRequestException('Job description text is required.');
+    return this.vacancyDocuments.saveJdText(user.organizationId, id, text, user, fileName);
+  }
 }

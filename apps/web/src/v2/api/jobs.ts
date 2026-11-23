@@ -76,6 +76,11 @@ export interface JobDetail {
   joinedHeadcount: number;
   targetStartDate: string | null;
   vacancyRequestId?: string;
+  requiredSkills?: string[];
+  minExperienceYears?: number | null;
+  qualifications?: string | null;
+  location?: string | null;
+  jdCriteria?: unknown;
   assignments?: Array<{ userId: string; assignmentKind?: 'PRIMARY' | 'SUPPORT'; isActive: boolean; user?: { id: string; displayName: string } }>;
   targetChip?: TargetChip;
   holdUntil?: string | null;

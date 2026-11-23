@@ -33,6 +33,10 @@ describe('SuggestJobsDrawer', () => {
       matchedSkillsCount: 4,
       totalRequiredSkillsCount: 4,
       alreadyApplied: false,
+      matchedKeywords: ['ICU', 'Ventilator Management', 'BLS', 'ACLS'],
+      missingKeywords: [],
+      fitReasons: ['Matched main keywords: ICU, Ventilator Management, BLS, ACLS'],
+      keywordEvidence: [{ keyword: 'ICU', source: 'cv-text', snippet: '5 years ICU Charge Nurse experience' }],
     },
     {
       vacancyId: 'vac-2',
@@ -81,6 +85,9 @@ describe('SuggestJobsDrawer', () => {
     expect(screen.getByText(/Riyadh Hospital/)).toBeInTheDocument();
     expect(screen.getByText('4/4 skills matched')).toBeInTheDocument();
     expect(screen.getByText('2/3 skills matched')).toBeInTheDocument();
+    expect(screen.getByText('Ventilator Management')).toBeInTheDocument();
+    expect(screen.getByText('Matched main keywords: ICU, Ventilator Management, BLS, ACLS')).toBeInTheDocument();
+    expect(screen.getByText(/5 years ICU Charge Nurse experience/)).toBeInTheDocument();
   });
 
   it('allows applying an unapplied candidate to a recommended job', async () => {

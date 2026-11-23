@@ -79,4 +79,16 @@ describe('LicenseManagementV2', () => {
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(screen.getByText('Sarah Ahmed')).toBeInTheDocument());
   });
+
+  it('maps TALENT_MANAGER to Manager workspace consistently and handles paged { data } payloads', async () => {
+    vi.mocked(client.getApi).mockResolvedValueOnce({
+      data: [
+        { id: 'u-tm', displayName: 'Mona El-Sayed', email: 'mona@sgh.com', roles: [{ code: 'TALENT_MANAGER', name: 'Talent Manager' }], status: 'Active' },
+      ],
+    });
+    show();
+    const table = await screen.findByRole('table', { name: 'User seat allocations' });
+    const row = within(table).getByRole('row', { name: /Mona El-Sayed/ });
+    expect(within(row).getByText('Manager')).toBeInTheDocument();
+  });
 });

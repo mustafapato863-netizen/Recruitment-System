@@ -81,15 +81,34 @@ async function seedReasonLists(organizationId) {
   }
 }
 
-// B9: exactly one pipeline template (the default). Idempotent: does nothing if an active template exists.
+// B9: exactly one pipeline template (the default). Idempotent: heals empty templates too.
 async function seedDefaultPipeline(tx, organizationId) {
-  const existing = await tx.pipelineTemplate.count({ where: { organizationId, status: { not: 'Archived' } } });
-  if (existing) return;
-  const stages = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire', 'Joined'];
+  const canonicalStages = [
+    { name: 'Applied', stageType: 'Applied', sortOrder: 0, required: true, isHiredStage: false },
+    { name: 'Screening', stageType: 'Screening', sortOrder: 1, required: true, isHiredStage: false },
+    { name: 'Interview', stageType: 'Interview', sortOrder: 2, required: true, isHiredStage: false },
+    { name: 'Offer', stageType: 'Offer', sortOrder: 3, required: true, isHiredStage: false },
+    { name: 'Pre-Hire', stageType: 'Pre-Hire', sortOrder: 4, required: true, isHiredStage: false },
+    { name: 'Joined', stageType: 'Joined', sortOrder: 5, required: true, isHiredStage: true },
+    { name: 'Rejected', stageType: 'exit', sortOrder: 6, required: false, isHiredStage: false },
+    { name: 'Withdrawn', stageType: 'exit', sortOrder: 7, required: false, isHiredStage: false },
+  ];
+  const existing = await tx.pipelineTemplate.findFirst({
+    where: { organizationId, status: { not: 'Archived' } },
+    include: { _count: { select: { stages: { where: { status: { not: 'Archived' } } } } } },
+  });
+  if (existing) {
+    if (existing._count.stages === 0) {
+      await tx.pipelineStage.createMany({
+        data: canonicalStages.map((s) => ({ templateId: existing.id, ...s, status: 'Active' })),
+      });
+    }
+    return;
+  }
   await tx.pipelineTemplate.create({
     data: {
       organizationId, name: 'Default pipeline', isDefault: true, status: 'Active',
-      stages: { create: stages.map((name, i) => ({ name, stageType: name, sortOrder: i, required: true, isHiredStage: name === 'Joined' })) },
+      stages: { create: canonicalStages.map((s) => ({ ...s, status: 'Active' })) },
     },
   });
 }

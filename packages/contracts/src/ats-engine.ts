@@ -95,6 +95,12 @@ export interface AtsEvaluationResult {
   breakdown: AtsMatchBreakdown;
 }
 
+export interface CandidateJobKeywordEvidence {
+  keyword: string;
+  source: 'verified-skill' | 'cv-text';
+  snippet?: string | null;
+}
+
 export interface CandidateJobRecommendation {
   vacancyId: string;
   vacancyCode: string;
@@ -107,6 +113,11 @@ export interface CandidateJobRecommendation {
   totalRequiredSkillsCount: number;
   alreadyApplied: boolean;
   existingApplicationId?: string | null;
+  requiredExperienceYears?: number | null;
+  matchedKeywords?: string[];
+  missingKeywords?: string[];
+  keywordEvidence?: CandidateJobKeywordEvidence[];
+  fitReasons?: string[];
 }
 
 export interface InterviewScorecardCriterionRating {

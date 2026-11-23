@@ -13,13 +13,11 @@
  *   Errors are surfaced explicitly so partial progress can be retried without duplicating person, file, or CV.
  * No pay fields exist on these DTOs.
  */
+import type { ExtractedCandidate } from '@recruitflow/contracts';
 import { postApi, postFormDataApi } from '../../api/client';
 import { findExistingFile, isApplicationExists } from './applicationExists';
 
-export interface ExtractedCv {
-  firstName?: string; lastName?: string; email?: string; phone?: string; title?: string; currentCompany?: string;
-  rawText?: string; skills?: string[]; experienceYears?: number; location?: string; parsingQuality?: 'high' | 'medium' | 'low';
-}
+export type ExtractedCv = ExtractedCandidate;
 export type MatchedBy = 'email' | 'phone';
 export interface DuplicateMatch { candidateId: string; candidateCode: string; name: string; status: string; matchedBy: MatchedBy[] }
 export interface DuplicateCheckResult { normalized: { email: string | null; phone: string | null }; isDuplicate: boolean; matches: DuplicateMatch[] }
@@ -154,6 +152,33 @@ async function serverLinkFill(candidateId: string, documentId: string | null, cv
  * R03: CV document is uploaded before calling POST /candidates/:id/fill-from-cv so the backend enrichment service
  * can validate the stored CV and transactionally fill only empty fields without overwriting concurrent manual edits.
  */
+function buildCandidateCreatePayload(cv: ExtractedCv, firstName: string, lastName: string) {
+  const atsMeta: Record<string, unknown> = {
+    ...(cv.clinicalDomain ? { clinicalDomain: cv.clinicalDomain } : {}),
+    ...(cv.subspecialties?.length ? { subspecialties: cv.subspecialties } : {}),
+    ...(cv.keyHighlights?.length ? { keyHighlights: cv.keyHighlights } : {}),
+    ...(cv.education ? { education: cv.education } : {}),
+    ...(cv.parsingQuality ? { parsingQuality: cv.parsingQuality } : {}),
+    ...(cv.parserSource ? { parserSource: cv.parserSource } : {}),
+  };
+  return {
+    firstName,
+    lastName,
+    ...(cv.email ? { email: cv.email } : {}),
+    ...(cv.phone ? { phone: cv.phone } : {}),
+    ...(cv.title ? { currentTitle: cv.title.slice(0, 120) } : {}),
+    ...(cv.currentCompany ? { currentCompany: cv.currentCompany.slice(0, 120) } : {}),
+    ...(cv.location ? { location: cv.location.slice(0, 120) } : {}),
+    ...(typeof cv.experienceYears === 'number' ? { experienceYears: Math.round(cv.experienceYears) } : {}),
+    ...(cv.skills?.length ? { skills: cv.skills } : {}),
+    ...(cv.summary?.trim() ? { summary: cv.summary.trim().slice(0, 5000) } : {}),
+    ...(cv.certifications?.length ? { certifications: cv.certifications } : {}),
+    ...(cv.languages?.length ? { languages: cv.languages } : {}),
+    ...(Object.keys(atsMeta).length > 0 ? { metadata: { ...atsMeta, cvExtractionStatus: 'Completed' } } : {}),
+    source: 'CV import',
+  };
+}
+
 export async function importRow(
   vacancyId: string,
   file: File,
@@ -167,15 +192,7 @@ export async function importRow(
   else if (decision.kind === 'link') candidateId = decision.candidateId;
   else {
     const { firstName, lastName } = splitName(cv, file.name);
-    const created = await postApi<{ id: string }>('/candidates', {
-      firstName, lastName,
-      ...(cv.email ? { email: cv.email } : {}), ...(cv.phone ? { phone: cv.phone } : {}),
-      ...(cv.title ? { currentTitle: cv.title.slice(0, 120) } : {}), ...(cv.currentCompany ? { currentCompany: cv.currentCompany.slice(0, 120) } : {}),
-      ...(cv.location ? { location: cv.location.slice(0, 120) } : {}),
-      ...(typeof cv.experienceYears === 'number' ? { experienceYears: Math.round(cv.experienceYears) } : {}),
-      ...(cv.skills?.length ? { skills: cv.skills } : {}),
-      source: 'CV import',
-    });
+    const created = await postApi<{ id: string }>('/candidates', buildCandidateCreatePayload(cv, firstName, lastName));
     candidateId = created.id;
     writeStoredImportProgress(vacancyId, file, { candidateId });
   }
@@ -233,6 +250,9 @@ export interface BankCvImportResult {
   documentId: string | null;
   linked: boolean;
   fileName: string;
+  cv: ExtractedCv;
+  duplicateCheck: DuplicateCheckResult | null;
+  linkResult: LinkResult | null;
 }
 
 /**
@@ -250,13 +270,15 @@ export async function importBankCv(
   const cv = await parseCv(file);
   let candidateId = opts?.candidateId?.trim() || '';
   let linked = Boolean(candidateId);
+  let dupResult: DuplicateCheckResult | null = null;
+  let linkResult: LinkResult | null = null;
 
   if (!candidateId && (cv.email || cv.phone)) {
-    const dup = await duplicateCheck({
+    dupResult = await duplicateCheck({
       ...(cv.email ? { email: cv.email } : {}),
       ...(cv.phone ? { phone: cv.phone } : {}),
     });
-    const matchId = dup?.matches?.[0]?.candidateId;
+    const matchId = dupResult?.matches?.[0]?.candidateId;
     if (matchId) {
       candidateId = matchId;
       linked = true;
@@ -266,24 +288,29 @@ export async function importBankCv(
   if (!candidateId) {
     const { firstName, lastName } = splitName(cv, file.name);
     try {
-      const created = await postApi<{ id: string }>('/candidates', {
-        firstName,
-        lastName,
-        ...(cv.email ? { email: cv.email } : {}),
-        ...(cv.phone ? { phone: cv.phone } : {}),
-        ...(cv.title ? { currentTitle: cv.title.slice(0, 120) } : {}),
-        ...(cv.currentCompany ? { currentCompany: cv.currentCompany.slice(0, 120) } : {}),
-        ...(cv.location ? { location: cv.location.slice(0, 120) } : {}),
-        ...(typeof cv.experienceYears === 'number' ? { experienceYears: Math.round(cv.experienceYears) } : {}),
-        ...(cv.skills?.length ? { skills: cv.skills } : {}),
-        source: 'CV import',
-      });
+      const created = await postApi<{ id: string }>('/candidates', buildCandidateCreatePayload(cv, firstName, lastName));
       candidateId = created.id;
     } catch (e) {
       const hit = await existingPerson(e, { email: cv.email, phone: cv.phone });
       if (!hit?.candidateId) throw e;
       candidateId = hit.candidateId;
       linked = true;
+      if (!dupResult?.isDuplicate) {
+        dupResult = {
+          normalized: { email: cv.email ?? null, phone: cv.phone ?? null },
+          isDuplicate: true,
+          matches: [{
+            candidateId: hit.candidateId,
+            candidateCode: hit.candidateCode ?? '',
+            name: hit.name ?? hit.candidateCode ?? 'Existing candidate',
+            status: 'Active',
+            matchedBy: [
+              ...(cv.email ? (['email'] as const) : []),
+              ...(cv.phone ? (['phone'] as const) : []),
+            ],
+          }],
+        };
+      }
     }
   }
 
@@ -312,7 +339,7 @@ export async function importBankCv(
   const documentId = uploaded?.id ?? null;
 
   if (linked) {
-    await serverLinkFill(candidateId, documentId, cv);
+    linkResult = await serverLinkFill(candidateId, documentId, cv);
   }
 
   return {
@@ -321,5 +348,124 @@ export async function importBankCv(
     documentId,
     linked,
     fileName: file.name,
+    cv,
+    duplicateCheck: dupResult,
+    linkResult,
+  };
+}
+
+export interface ValidatedCvIntakeInput {
+  file: File | null;
+  cv: ExtractedCv;
+  decision: ImportDecision;
+  vacancyId?: string | null;
+  source?: string;
+  duplicateCheck?: DuplicateCheckResult | null;
+}
+
+export interface ValidatedCvIntakeResult extends BankCvImportResult {
+  candidateCode: string | null;
+  alreadyOnJob: boolean;
+}
+
+/**
+ * Commits a recruiter-validated CV intake after the 4-stage engine:
+ * Upload -> Detect & Validate/Edit -> Duplicate Resolution & Open-Job Fit -> Confirm.
+ */
+export async function saveValidatedCvIntake(input: ValidatedCvIntakeInput): Promise<ValidatedCvIntakeResult> {
+  const { file, cv, decision } = input;
+  const source = (input.source?.trim() || 'CV Intake Upload').slice(0, 80);
+  const fileName = file?.name || 'manual-intake.pdf';
+
+  let candidateId = decision.kind === 'link' ? decision.candidateId : '';
+  let candidateCode: string | null = null;
+  let linked = decision.kind === 'link';
+  let dupResult: DuplicateCheckResult | null = input.duplicateCheck ?? null;
+  let linkResult: LinkResult | null = null;
+
+  if (linked && dupResult?.matches?.length) {
+    const match = dupResult.matches.find((m) => m.candidateId === candidateId) ?? dupResult.matches[0];
+    candidateCode = match?.candidateCode ?? null;
+  }
+
+  if (!candidateId) {
+    const { firstName, lastName } = splitName(cv, fileName);
+    const payload = {
+      ...buildCandidateCreatePayload(cv, firstName, lastName),
+      source,
+    };
+    try {
+      const created = await postApi<{ id: string; candidateCode?: string }>('/candidates', payload);
+      candidateId = created.id;
+      candidateCode = created.candidateCode ?? null;
+    } catch (e) {
+      const hit = await existingPerson(e, { email: cv.email, phone: cv.phone });
+      if (!hit?.candidateId) throw e;
+      candidateId = hit.candidateId;
+      candidateCode = hit.candidateCode ?? null;
+      linked = true;
+      if (!dupResult?.isDuplicate) {
+        dupResult = {
+          normalized: { email: cv.email ?? null, phone: cv.phone ?? null },
+          isDuplicate: true,
+          matches: [{
+            candidateId: hit.candidateId,
+            candidateCode: hit.candidateCode ?? '',
+            name: hit.name ?? hit.candidateCode ?? 'Existing candidate',
+            status: 'Active',
+            matchedBy: [
+              ...(cv.email ? (['email'] as const) : []),
+              ...(cv.phone ? (['phone'] as const) : []),
+            ],
+          }],
+        };
+      }
+    }
+  }
+
+  let applicationId: string | null = null;
+  let alreadyOnJob = false;
+  const vacancyId = input.vacancyId && input.vacancyId !== 'pool' ? input.vacancyId.trim() : '';
+  if (vacancyId) {
+    try {
+      const app = await postApi<{ id?: string }>('/applications', {
+        vacancyId,
+        candidateId,
+        source,
+      });
+      applicationId = app?.id ?? null;
+    } catch (e) {
+      if (!isApplicationExists(e)) throw e;
+      alreadyOnJob = true;
+      applicationId = await findExistingFile(vacancyId, candidateId);
+    }
+  }
+
+  let documentId: string | null = null;
+  if (file) {
+    const doc = new FormData();
+    doc.append('candidateId', candidateId);
+    doc.append('documentType', 'CV');
+    doc.append('file', file);
+    if (cv.rawText?.trim()) doc.append('extractionText', cv.rawText.trim().slice(0, 50000));
+    const uploaded = await postFormDataApi<{ id?: string } | null>('/documents/upload', doc);
+    documentId = uploaded?.id ?? null;
+  }
+
+  if (linked) {
+    linkResult = await serverLinkFill(candidateId, documentId, cv);
+  }
+
+  return {
+    candidateId,
+    candidateCode,
+    applicationId,
+    alreadyOnJob,
+    documentId,
+    linked,
+    fileName,
+    cv,
+    duplicateCheck: dupResult,
+    linkResult,
   };
 }

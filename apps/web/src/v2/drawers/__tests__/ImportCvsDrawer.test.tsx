@@ -39,3 +39,87 @@ it('keeps a real invalid-file response distinct from a processing outage', async
   await waitFor(() => expect(within(d).getByRole('listitem')).toHaveTextContent('Unreadable'));
   expect(within(d).getByRole('button', { name: 'Import 0 to Applied' })).toBeDisabled();
 });
+
+it('evaluates role fit without %, allows inline editing of extracted fields & skills, and submits validated payload', async () => {
+  const u = userEvent.setup();
+  api.postFormDataApi
+    .mockResolvedValueOnce({
+      firstName: 'Salma',
+      lastName: 'Mansour',
+      email: 'salma.mansour@example.com',
+      phone: '+971501234567',
+      title: 'ICU Registered Nurse',
+      experienceYears: 5,
+      skills: ['icu', 'ecg', 'Critical Care'],
+      clinicalDomain: 'Critical Care & ICU',
+      parsingQuality: 'high',
+      parserSource: 'local',
+    })
+    .mockResolvedValueOnce({ id: 'doc-1' });
+  api.postApi.mockImplementation(async (path: string) => {
+    if (path === '/candidates/duplicate-check') return noDup;
+    if (path === '/candidates') return { id: 'cand-new-1' };
+    if (path === '/applications') return { id: 'app-new-1' };
+    return {};
+  });
+
+  const jobWithCriteria = {
+    ...jobDetail(),
+    status: 'Open' as const,
+    assignments: [],
+    minExperienceYears: 3,
+    requiredSkills: ['ICU', 'ACLS', 'Critical Care'],
+  };
+
+  render(<MemoryRouter><ImportCvsDrawer job={jobWithCriteria} onClose={vi.fn()} onDone={vi.fn()} /></MemoryRouter>);
+  const d = screen.getByRole('dialog');
+
+  // Target job criteria visible before upload
+  expect(d).toHaveTextContent('Matching Criteria');
+  expect(d).toHaveTextContent('3+ yrs exp');
+
+  await u.upload(within(d).getByLabelText(/Drop CVs or/), new File(['synthetic'], 'salma-icu.pdf', { type: 'application/pdf' }));
+  const row = await within(d).findByRole('listitem');
+  await waitFor(() => expect(row).toHaveTextContent('Role Fit Evaluation'));
+
+  // Zero numeric percentage anywhere in drawer
+  expect(d.textContent).not.toMatch(/\d\s?%/);
+  expect(row).toHaveTextContent('✓ ICU');
+  expect(row).toHaveTextContent('− ACLS');
+
+  // Inline edit extracted name + verify acronym normalization (ICU, ECG) + one-click missing skill + comma-separated add
+  await u.click(within(row).getByRole('button', { name: 'Edit detected data' }));
+  expect(row).toHaveTextContent('Skills & competencies');
+  expect(row).toHaveTextContent('ECG');
+
+  const firstNameInput = within(row).getByLabelText('First name');
+  await u.clear(firstNameInput);
+  await u.type(firstNameInput, 'Dr. Salma');
+
+  // One-click missing role skill suggestion (+ ACLS)
+  await u.click(within(row).getByRole('button', { name: 'ACLS' }));
+
+  // Comma-separated multi-skill addition
+  const addSkillInput = within(row).getByLabelText('Add skill');
+  await u.type(addSkillInput, 'bls, Ventilator Care');
+  await u.click(within(row).getByRole('button', { name: 'Add' }));
+
+  // Role fit recalculates live: ACLS moves from missing to matched and achieves Strong fit
+  await waitFor(() => expect(row).toHaveTextContent('✓ ACLS'));
+  expect(row).toHaveTextContent('BLS');
+  expect(row).toHaveTextContent('Ventilator Care');
+  expect(row).toHaveTextContent('Strong fit');
+  expect(d.textContent).not.toMatch(/\d\s?%/);
+
+  await u.click(within(d).getByRole('button', { name: 'Import 1 to Applied' }));
+  await waitFor(() => expect(row).toHaveTextContent('Added to Applied'));
+
+  const createCall = api.postApi.mock.calls.find(([path]) => path === '/candidates');
+  expect(createCall).toBeTruthy();
+  expect(createCall?.[1]).toMatchObject({
+    firstName: 'Dr. Salma',
+    lastName: 'Mansour',
+    email: 'salma.mansour@example.com',
+    skills: expect.arrayContaining(['ICU', 'ECG', 'Critical Care', 'ACLS', 'BLS', 'Ventilator Care']),
+  });
+});

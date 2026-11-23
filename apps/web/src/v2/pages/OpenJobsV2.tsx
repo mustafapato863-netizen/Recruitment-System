@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
@@ -26,6 +26,7 @@ import {
 import { useAuth } from '../../auth/AuthContext';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, type StatusTone } from '../../components/v2';
 import { fetchOpenJobs, type JobStatus, type MyJobRow, type OpenJobs, type OtherJobRow } from '../api/jobs';
+import { useCachedResource } from '../api/useCachedResource';
 import { JdReviewDrawer } from '../drawers/JdReviewDrawer';
 import { getInitials } from '../userIdentity';
 import './jobs.css';
@@ -80,7 +81,6 @@ function getJobDisplayMeta(title: string, index: number): { tone: JobTone; Icon:
 export function OpenJobsV2() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: OpenJobs } | { kind: 'error'; message: string } | { kind: 'forbidden' }>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [jdJob, setJdJob] = useState<{ id: string; title: string } | null>(null);
   const [dept, setDept] = useState('');
@@ -93,14 +93,29 @@ export function OpenJobsV2() {
     setSearchParams(jobsQuery(patch.q ?? q, patch.filter ?? filter, patch.site ?? site, patch.view ?? view), { replace: true });
   };
 
-  useEffect(() => {
-    let live = true;
-    setState({ kind: 'loading' });
-    fetchOpenJobs()
-      .then((data) => { if (live) setState({ kind: 'ready', data }); })
-      .catch((e: { statusCode?: number; message?: string }) => { if (live) setState(e?.statusCode === 403 ? { kind: 'forbidden' } : { kind: 'error', message: e?.message || 'Something went wrong.' }); });
-    return () => { live = false; };
-  }, [user?.id, attempt]);
+  const jobsRes = useCachedResource<OpenJobs>({
+    key: 'open-jobs',
+    attempt,
+    userId: user?.id ?? null,
+    fetcher: fetchOpenJobs,
+  });
+
+  const state = useMemo<
+    | { kind: 'loading' }
+    | { kind: 'ready'; data: OpenJobs }
+    | { kind: 'error'; message: string }
+    | { kind: 'forbidden' }
+  >(
+    () =>
+      jobsRes.kind === 'loading'
+        ? { kind: 'loading' }
+        : jobsRes.kind === 'error'
+          ? ((jobsRes.error as { statusCode?: number })?.statusCode === 403
+              ? { kind: 'forbidden' }
+              : { kind: 'error', message: (jobsRes.error as { message?: string })?.message || 'Something went wrong.' })
+          : { kind: 'ready', data: jobsRes.data },
+    [jobsRes],
+  );
 
   const activeFilterReturn = useMemo(() => {
     if (q.trim() === '' && filter === 'open' && site === '' && view === 'cards') return null;

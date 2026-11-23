@@ -1,5 +1,5 @@
 import { useLayoutEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { ApplicantProfilePolish } from '../components/candidate/ApplicantProfilePolish';
 import { CollapseInitialMatchSkills } from '../components/candidate/CollapseInitialMatchSkills';
@@ -26,13 +26,18 @@ import '../styles/v2-retained-workflows.css';
  */
 export function V2Shell() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   useLayoutEffect(() => { applyUiVersion('v2'); }, []);
   if (!user) return <Outlet />;
+  const handleSignOut = () => {
+    navigate('/login', { replace: true, state: null });
+    void logout();
+  };
   return (
     <>
       <ApplicantProfilePolish />
       <CollapseInitialMatchSkills />
-      <AppShellV2 user={user} seat={resolveSeat(user)} onSignOut={() => void logout()} />
+      <AppShellV2 user={user} seat={resolveSeat(user)} onSignOut={handleSignOut} />
     </>
   );
 }

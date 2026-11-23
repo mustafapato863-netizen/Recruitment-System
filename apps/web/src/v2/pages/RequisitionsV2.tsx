@@ -12,6 +12,7 @@ import {
   type Grade, type Person, type ReqContext, type ReqStatus, type Requisition,
 } from '../api/requisitions';
 import { RequisitionDrawer, TargetDrawer } from '../drawers/RequisitionDrawers';
+import { useCachedResource } from '../api/useCachedResource';
 import { JdReviewDrawer } from '../drawers/JdReviewDrawer';
 import { EditRequisitionView, RequisitionDetailView } from './RequisitionViews';
 import './jobs.css';
@@ -250,7 +251,6 @@ export function RequisitionsV2() {
   const isAdmin = (user?.roles ?? []).some((r) => r.code === 'ADMINISTRATOR');
   const can = (p: string) => isAdmin || perms.has(p);
   const [params, setParams] = useSearchParams();
-  const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: Data } | { kind: 'forbidden' } | { kind: 'error'; message: string }>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ id: string; top: number; right: number } | null>(null);
@@ -262,30 +262,41 @@ export function RequisitionsV2() {
   const ownerQ = params.get('owner') ?? '';
   const sort = sortKeyOf(params.get('sort'));
   const setList = useCallback((patch: { q?: string; status?: string; site?: string; owner?: string; due?: string; sort?: string; desk?: string }) => {
-    const n = new URLSearchParams(params);
-    const put = (key: string, value: string | undefined, blank: string) => {
-      if (value === undefined) return;
-      if (!value || value === blank) n.delete(key);
-      else n.set(key, value);
-    };
-    put('q', patch.q, '');
-    put('status', patch.status, 'all');
-    put('site', patch.site, '');
-    put('owner', patch.owner, '');
-    put('due', patch.due, '');
-    put('sort', patch.sort, 'due');
-    put('desk', patch.desk, '');
     setMenu(null);
-    setParams(n);
-  }, [params, setParams]);
+    setParams((prev) => {
+      const n = new URLSearchParams(prev);
+      const put = (key: string, value: string | undefined, blank: string) => {
+        if (value === undefined) return;
+        if (!value || value === blank) n.delete(key);
+        else n.set(key, value);
+      };
+      put('q', patch.q, '');
+      put('status', patch.status, 'all');
+      put('site', patch.site, '');
+      put('owner', patch.owner, '');
+      put('due', patch.due, '');
+      put('sort', patch.sort, 'due');
+      put('desk', patch.desk, '');
+      return n;
+    });
+  }, [setParams]);
 
-  useEffect(() => {
-    let live = true;
-    Promise.all([fetchRequisitions(), fetchContext(), fetchPeople(), fetchGrades()])
-      .then(([rows, ctx, people, grades]) => live && setState({ kind: 'ready', data: { rows, ctx, people, grades } }))
-      .catch((e: { statusCode?: number; message?: string }) => live && setState(e?.statusCode === 403 ? { kind: 'forbidden' } : { kind: 'error', message: e?.message || 'Something went wrong.' }));
-    return () => { live = false; };
-  }, [attempt]);
+  const reqsRes = useCachedResource<Data>({
+    key: 'requisitions',
+    attempt,
+    userId: user?.id ?? null,
+    fetcher: () => Promise.all([fetchRequisitions(), fetchContext(), fetchPeople(), fetchGrades()])
+      .then(([rows, ctx, people, grades]) => ({ rows, ctx, people, grades })),
+  });
+
+  const state: { kind: 'loading' } | { kind: 'ready'; data: Data } | { kind: 'forbidden' } | { kind: 'error'; message: string } =
+    reqsRes.kind === 'loading'
+      ? { kind: 'loading' }
+      : reqsRes.kind === 'error'
+        ? ((reqsRes.error as { statusCode?: number })?.statusCode === 403
+            ? { kind: 'forbidden' }
+            : { kind: 'error', message: (reqsRes.error as { message?: string })?.message || 'Something went wrong.' })
+        : { kind: 'ready', data: reqsRes.data };
 
   useEffect(() => {
     if (!menu) return undefined;
@@ -307,12 +318,18 @@ export function RequisitionsV2() {
 
   const open = params.get('req');
   const drawer = params.get('drawer');
-  const go = useCallback((req: string | null, d?: string) => {
+  const go = useCallback((req: string | null, d?: string, extra?: Record<string, string | null>) => {
     const n = new URLSearchParams(params);
     if (req) n.set('req', req); else n.delete('req');
     if (d) n.set('drawer', d); else n.delete('drawer');
     n.delete('view');
     n.delete('mode');
+    n.delete('extract');
+    if (extra) {
+      for (const [k, v] of Object.entries(extra)) {
+        if (v) n.set(k, v); else n.delete(k);
+      }
+    }
     setMenu(null);
     setParams(n);
   }, [params, setParams]);
@@ -399,7 +416,9 @@ export function RequisitionsV2() {
           <h1 className="rf2-jobs__title">Requisitions</h1>
           <p className="rf2-jobs__sub">Create, track, and manage your team&apos;s hiring requisitions from request to fill.</p>
         </div>
-        {canCreate && !showDetail && !showEdit ? <ButtonV2 icon={<Plus />} onClick={() => go('new')}>New requisition</ButtonV2> : null}
+        {canCreate && !showDetail && !showEdit ? (
+          <ButtonV2 icon={<Plus />} onClick={() => go('new')}>New requisition</ButtonV2>
+        ) : null}
       </div>
       {toast ? <p className="rf2-inline-note" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {toast}</p> : null}
       {state.kind === 'loading' ? (
@@ -556,7 +575,7 @@ export function RequisitionsV2() {
             </div>
           </div>
           {outsideScope ? <p className="rf2-inline-note" role="status">That requisition is not in your team or organization.</p> : null}
-          {open === 'new' && canCreate ? <RequisitionDrawer req={null} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} canDecide={canDecide} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
+          {open === 'new' && canCreate ? <RequisitionDrawer req={null} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} canDecide={canDecide} meId={user?.id} initialExtract={params.get('extract') === '1'} onClose={() => go(null)} onDone={done} /> : null}
           {showTarget && current ? <TargetDrawer req={current} people={data.people} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
           {showJd && current ? (
             <JdReviewDrawer

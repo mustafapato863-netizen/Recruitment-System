@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Clock, Download, Info, RotateCw, ShieldAlert } from 'lucide-react';
+import { BarChart3, Briefcase, ChevronLeft, ChevronRight, Clock, Download, Info, RotateCw, ShieldAlert, Users } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, TextareaV2, initials } from '../../components/v2';
 import { OTHER_REASON, cairoToday, jobReasons } from '../api/jobs';
 import { cairoMonth, monthLabel, tooFew, type ResultTile, type TileKey } from '../api/myResult';
@@ -356,43 +356,83 @@ export function AdminReportsV2() {
           </ButtonV2>
         }
       />
-      <div className="rf2-admin__filterset">
-        <div className="rf2-segmented" role="group" aria-label="Period">
-          <ButtonV2
-            kind="secondary"
-            size="sm"
-            icon={<ChevronLeft />}
-            onClick={() => go({ month: shift(month, -1) })}
-            aria-label="Previous month"
-          />
-          <span className="rf2-tres__month" aria-live="polite">
-            {monthLabel(month)}
-          </span>
-          <ButtonV2
-            kind="secondary"
-            size="sm"
-            icon={<ChevronRight />}
-            onClick={() => go({ month: shift(month, 1) })}
-            disabled={month >= cairoMonth()}
-            aria-label="Next month"
-          />
+      <div className="rf2-admin-filterbar">
+        <div className="rf2-admin__filterset">
+          <div className="rf2-segmented" role="group" aria-label="Period">
+            <ButtonV2
+              kind="secondary"
+              size="sm"
+              icon={<ChevronLeft />}
+              onClick={() => go({ month: shift(month, -1) })}
+              aria-label="Previous month"
+            />
+            <span className="rf2-tres__month" aria-live="polite">
+              {monthLabel(month)}
+            </span>
+            <ButtonV2
+              kind="secondary"
+              size="sm"
+              icon={<ChevronRight />}
+              onClick={() => go({ month: shift(month, 1) })}
+              disabled={month >= cairoMonth()}
+              aria-label="Next month"
+            />
+          </div>
+          <SelectV2 label="Site filter" fieldClassName="rf2-sr-label" value={site} onChange={(e) => setSite(e.target.value)}>
+            <option value="all">Open jobs site: All</option>
+            {sites.map((s) => (
+              <option key={s} value={s}>
+                Open jobs site: {s}
+              </option>
+            ))}
+          </SelectV2>
         </div>
-        <SelectV2 label="Site filter" fieldClassName="rf2-sr-label" value={site} onChange={(e) => setSite(e.target.value)}>
-          <option value="all">Open jobs site: All</option>
-          {sites.map((s) => (
-            <option key={s} value={s}>
-              Open jobs site: {s}
-            </option>
-          ))}
-        </SelectV2>
       </div>
+      <ul className="rf2-admin-kpis" aria-label="Reports overview">
+        <li className="rf2-admin-kpi">
+          <span className="rf2-admin-kpi__icon" aria-hidden="true"><Briefcase /></span>
+          <span className="rf2-admin-kpi__copy">
+            <span className="rf2-admin-kpi__value">{jobsState.kind === 'ready' ? jobs.length : '—'}</span>
+            <span className="rf2-admin-kpi__label">Open jobs</span>
+            <span className="rf2-admin-kpi__sub">Site: {site === 'all' ? 'All sites' : site}</span>
+          </span>
+        </li>
+        <li className="rf2-admin-kpi">
+          <span className="rf2-admin-kpi__icon" data-tone="success" aria-hidden="true"><BarChart3 /></span>
+          <span className="rf2-admin-kpi__copy">
+            <span className="rf2-admin-kpi__value">
+              {stagesState.kind === 'ready' ? stagesState.data.reduce((sum, s) => sum + s.count, 0) : '—'}
+            </span>
+            <span className="rf2-admin-kpi__label">Stage volume</span>
+            <span className="rf2-admin-kpi__sub">{monthLabel(month)}</span>
+          </span>
+        </li>
+        <li className="rf2-admin-kpi">
+          <span className="rf2-admin-kpi__icon" data-tone={offersState.kind === 'ready' && offersState.data.length > 0 ? 'warning' : 'neutral'} aria-hidden="true"><Clock /></span>
+          <span className="rf2-admin-kpi__copy">
+            <span className="rf2-admin-kpi__value" data-tone={offersState.kind === 'ready' && offersState.data.length > 0 ? 'warning' : undefined}>
+              {offersState.kind === 'ready' ? offersState.data.length : '—'}
+            </span>
+            <span className="rf2-admin-kpi__label">Offers waiting</span>
+            <span className="rf2-admin-kpi__sub">Pending manager decision</span>
+          </span>
+        </li>
+        <li className="rf2-admin-kpi">
+          <span className="rf2-admin-kpi__icon" aria-hidden="true"><Users /></span>
+          <span className="rf2-admin-kpi__copy">
+            <span className="rf2-admin-kpi__value">{teamState.kind === 'ready' ? teamState.data.length : '—'}</span>
+            <span className="rf2-admin-kpi__label">Reporting teams</span>
+            <span className="rf2-admin-kpi__sub">Direct-report rollups</span>
+          </span>
+        </li>
+      </ul>
       {note ? (
         <p className="rf2-inline-note" data-tone="success" role="status">
           {note}
         </p>
       ) : null}
 
-      <section className="rf2-panel rf2-admin__card" aria-labelledby="oj-h">
+      <section className="rf2-panel rf2-admin__card" aria-labelledby="oj-h" tabIndex={0}>
         <div className="rf2-row-between rf2-admin__head">
           <h2 id="oj-h" className="rf2-jtable__name">
             Open jobs
@@ -520,7 +560,7 @@ export function AdminReportsV2() {
           </p>
         </section>
 
-        <section className="rf2-panel rf2-admin__card" aria-labelledby="ow-h">
+        <section className="rf2-panel rf2-admin__card" aria-labelledby="ow-h" tabIndex={0}>
           <div className="rf2-row-between rf2-admin__head">
             <h2 id="ow-h" className="rf2-jtable__name">
               Offers waiting
@@ -582,7 +622,7 @@ export function AdminReportsV2() {
         </section>
       </div>
 
-      <section className="rf2-panel rf2-admin__card" aria-labelledby="tr-h">
+      <section className="rf2-panel rf2-admin__card" aria-labelledby="tr-h" tabIndex={0}>
         <div className="rf2-row-between rf2-admin__head">
           <h2 id="tr-h" className="rf2-jtable__name">
             Hiring report by team

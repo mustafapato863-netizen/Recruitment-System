@@ -24,6 +24,9 @@
   gap: var(--rf2-space-1-5);
   padding: 0 var(--rf2-space-2) var(--rf2-space-2);
 }
+[data-ui='v2'] .rf2-int__form > .rf2-btn {
+  align-self: flex-start;
+}
 [data-ui='v2'] .rf2-int__form .rf2-field__box {
   max-width: 100%;
 }

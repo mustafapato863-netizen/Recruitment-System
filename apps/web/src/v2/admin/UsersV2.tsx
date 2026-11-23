@@ -1,7 +1,7 @@
 import { bannerError, fieldError, serverFormErrors } from '../forms/serverErrors';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, CircleCheck, Info, Network, RotateCw, Search, ShieldCheck, UserMinus, UserPlus, UserCheck, TriangleAlert } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, CircleCheck, Info, Network, RotateCw, Search, ShieldCheck, UserMinus, UserPlus, UserCheck, Users, TriangleAlert } from 'lucide-react';
 import { ButtonV2, DangerConfirmButton, DrawerV2, EmptyStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, TextareaV2 } from '../../components/v2';
 import { SEAT_LABEL, SEATS, type Seat } from '../seat';
 import { domainError } from '../api/gates';
@@ -11,18 +11,22 @@ import { fetchOptions, type CatalogValue } from './configApi';
 import { fetchRoles, roleSeat, type AdminRole } from './rolesApi';
 import { getInitials } from '../userIdentity';
 import {
-  buildTree, fetchUsers, flatten, inviteUser, isActive, isDescendant, ownedWork, seatOf, setManager, setStatus, statusTone, subLine, updateUser,
+  fetchUsers, inviteUser, isActive, isDescendant, ownedWork, seatOf, setStatus, statusTone, updateUser,
   type AdminUser, type OwnedWork,
   overrideReassign,
 } from './usersApi';
 import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
+import { ReportingTreeV2 } from './ReportingTreeV2';
+import { useCachedResource } from '../api/useCachedResource';
 import '../pages/jobs.css';
 import './admin.css';
 
 const Avatar = ({ name }: { name: string }) => <span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{getInitials(name)}</span>;
-/** Branch wins when it is non-empty; otherwise the site; otherwise an em dash. */
-function siteOf(u: Pick<AdminUser, 'branchName' | 'site'>): string {
+/** Branch wins when it is non-empty; otherwise catalog lookup by branchId; otherwise the site; otherwise an em dash. */
+function siteOf(u: Pick<AdminUser, 'branchId' | 'branchName' | 'branch' | 'site'>, branchesById?: ReadonlyMap<string, string>): string {
   if (u.branchName) return u.branchName;
+  if (u.branch?.name) return u.branch.name;
+  if (u.branchId && branchesById?.has(u.branchId)) return branchesById.get(u.branchId)!;
   if (u.site) return u.site;
   return '—';
 }
@@ -31,35 +35,43 @@ const USER_PAGE_SIZE = 10;
 /** A02 Users (Admin seat). Three seats; deactivate, never delete. */
 export function UsersV2() {
   const [params, setParams] = useSearchParams();
-  const [users, setUsers] = useState<AdminUser[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [q, setQ] = useState('');
   const [seat, setSeat] = useState<'all' | Seat>('all');
   const [branchId, setBranchId] = useState('');
   const [status, setStatusFilter] = useState('');
-  const [branches, setBranches] = useState<CatalogValue[] | null>(null);
-  const [branchError, setBranchError] = useState<string | null>(null);
   const [branchAttempt, setBranchAttempt] = useState(0);
   const [page, setPage] = useState(1);
-  useEffect(() => {
-    let live = true; setUsers(null); setError(null);
-    fetchUsers().then((u) => live && setUsers(u)).catch((e: { message?: string }) => live && setError(e?.message || 'Something went wrong.'));
-    return () => { live = false; };
-  }, [attempt]);
-  useEffect(() => {
-    let live = true; setBranches(null); setBranchError(null);
-    fetchOptions('branches').then((options) => live && setBranches(options)).catch((e: { message?: string }) => live && setBranchError(e?.message || 'Could not load branches.'));
-    return () => { live = false; };
-  }, [branchAttempt]);
-  const go = (patch: Record<string, string | null>) => { const n = new URLSearchParams(params); for (const [k, v] of Object.entries(patch)) (v ? n.set(k, v) : n.delete(k)); setParams(n); };
+
+  const usersRes = useCachedResource<AdminUser[]>({
+    key: 'admin:users',
+    attempt,
+    fetcher: fetchUsers,
+  });
+  const branchesRes = useCachedResource<CatalogValue[]>({
+    key: 'admin:branches',
+    attempt: branchAttempt,
+    fetcher: () => fetchOptions('branches'),
+  });
+  const users = usersRes.kind === 'ready' ? usersRes.data : null;
+  const error = usersRes.kind === 'error' ? ((usersRes.error as { message?: string })?.message || 'Something went wrong.') : null;
+  const branches = branchesRes.kind === 'ready' ? branchesRes.data : null;
+  const branchError = branchesRes.kind === 'error' ? ((branchesRes.error as { message?: string })?.message || 'Could not load branches.') : null;
+  const go = (patch: Record<string, string | null>) => {
+    setParams((prev) => {
+      const n = new URLSearchParams(prev);
+      for (const [k, v] of Object.entries(patch)) (v ? n.set(k, v) : n.delete(k));
+      return n;
+    });
+  };
   const byId = useMemo(() => new Map((users ?? []).map((u) => [u.id, u])), [users]);
+  const branchesById = useMemo(() => new Map((branches ?? []).map((b) => [b.id, b.name])), [branches]);
   const filteredRows = useMemo(() => (users ?? []).filter((u) =>
     (seat === 'all' || seatOf(u) === seat)
-    && (!branchId || u.branchId === branchId || (!u.branchId && branches?.find((branch) => branch.id === branchId)?.name === siteOf(u)))
+    && (!branchId || u.branchId === branchId || (!u.branchId && branchesById.get(branchId) === siteOf(u, branchesById)))
     && (!status || u.status === status)
     && (!q.trim() || `${u.displayName} ${u.email}`.toLowerCase().includes(q.trim().toLowerCase())))
-    .sort((a, b) => Number(b.status !== 'Inactive') - Number(a.status !== 'Inactive') || a.displayName.localeCompare(b.displayName)), [users, q, seat, branchId, branches, status]);
+    .sort((a, b) => Number(b.status !== 'Inactive') - Number(a.status !== 'Inactive') || a.displayName.localeCompare(b.displayName)), [users, q, seat, branchId, branchesById, status]);
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / USER_PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const rows = filteredRows.slice((currentPage - 1) * USER_PAGE_SIZE, currentPage * USER_PAGE_SIZE);
@@ -67,9 +79,59 @@ export function UsersV2() {
   const lastShown = Math.min(currentPage * USER_PAGE_SIZE, filteredRows.length);
   const open = users?.find((u) => u.id === params.get('user')) ?? null;
   const drawer = params.get('drawer');
+  const view = params.get('view') ?? 'directory';
   const [note, setNote] = useState<string | null>(null);
   const done = (m: string) => { setNote(m); go({ user: null, drawer: null, focus: null }); setAttempt((n) => n + 1); };
   const changeFilter = (change: () => void) => { change(); setPage(1); };
+  const activeCount = useMemo(() => (users ?? []).filter(isActive).length, [users]);
+  const managerCount = useMemo(() => (users ?? []).filter((u) => isActive(u) && seatOf(u) !== 'employee').length, [users]);
+  const assignedLinesCount = useMemo(
+    () => (users ?? []).filter((u) => isActive(u) && Boolean(u.managerId && byId.has(u.managerId))).length,
+    [users, byId],
+  );
+  const unassignedUsers = useMemo(
+    () => (users ?? []).filter((u) => isActive(u) && seatOf(u) === 'employee' && (!u.managerId || !byId.has(u.managerId))),
+    [users, byId],
+  );
+
+  const viewSwitcher = (
+    <div className="rf2-segmented rf2-users-view-switcher" role="tablist" aria-label="Users workspace view" style={{ alignSelf: 'flex-start' }}>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={view !== 'tree'}
+        className="rf2-segmented__btn"
+        onClick={() => go({ view: null })}
+      >
+        <Users size={14} aria-hidden="true" />
+        <span>User Directory</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={view === 'tree'}
+        className="rf2-segmented__btn"
+        onClick={() => go({ view: 'tree' })}
+      >
+        <Network size={14} aria-hidden="true" />
+        <span>Visual Org Chart &amp; Reporting Tree</span>
+      </button>
+    </div>
+  );
+
+  if (view === 'tree') {
+    return (
+      <div className="rf2-jobs rf2-admin">
+        <AdminWorkspaceHeader
+          group="Users & Access"
+          title="Users & Reporting Hierarchy"
+          subtitle="Interactive organizational hierarchy, reporting lines, and manager oversight structure."
+        />
+        {viewSwitcher}
+        <ReportingTreeV2 hideHeader />
+      </div>
+    );
+  }
 
   return (
     <div className="rf2-jobs rf2-admin">
@@ -78,8 +140,74 @@ export function UsersV2() {
         title="Users"
         subtitle="Manage directory access, reporting lines and account status."
       />
+      {viewSwitcher}
       {note ? <p className="rf2-inline-note" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {note}</p> : null}
-      <div className="rf2-admin-toolbar rf2-admin-users__toolbar">
+      {users ? (
+        <ul className="rf2-admin-kpis" aria-label="Directory summary">
+          <li className="rf2-admin-kpi">
+            <span className="rf2-admin-kpi__icon" aria-hidden="true"><Users /></span>
+            <span className="rf2-admin-kpi__copy">
+              <span className="rf2-admin-kpi__value">{activeCount}</span>
+              <span className="rf2-admin-kpi__label">Active users</span>
+              <span className="rf2-admin-kpi__sub">{users.length} total in directory</span>
+            </span>
+          </li>
+          <li className="rf2-admin-kpi">
+            <span className="rf2-admin-kpi__icon" data-tone="success" aria-hidden="true"><ShieldCheck /></span>
+            <span className="rf2-admin-kpi__copy">
+              <span className="rf2-admin-kpi__value">{managerCount}</span>
+              <span className="rf2-admin-kpi__label">Managers &amp; admins</span>
+              <span className="rf2-admin-kpi__sub">Eligible reporting leads</span>
+            </span>
+          </li>
+          <li className="rf2-admin-kpi rf2-admin-kpi--action">
+            <button
+              type="button"
+              className="rf2-admin-kpi__btn"
+              onClick={() => go({ view: 'tree' })}
+            >
+              <span className="rf2-admin-kpi__icon" aria-hidden="true"><Network /></span>
+              <span className="rf2-admin-kpi__copy">
+                <span className="rf2-admin-kpi__value">{assignedLinesCount}</span>
+                <span className="rf2-admin-kpi__label">Reporting lines</span>
+                <span className="rf2-admin-kpi__sub">
+                  <span>Open visual org chart</span>
+                  <ChevronRight size={14} aria-hidden="true" />
+                </span>
+              </span>
+            </button>
+          </li>
+          {unassignedUsers.length > 0 ? (
+            <li className="rf2-admin-kpi rf2-admin-kpi--action">
+              <button
+                type="button"
+                className="rf2-admin-kpi__btn"
+                onClick={() => go({ view: 'tree' })}
+              >
+                <span className="rf2-admin-kpi__icon" data-tone="warning" aria-hidden="true"><TriangleAlert /></span>
+                <span className="rf2-admin-kpi__copy">
+                  <span className="rf2-admin-kpi__value" data-tone="warning">{unassignedUsers.length}</span>
+                  <span className="rf2-admin-kpi__label">Needs manager</span>
+                  <span className="rf2-admin-kpi__sub">
+                    <span>Open visual org chart</span>
+                    <ChevronRight size={14} aria-hidden="true" />
+                  </span>
+                </span>
+              </button>
+            </li>
+          ) : (
+            <li className="rf2-admin-kpi">
+              <span className="rf2-admin-kpi__icon" data-tone="success" aria-hidden="true"><CircleCheck /></span>
+              <span className="rf2-admin-kpi__copy">
+                <span className="rf2-admin-kpi__value">0</span>
+                <span className="rf2-admin-kpi__label">Unassigned</span>
+                <span className="rf2-admin-kpi__sub">All employees mapped</span>
+              </span>
+            </li>
+          )}
+        </ul>
+      ) : null}
+      <div className="rf2-admin-filterbar rf2-admin-toolbar rf2-admin-users__toolbar">
         <div className="rf2-admin__filterset">
           <InputV2 label="Search users" fieldClassName="rf2-jobs__search rf2-sr-label" placeholder="Search users" leadingIcon={<Search />} value={q} onChange={(e) => changeFilter(() => setQ(e.target.value))} />
           <SelectV2 label="Role filter" fieldClassName="rf2-sr-label" value={seat} onChange={(e) => changeFilter(() => setSeat(e.target.value as 'all' | Seat))}>
@@ -99,7 +227,6 @@ export function UsersV2() {
           </SelectV2>
         </div>
         <div className="rf2-admin-toolbar__end">
-          <ButtonV2 kind="secondary" icon={<Network />} onClick={() => go({ drawer: 'tree' })} disabled={!users}>Reporting tree</ButtonV2>
           <ButtonV2 icon={<UserPlus />} onClick={() => go({ drawer: 'invite' })}>Invite user</ButtonV2>
         </div>
       </div>
@@ -120,8 +247,8 @@ export function UsersV2() {
                     </button>
                   </th>
                   <td className="rf2-admin__seat">{SEAT_LABEL[seatOf(u)]}</td>
-                  <td>{u.managerId && byId.has(u.managerId) ? byId.get(u.managerId)?.displayName : isActive(u) && seatOf(u) === 'employee' ? <span className="rf2-admin-users__orphan"><TriangleAlert aria-hidden="true" /> Unassigned manager</span> : '—'}</td>
-                  <td>{siteOf(u)}</td>
+                  <td>{u.managerId && byId.has(u.managerId) ? byId.get(u.managerId)?.displayName : isActive(u) && seatOf(u) === 'employee' ? <button type="button" className="rf2-admin-users__orphan rf2-admin-users__orphan-btn" onClick={() => go({ view: 'tree' })} aria-label={`Assign manager for ${u.displayName}`}><TriangleAlert aria-hidden="true" /> Unassigned manager</button> : '—'}</td>
+                  <td>{siteOf(u, branchesById)}</td>
                   <td><StatusChip tone={statusTone(u.status)} label={u.status} /></td>
                   <td><ButtonV2 kind="secondary" size="sm" aria-label={`Edit ${u.displayName}`} onClick={() => go({ user: u.id, drawer: 'edit' })}>Edit</ButtonV2></td>
                 </tr>
@@ -141,7 +268,6 @@ export function UsersV2() {
       <p className="rf2-inline-note"><ShieldCheck aria-hidden="true" /> Interviewer is not a role. Any user picked as an interviewer can read that candidate’s CV and submit the scorecard, nothing else.</p>
       {open && users && drawer === 'edit' ? <UserEditDrawer user={open} users={users} branches={branches} branchError={branchError} onRetryBranches={() => setBranchAttempt((n) => n + 1)} onClose={() => go({ user: null, drawer: null })} onDone={done} /> : null}
       {open && users && drawer !== 'edit' ? <UserDrawer user={open} users={users} onClose={() => go({ user: null })} onDone={done} /> : null}
-      {drawer === 'tree' && users ? <TreeDrawer users={users} focus={params.get('focus')} onClose={() => go({ drawer: null, focus: null })} onDone={done} /> : null}
       {drawer === 'invite' ? <InviteDrawer onClose={() => go({ drawer: null })} onDone={done} /> : null}
     </div>
   );
@@ -417,60 +543,7 @@ function OwnedWorkPanel({ user, users, manager, owned, onMoved }: { user: AdminU
   );
 }
 
-/** A03 Reporting tree: who reports to whom; edit one line (PATCH /users/:id {managerId}). */
-function TreeDrawer({ users, focus, onClose, onDone }: { users: AdminUser[]; focus: string | null; onClose: () => void; onDone: (m: string) => void }) {
-  const activeUsers = users.filter((u) => u.status !== 'Inactive');
-  const nodes = flatten(buildTree(activeUsers));
-  const [sel, setSel] = useState<string | null>(focus);
-  const picked = activeUsers.find((u) => u.id === sel) ?? null;
-  const [mgr, setMgr] = useState<string>(picked?.managerId ?? '');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [mgrErr, setMgrErr] = useState<string | undefined>();
-  useEffect(() => { setMgr(picked?.managerId ?? ''); setErr(null); setMgrErr(undefined); }, [picked?.id, picked?.managerId]);
-  const options = picked ? activeUsers.filter((u) => u.id !== picked.id && seatOf(u) !== 'employee' && !isDescendant(activeUsers, picked.id, u.id)).sort((a, b) => a.displayName.localeCompare(b.displayName)) : [];
-  const directs = (id: string) => activeUsers.filter((u) => u.managerId === id).length;
-  const save = async () => {
-    if (!picked) return;
-    setBusy(true); setErr(null); setMgrErr(undefined);
-    try { await setManager(picked.id, mgr || null); onDone(`${picked.displayName} now reports to ${activeUsers.find((u) => u.id === mgr)?.displayName ?? 'nobody'}.`); }
-    catch (e) {
-      const f = serverFormErrors(e);
-      const onMgr = fieldError(f, 'managerId');
-      if (onMgr) { setMgrErr(onMgr); setErr(bannerError(f, ['managerId'])); }
-      else setErr(f.message || 'Could not save.');
-    } finally { setBusy(false); }
-  };
-  return (
-    <DrawerV2 open onClose={onClose} kicker="Reporting tree" title="Who reports to whom"
-      primaryAction={<ButtonV2 icon={<CircleCheck />} loading={busy} disabled={!picked || busy || (mgr || null) === (picked?.managerId ?? null)} onClick={() => void save()}>Save reporting line</ButtonV2>}
-      secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
-      <ul className="rf2-admin__tree" aria-label="Reporting tree">
-        {nodes.map((n) => (
-          <li key={n.user.id} style={{ paddingInlineStart: `${n.depth * 24}px` }}>
-            <button type="button" className="rf2-admin__node" aria-pressed={sel === n.user.id} onClick={() => setSel(n.user.id)}>
-              {n.depth ? <ArrowRight aria-hidden="true" className="rf2-admin__arrow" /> : null}
-              <Avatar name={n.user.displayName} />
-              <span><span className="rf2-jtable__name">{n.user.displayName}</span>
-                <span className="rf2-jtable__sub">{[subLine(n.user), n.user.status !== 'Active' ? n.user.status.toLowerCase() : '', directs(n.user.id) ? plural(directs(n.user.id), 'direct report') : ''].filter(Boolean).join(' · ')}</span></span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      {picked ? (
-        <div className="rf2-admin__edit">
-          <p className="rf2-jtable__name">Edit reporting line — {picked.displayName}</p>
-          <SelectV2 label={`${picked.displayName} reports to`} value={mgr} onChange={(e) => { setMgr(e.target.value); setMgrErr(undefined); }} error={mgrErr}>
-            <option value="">Nobody (top of the tree)</option>
-            {options.map((u) => <option key={u.id} value={u.id}>{u.displayName} · {SEAT_LABEL[seatOf(u)]}</option>)}
-          </SelectV2>
-          {err ? <p className="rf2-form-error" role="alert">{err}</p> : null}
-        </div>
-      ) : <p className="rf2-jtable__sub">Pick a person to change who they report to.</p>}
-      <p className="rf2-inline-note"><Info aria-hidden="true" /> Managers see Team work for their reporting line and Team result for their direct reports. Changing a line moves those views, not the files; file owners stay the same.</p>
-    </DrawerV2>
-  );
-}
+
 
 function InviteDrawer({ onClose, onDone }: { onClose: () => void; onDone: (m: string) => void }) {
   const [roles, setRoles] = useState<AdminRole[] | null>(null);

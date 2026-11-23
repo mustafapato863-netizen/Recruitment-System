@@ -1,17 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarCheck, ClipboardCheck, RotateCw, Target, Users } from 'lucide-react';
 import { ButtonV2 } from '../../components/v2/Button';
 import { DrawerV2 } from '../../components/v2/Drawer';
 import { SkeletonV2 } from '../../components/v2/PageStates';
 import { cairoMonth, cairoWeek, fetchTargetsForPeriod, monthLabel, weekChoices, type EmployeeTargetItem, type TargetPeriodType } from '../api/myResult';
+import { useCachedResource } from '../api/useCachedResource';
 import { withReturnTo } from '../returnTarget';
 
-type TargetRead = { key: string } & (
-  | { status: 'loading' }
-  | { status: 'ready'; items: EmployeeTargetItem[] }
-  | { status: 'error'; message: string }
-);
 const icons = { screenings_completed: ClipboardCheck, interviews_conducted: CalendarCheck, feedback_submitted: ClipboardCheck, seats_joined: Users };
 
 /** Personal targets are independent of the daily task queue and never substitute hiring headcount. */
@@ -21,27 +17,22 @@ export function MyWorkTargets({ today, employeeId, period, onPeriod, returnTo, c
 }) {
   const anchor = /^\d{4}-\d{2}-\d{2}$/.test(today) ? new Date(`${today}T12:00:00Z`) : new Date();
   const periodKey = period === 'weekly' ? cairoWeek(anchor) : cairoMonth(anchor);
-  const key = `${employeeId ?? ''}:${period}:${periodKey}`;
+  const key = `my-work:targets:${employeeId ?? ''}:${period}:${periodKey}`;
   const label = period === 'monthly' ? monthLabel(periodKey) : weekChoices(1, anchor)[0]?.label ?? periodKey;
   const [attempt, setAttempt] = useState(0);
   const [opened, setOpened] = useState<string | null>(null);
-  const [read, setRead] = useState<TargetRead>({ key: '', status: 'loading' });
-  useEffect(() => {
-    // The targets endpoint requires the same application-view permission as its record links.
-    if (!canOpenFile) return undefined;
-    let live = true;
-    setRead({ key, status: 'loading' });
-    fetchTargetsForPeriod({ scope: 'me', periodType: period, periodKey })
-      .then((result) => { if (live) setRead({ key, status: 'ready', items: result.targets }); })
-      .catch((error: unknown) => { if (live) setRead({ key, status: 'error', message: error instanceof Error ? error.message : 'Could not load your targets.' }); });
-    return () => { live = false; };
-  }, [canOpenFile, key, period, periodKey, attempt, refreshKey]);
-  useEffect(() => {
-    const refresh = () => { if (document.visibilityState === 'visible') setAttempt((value) => value + 1); };
-    document.addEventListener('visibilitychange', refresh);
-    return () => document.removeEventListener('visibilitychange', refresh);
-  }, []);
-  const current = read.key === key ? read : { key, status: 'loading' as const };
+  const res = useCachedResource<EmployeeTargetItem[]>({
+    key,
+    enabled: canOpenFile,
+    attempt: attempt + refreshKey,
+    revalidateOnVisible: true,
+    fetcher: () => fetchTargetsForPeriod({ scope: 'me', periodType: period, periodKey }).then((result) => result.targets),
+  });
+  const current = res.kind === 'loading'
+    ? { status: 'loading' as const }
+    : res.kind === 'error'
+      ? { status: 'error' as const, message: res.error instanceof Error ? res.error.message : 'Could not load your targets.' }
+      : { status: 'ready' as const, items: res.data };
   const items = current.status === 'ready' ? current.items : [];
   const selected = items.find((item) => item.id === opened);
   if (!canOpenFile) return null;

@@ -39,11 +39,26 @@ export class VacancyDocumentsService {
     file: { originalname: string; mimetype: string; size: number; buffer: Buffer },
     user: AuthUser,
   ): Promise<{ document: VacancyDocumentItem; criteria: JdCriteriaDefinition }> {
-    const vacancy = await this.prisma.vacancy.findFirst({
+    let vacancy = await this.prisma.vacancy.findFirst({
       where: { id: vacancyId, organizationId },
-      select: { id: true, vacancyCode: true, requiredSkills: true, status: true },
+      select: { id: true, vacancyCode: true, requiredSkills: true, status: true, vacancyRequestId: true },
     });
-    if (!vacancy) throw new NotFoundException('Job not found.');
+    if (!vacancy) {
+      vacancy = await this.prisma.vacancy.findFirst({
+        where: { vacancyRequestId: vacancyId, organizationId },
+        select: { id: true, vacancyCode: true, requiredSkills: true, status: true, vacancyRequestId: true },
+      });
+    }
+    if (!vacancy) {
+      const req = await this.prisma.vacancyRequest.findFirst({
+        where: { id: vacancyId, organizationId },
+        select: { id: true },
+      });
+      if (req) {
+        return this.uploadRequisitionJd(organizationId, vacancyId, file, user);
+      }
+      throw new NotFoundException('Job not found.');
+    }
 
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
     const stored = await this.storage.put(organizationId, vacancyId, file.originalname, file.buffer);
@@ -220,10 +235,63 @@ export class VacancyDocumentsService {
   }
 
   /**
-   * Get JD details and criteria for a vacancy.
+   * Get JD details and criteria for a vacancy or vacancy request.
    */
   async getVacancyJd(organizationId: string, vacancyId: string): Promise<{ document: VacancyDocumentItem | null; criteria: JdCriteriaDefinition | null }> {
-    const vacancy = await this.prisma.vacancy.findFirst({
+    let vacancy = await this.prisma.vacancy.findFirst({
+      where: { id: vacancyId, organizationId },
+      select: {
+        id: true,
+        jdCriteria: true,
+        vacancyRequestId: true,
+        documents: {
+          where: { documentType: 'JOB_DESCRIPTION' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { uploadedBy: { select: { displayName: true } } },
+        },
+      },
+    });
+
+    if (!vacancy) {
+      vacancy = await this.prisma.vacancy.findFirst({
+        where: { vacancyRequestId: vacancyId, organizationId },
+        select: {
+          id: true,
+          jdCriteria: true,
+          vacancyRequestId: true,
+          documents: {
+            where: { documentType: 'JOB_DESCRIPTION' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: { uploadedBy: { select: { displayName: true } } },
+          },
+        },
+      });
+    }
+
+    if (vacancy) {
+      const doc = vacancy.documents[0] ?? null;
+      return {
+        document: doc
+          ? {
+              id: doc.id,
+              vacancyId: doc.vacancyId,
+              documentType: doc.documentType,
+              fileName: doc.fileName,
+              fileSize: doc.fileSize,
+              mimeType: doc.mimeType,
+              parserStatus: doc.parserStatus,
+              extractionText: doc.extractionText,
+              uploadedByName: doc.uploadedBy?.displayName || null,
+              createdAt: doc.createdAt.toISOString(),
+            }
+          : null,
+        criteria: (vacancy.jdCriteria as unknown as JdCriteriaDefinition) || null,
+      };
+    }
+
+    const req = await this.prisma.vacancyRequest.findFirst({
       where: { id: vacancyId, organizationId },
       select: {
         id: true,
@@ -236,14 +304,15 @@ export class VacancyDocumentsService {
         },
       },
     });
-    if (!vacancy) throw new NotFoundException('Job not found.');
 
-    const doc = vacancy.documents[0] ?? null;
+    if (!req) throw new NotFoundException('Job not found.');
+
+    const doc = req.documents[0] ?? null;
     return {
       document: doc
         ? {
             id: doc.id,
-            vacancyId: doc.vacancyId,
+            vacancyRequestId: doc.vacancyRequestId,
             documentType: doc.documentType,
             fileName: doc.fileName,
             fileSize: doc.fileSize,
@@ -254,7 +323,7 @@ export class VacancyDocumentsService {
             createdAt: doc.createdAt.toISOString(),
           }
         : null,
-      criteria: (vacancy.jdCriteria as unknown as JdCriteriaDefinition) || null,
+      criteria: (req.jdCriteria as unknown as JdCriteriaDefinition) || null,
     };
   }
 
@@ -267,22 +336,74 @@ export class VacancyDocumentsService {
     criteria: Partial<JdCriteriaDefinition>,
     user: AuthUser,
   ): Promise<JdCriteriaDefinition> {
-    const vacancy = await this.prisma.vacancy.findFirst({
+    let vacancy = await this.prisma.vacancy.findFirst({
       where: { id: vacancyId, organizationId },
-      select: { id: true, jdCriteria: true, requiredSkills: true },
+      select: { id: true, jdCriteria: true, requiredSkills: true, vacancyRequestId: true },
     });
-    if (!vacancy) throw new NotFoundException('Job not found.');
+    if (!vacancy) {
+      vacancy = await this.prisma.vacancy.findFirst({
+        where: { vacancyRequestId: vacancyId, organizationId },
+        select: { id: true, jdCriteria: true, requiredSkills: true, vacancyRequestId: true },
+      });
+    }
 
-    const current = (vacancy.jdCriteria as unknown as JdCriteriaDefinition) || this.jdParser.parseJdText('', vacancy.requiredSkills);
+    if (vacancy) {
+      const current = (vacancy.jdCriteria as unknown as JdCriteriaDefinition) || this.jdParser.parseJdText('', vacancy.requiredSkills);
+
+      const updated: JdCriteriaDefinition = {
+        ...current,
+        ...criteria,
+        version: (current.version || 1) + 1,
+        weights: criteria.weights || current.weights || { skills: 50, experience: 30, education: 10, languages: 10 },
+        mustHaveSkills: criteria.mustHaveSkills || current.mustHaveSkills || [],
+        niceToHaveSkills: criteria.niceToHaveSkills || current.niceToHaveSkills || [],
+        knockoutRules: criteria.knockoutRules || current.knockoutRules || [],
+      };
+
+      if (criteria.isLocked && !current.isLocked) {
+        updated.isLocked = true;
+        updated.lockedAt = new Date().toISOString();
+        updated.lockedById = user.userId;
+        updated.lockedByName = user.userId;
+      }
+
+      const newSkills = Array.from(new Set([...updated.mustHaveSkills.map((s) => s.name)]));
+
+      await this.prisma.vacancy.update({
+        where: { id: vacancy.id },
+        data: {
+          jdCriteria: updated as unknown as object,
+          requiredSkills: newSkills.length > 0 ? newSkills : vacancy.requiredSkills,
+          minExperienceYears: updated.minExperienceYears ?? null,
+        },
+      });
+
+      if (vacancy.vacancyRequestId) {
+        await this.prisma.vacancyRequest.update({
+          where: { id: vacancy.vacancyRequestId },
+          data: { jdCriteria: updated as unknown as object },
+        }).catch(() => null);
+      }
+
+      return updated;
+    }
+
+    const req = await this.prisma.vacancyRequest.findFirst({
+      where: { id: vacancyId, organizationId },
+      select: { id: true, jdCriteria: true },
+    });
+    if (!req) throw new NotFoundException('Job not found.');
+
+    const current = (req.jdCriteria as unknown as JdCriteriaDefinition) || this.jdParser.parseJdText('', []);
 
     const updated: JdCriteriaDefinition = {
       ...current,
       ...criteria,
-      version: current.version + 1,
-      weights: criteria.weights || current.weights,
-      mustHaveSkills: criteria.mustHaveSkills || current.mustHaveSkills,
-      niceToHaveSkills: criteria.niceToHaveSkills || current.niceToHaveSkills,
-      knockoutRules: criteria.knockoutRules || current.knockoutRules,
+      version: (current.version || 1) + 1,
+      weights: criteria.weights || current.weights || { skills: 50, experience: 30, education: 10, languages: 10 },
+      mustHaveSkills: criteria.mustHaveSkills || current.mustHaveSkills || [],
+      niceToHaveSkills: criteria.niceToHaveSkills || current.niceToHaveSkills || [],
+      knockoutRules: criteria.knockoutRules || current.knockoutRules || [],
     };
 
     if (criteria.isLocked && !current.isLocked) {
@@ -292,17 +413,151 @@ export class VacancyDocumentsService {
       updated.lockedByName = user.userId;
     }
 
-    const newSkills = Array.from(new Set([...updated.mustHaveSkills.map((s) => s.name)]));
-
-    await this.prisma.vacancy.update({
-      where: { id: vacancyId },
+    await this.prisma.vacancyRequest.update({
+      where: { id: req.id },
       data: {
         jdCriteria: updated as unknown as object,
-        requiredSkills: newSkills.length > 0 ? newSkills : vacancy.requiredSkills,
-        minExperienceYears: updated.minExperienceYears ?? null,
       },
     });
 
     return updated;
+  }
+
+  /**
+   * Save written or edited JD text, parse competencies, and create a document record.
+   */
+  async saveJdText(
+    organizationId: string,
+    targetId: string,
+    text: string,
+    user: AuthUser,
+    fileName = 'job_description.txt',
+  ): Promise<{ document: VacancyDocumentItem; criteria: JdCriteriaDefinition }> {
+    let vacancy = await this.prisma.vacancy.findFirst({
+      where: { id: targetId, organizationId },
+      select: { id: true, vacancyCode: true, requiredSkills: true, status: true, vacancyRequestId: true },
+    });
+    if (!vacancy) {
+      vacancy = await this.prisma.vacancy.findFirst({
+        where: { vacancyRequestId: targetId, organizationId },
+        select: { id: true, vacancyCode: true, requiredSkills: true, status: true, vacancyRequestId: true },
+      });
+    }
+
+    const extractionText = text || '';
+    const buffer = Buffer.from(extractionText, 'utf8');
+    const sha256 = createHash('sha256').update(buffer).digest('hex');
+    const stored = await this.storage.put(organizationId, targetId, fileName, buffer);
+
+    if (vacancy) {
+      const parsedCriteria = this.jdParser.parseJdText(extractionText, vacancy.requiredSkills);
+
+      const doc = await this.prisma.vacancyDocument.create({
+        data: {
+          organizationId,
+          vacancyId: vacancy.id,
+          vacancyRequestId: vacancy.vacancyRequestId ?? null,
+          documentType: 'JOB_DESCRIPTION',
+          fileName,
+          fileSize: buffer.length,
+          mimeType: 'text/plain',
+          storageKey: stored.storageKey,
+          storageProvider: stored.provider,
+          sha256,
+          extractionText,
+          parserStatus: 'Completed',
+          uploadedById: user.userId,
+        },
+        include: { uploadedBy: { select: { displayName: true } } },
+      });
+
+      const updatedSkills = Array.from(
+        new Set([
+          ...vacancy.requiredSkills,
+          ...parsedCriteria.mustHaveSkills.map((s) => s.name),
+        ]),
+      );
+
+      await this.prisma.vacancy.update({
+        where: { id: vacancy.id },
+        data: {
+          jdCriteria: parsedCriteria as unknown as object,
+          requiredSkills: updatedSkills,
+          minExperienceYears: parsedCriteria.minExperienceYears ?? null,
+        },
+      });
+
+      if (vacancy.vacancyRequestId) {
+        await this.prisma.vacancyRequest.update({
+          where: { id: vacancy.vacancyRequestId },
+          data: { jdCriteria: parsedCriteria as unknown as object },
+        }).catch(() => null);
+      }
+
+      return {
+        document: {
+          id: doc.id,
+          vacancyId: doc.vacancyId,
+          documentType: doc.documentType,
+          fileName: doc.fileName,
+          fileSize: doc.fileSize,
+          mimeType: doc.mimeType,
+          parserStatus: doc.parserStatus,
+          extractionText: doc.extractionText,
+          uploadedByName: doc.uploadedBy?.displayName || null,
+          createdAt: doc.createdAt.toISOString(),
+        },
+        criteria: parsedCriteria,
+      };
+    }
+
+    const req = await this.prisma.vacancyRequest.findFirst({
+      where: { id: targetId, organizationId },
+      select: { id: true },
+    });
+    if (!req) throw new NotFoundException('Job not found.');
+
+    const parsedCriteria = this.jdParser.parseJdText(extractionText, []);
+
+    const doc = await this.prisma.vacancyDocument.create({
+      data: {
+        organizationId,
+        vacancyRequestId: req.id,
+        documentType: 'JOB_DESCRIPTION',
+        fileName,
+        fileSize: buffer.length,
+        mimeType: 'text/plain',
+        storageKey: stored.storageKey,
+        storageProvider: stored.provider,
+        sha256,
+        extractionText,
+        parserStatus: 'Completed',
+        uploadedById: user.userId,
+      },
+      include: { uploadedBy: { select: { displayName: true } } },
+    });
+
+    await this.prisma.vacancyRequest.update({
+      where: { id: req.id },
+      data: {
+        jdCriteria: parsedCriteria as unknown as object,
+      },
+    });
+
+    return {
+      document: {
+        id: doc.id,
+        vacancyRequestId: doc.vacancyRequestId,
+        documentType: doc.documentType,
+        fileName: doc.fileName,
+        fileSize: doc.fileSize,
+        mimeType: doc.mimeType,
+        parserStatus: doc.parserStatus,
+        extractionText: doc.extractionText,
+        uploadedByName: doc.uploadedBy?.displayName || null,
+        createdAt: doc.createdAt.toISOString(),
+      },
+      criteria: parsedCriteria,
+    };
   }
 }

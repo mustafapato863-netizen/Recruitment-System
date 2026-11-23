@@ -210,6 +210,7 @@ export function NotificationsPage() {
 
   return (
     <div className="rf2-notify">
+      <h1 className="rf2-jobs__title">Notifications</h1>
       <div className="rf2-notify__bar">
         <TabsV2
           items={filters}

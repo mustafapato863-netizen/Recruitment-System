@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Calendar, Clock, AlertTriangle, Users, RotateCw, CheckCircle2, UserX } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { InputV2 } from '../../components/v2/Field';
 import { getApi, ApiError } from '../../api/client';
+import { useCachedResource } from '../api/useCachedResource';
 import {
   requirementCleared,
 } from '../../components/candidate/JoiningChecklist';
@@ -36,9 +37,6 @@ const statusTone = (status: string): 'info' | 'success' | 'warning' | 'danger' =
 
 export function JoiningV2() {
   const [params, setParams] = useSearchParams();
-  const [items, setItems] = useState<JoiningCase[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   const statusFilter = params.get('status') || '';
@@ -47,48 +45,40 @@ export function JoiningV2() {
   const drawerMode = params.get('drawer');
 
   const updateParams = (patch: Record<string, string | null>) => {
-    const next = new URLSearchParams(params);
-    for (const [key, val] of Object.entries(patch)) {
-      if (val) next.set(key, val);
-      else next.delete(key);
-    }
-    setParams(next);
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      for (const [key, val] of Object.entries(patch)) {
+        if (val) next.set(key, val);
+        else next.delete(key);
+      }
+      return next;
+    });
   };
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setError(null);
+  const joiningRes = useCachedResource<JoiningCase[]>({
+    key: 'joining',
+    attempt,
+    fetcher: () => getApi<JoiningCase[]>('/hiring').then((data) =>
+      (Array.isArray(data) ? data : []).map((item) => {
+        const reqs = item.complianceRequirements ?? [];
+        const completed = reqs.filter((req) => req && requirementCleared(req)).length;
+        const total = reqs.length;
+        const checklistProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
+        return {
+          ...item,
+          checklistProgress,
+          completedItems: completed,
+          totalItems: total,
+        };
+      }),
+    ),
+  });
 
-    getApi<JoiningCase[]>('/hiring')
-      .then((data) => {
-        if (!alive) return;
-        const enriched = (Array.isArray(data) ? data : []).map((item) => {
-          const reqs = item.complianceRequirements ?? [];
-          const completed = reqs.filter((req) => req && requirementCleared(req)).length;
-          const total = reqs.length;
-          const checklistProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
-          return {
-            ...item,
-            checklistProgress,
-            completedItems: completed,
-            totalItems: total,
-          };
-        });
-        setItems(enriched);
-      })
-      .catch((err) => {
-        if (!alive) return;
-        setError(err instanceof ApiError ? err.message : 'Could not load joining records.');
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, [attempt]);
+  const items = joiningRes.kind === 'ready' ? joiningRes.data : [];
+  const loading = joiningRes.kind === 'loading';
+  const error = joiningRes.kind === 'error'
+    ? (joiningRes.error instanceof ApiError ? joiningRes.error.message : 'Could not load joining records.')
+    : null;
 
   const awaitingCount = items.filter((i) => i.status === 'Awaiting Joining').length;
   const joinedCount = items.filter((i) => i.status === 'Joined').length;
@@ -121,7 +111,7 @@ export function JoiningV2() {
         </div>
       </header>
 
-      <ul className="rf2-team__summary-cards" aria-label="Joining summary">
+      <ul className="rf2-team__summary-cards rf2-team__summary-cards--5" aria-label="Joining summary">
         <li>
           <span className="rf2-team__sum-icon" data-tone="info" aria-hidden="true"><Clock /></span>
           <span className="rf2-team__sum-copy">
@@ -214,7 +204,7 @@ export function JoiningV2() {
             </button>
           </div>
 
-          <div style={{ maxWidth: 300, flex: 1 }}>
+          <div style={{ flex: '1 1 300px', minWidth: 'min(100%, 300px)', maxWidth: 420 }}>
             <InputV2
               label="Search candidates"
               fieldClassName="rf2-jobs__search rf2-sr-label"

@@ -26,6 +26,7 @@ import {
 } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { SuggestJobsDrawer } from '../drawers/SuggestJobsDrawer';
 import { CandidateActivityPanel } from '../../components/candidate/CandidateActivityPanel';
 import {
   ScorecardSummary,
@@ -119,6 +120,7 @@ export function CandidateDetailPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isSuggestJobsOpen, setIsSuggestJobsOpen] = useState(false);
 
   // ─── Data Loading ────────────────────────────────────────────
 
@@ -585,6 +587,10 @@ export function CandidateDetailPage() {
       }
       actions={
         <>
+          <Button variant="secondary" size="sm" onClick={() => setIsSuggestJobsOpen(true)}>
+            <Icon name="sparkles" size={13} />
+            Find matching roles
+          </Button>
           {canAssign ? <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
             <Icon name="plus" size={13} />
             Assign to job
@@ -981,6 +987,14 @@ export function CandidateDetailPage() {
         tone="danger"
         icon="trash"
         isLoading={deleteSubmitting}
+      />
+
+      <SuggestJobsDrawer
+        isOpen={isSuggestJobsOpen}
+        candidateId={candidate.id}
+        candidateName={fullName}
+        onClose={() => setIsSuggestJobsOpen(false)}
+        onApplied={() => void retryApplications()}
       />
     </PageFrame>
   );

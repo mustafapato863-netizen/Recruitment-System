@@ -1,6 +1,6 @@
 import { toFormErrs } from './formErrors';
 import { useEffect, useRef, useState } from 'react';
-import { CircleCheck, Info, LogOut, PencilLine, Plus, RotateCw, ShieldCheck } from 'lucide-react';
+import { ArrowRight, CircleCheck, GitBranch, Info, LogOut, PencilLine, Plus, RotateCw, ShieldCheck } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, InputV2, SelectV2, SkeletonV2 } from '../../components/v2';
 import { useAuth } from '../../auth/AuthContext';
 import { applyWorkflowRule, createPipeline, fetchPipeline, fetchWorkflowRules, isExit, isSingleTemplate, previewWorkflowRule, renameStage, stageInfo, WORKFLOW_RULE_REASON_MAX, type PipelineStage, type PipelineTemplate, type WorkflowImpact, type WorkflowPosition } from './configApi';
@@ -29,6 +29,7 @@ export function PipelineV2() {
   };
   const stages = data?.stages.filter((s) => !isExit(s)) ?? [];
   const exits = data?.stages.filter(isExit) ?? [];
+  const gateCount = stages.filter((s) => Boolean(stageInfo(s)?.gate)).length;
   return (
     <div className="rf2-jobs rf2-admin">
       <AdminWorkspaceHeader
@@ -42,8 +43,45 @@ export function PipelineV2() {
       {data === null ? <EmptyStateV2 title="No pipeline template yet" body="Create the one default template every job uses." action={<ButtonV2 icon={<Plus />} loading={busy} onClick={() => void create()}>Create the template</ButtonV2>} /> : null}
       {data ? (
         <>
+          <ul className="rf2-admin-kpis rf2-admin-kpis--3" aria-label="Pipeline overview">
+            <li className="rf2-admin-kpi">
+              <span className="rf2-admin-kpi__icon" aria-hidden="true"><GitBranch /></span>
+              <span className="rf2-admin-kpi__copy">
+                <span className="rf2-admin-kpi__value">{stages.length}</span>
+                <span className="rf2-admin-kpi__label">Active stages</span>
+                <span className="rf2-admin-kpi__sub">{data.template.name}</span>
+              </span>
+            </li>
+            <li className="rf2-admin-kpi">
+              <span className="rf2-admin-kpi__icon" data-tone="warning" aria-hidden="true"><ShieldCheck /></span>
+              <span className="rf2-admin-kpi__copy">
+                <span className="rf2-admin-kpi__value">{gateCount}</span>
+                <span className="rf2-admin-kpi__label">Enforced gates</span>
+                <span className="rf2-admin-kpi__sub">Server-verified transitions</span>
+              </span>
+            </li>
+            <li className="rf2-admin-kpi">
+              <span className="rf2-admin-kpi__icon" data-tone="danger" aria-hidden="true"><LogOut /></span>
+              <span className="rf2-admin-kpi__copy">
+                <span className="rf2-admin-kpi__value">{exits.length}</span>
+                <span className="rf2-admin-kpi__label">Exit stages</span>
+                <span className="rf2-admin-kpi__sub">Reachable from any stage</span>
+              </span>
+            </li>
+          </ul>
           <section className="rf2-panel rf2-admin__card" aria-labelledby="stages-h">
             <div className="rf2-row-between rf2-admin__head"><h2 id="stages-h" className="rf2-jtable__name">Stages</h2><span className="rf2-jtable__sub">{stages.length} stages · {data.template.name}</span></div>
+            <div className="rf2-pipeline-flow" aria-hidden="true">
+              {stages.map((s, i) => (
+                <span key={`flow-${s.id}`} style={{ display: 'contents' }}>
+                  <span className="rf2-pipeline-flow__step">
+                    <span className="rf2-admin__num">{i + 1}</span>
+                    <span>{s.name}</span>
+                  </span>
+                  {i < stages.length - 1 ? <ArrowRight className="rf2-pipeline-flow__arrow" /> : null}
+                </span>
+              ))}
+            </div>
             <ol className="rf2-admin__stages">
               {stages.map((s, i) => { const info = stageInfo(s); return (
                 <li key={s.id} className="rf2-admin__stage">

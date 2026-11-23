@@ -7,6 +7,7 @@ const atsApi = vi.hoisted(() => ({
   fetchVacancyJd: vi.fn(),
   uploadVacancyJd: vi.fn(),
   updateVacancyCriteria: vi.fn(),
+  saveVacancyJdText: vi.fn(),
 }));
 
 vi.mock('../../api/ats', () => atsApi);
@@ -229,6 +230,62 @@ describe('JdReviewDrawer', () => {
     await waitFor(() => {
       expect(screen.getByText('Uploaded_Nurse_JD.pdf')).toBeInTheDocument();
       expect(screen.getByText('Critical Care')).toBeInTheDocument();
+    });
+  });
+
+  it('allows writing / editing JD text directly and extracting fresh requirements', async () => {
+    const user = userEvent.setup();
+    atsApi.saveVacancyJdText.mockResolvedValue({
+      document: {
+        id: 'doc-text',
+        documentType: 'JOB_DESCRIPTION',
+        fileName: 'job_description.txt',
+        fileSize: 120,
+        mimeType: 'text/plain',
+        parserStatus: 'Completed',
+        extractionText: 'Requires Pediatrics and Neonatal Care. 5 years experience.',
+        createdAt: '2026-11-17T15:00:00Z',
+      },
+      criteria: {
+        ...mockCriteria,
+        minExperienceYears: 5,
+        mustHaveSkills: [{ id: 'must-peds', name: 'Pediatrics' }, { id: 'must-neo', name: 'Neonatal Care' }],
+      },
+    });
+
+    render(
+      <JdReviewDrawer
+        vacancyId="vac-100"
+        vacancyTitle="Senior ICU Specialist"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Job Description & ATS Calibration')).toBeInTheDocument();
+    });
+
+    // Switch to Write / Edit JD text tab
+    const writeTab = screen.getByRole('tab', { name: /Write \/ Edit JD text/i });
+    await user.click(writeTab);
+
+    const textarea = screen.getByPlaceholderText(/Type or paste the job description here/i);
+    expect(textarea).toBeInTheDocument();
+
+    await user.clear(textarea);
+    await user.type(textarea, 'Requires Pediatrics and Neonatal Care. 5 years experience.');
+
+    const extractBtn = screen.getByRole('button', { name: /Extract & Update Requirements/i });
+    await user.click(extractBtn);
+
+    expect(atsApi.saveVacancyJdText).toHaveBeenCalledWith(
+      'vac-100',
+      'Requires Pediatrics and Neonatal Care. 5 years experience.',
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Pediatrics')).toBeInTheDocument();
+      expect(screen.getByText('Neonatal Care')).toBeInTheDocument();
     });
   });
 });

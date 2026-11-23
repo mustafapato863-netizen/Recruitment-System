@@ -127,6 +127,64 @@ export function SuggestJobsDrawer({
                         </span>
                       </span>
                     </div>
+
+                    {rec.matchedKeywords && rec.matchedKeywords.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Matched main keywords">
+                        {rec.matchedKeywords.slice(0, 6).map((keyword) => (
+                          <span
+                            key={keyword}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/70"
+                          >
+                            <CircleCheck size={10} aria-hidden="true" />
+                            <span>{keyword}</span>
+                          </span>
+                        ))}
+                        {rec.matchedKeywords.length > 6 ? (
+                          <span className="text-[11px] font-medium text-[var(--rf2-muted)] self-center">
+                            +{rec.matchedKeywords.length - 6} more
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {rec.missingKeywords && rec.missingKeywords.length > 0 ? (
+                      <div className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Missing keywords">
+                        {rec.missingKeywords.slice(0, 4).map((keyword) => (
+                          <span
+                            key={keyword}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/60"
+                          >
+                            <span>− {keyword}</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {rec.fitReasons && rec.fitReasons.length > 0 ? (
+                      <ul className="mt-2 mb-0 pl-4 space-y-0.5 text-[11px] text-[var(--rf2-muted)]">
+                        {rec.fitReasons.slice(0, 3).map((reason) => (
+                          <li key={reason}>{reason}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    {rec.keywordEvidence && rec.keywordEvidence.some((ev) => ev.snippet) ? (
+                      <details className="mt-2 text-[11px] text-[var(--rf2-muted)]">
+                        <summary className="cursor-pointer font-semibold hover:text-[var(--rf2-ink)]">
+                          Keyword evidence in CV
+                        </summary>
+                        <ul className="mt-1 mb-0 pl-4 space-y-1">
+                          {rec.keywordEvidence
+                            .filter((ev) => ev.snippet)
+                            .slice(0, 4)
+                            .map((ev) => (
+                              <li key={ev.keyword}>
+                                <strong className="text-[var(--rf2-ink)]">{ev.keyword}:</strong> {ev.snippet}
+                              </li>
+                            ))}
+                        </ul>
+                      </details>
+                    ) : null}
                   </div>
 
                   <div className="shrink-0 pt-0.5">

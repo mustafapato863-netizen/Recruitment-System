@@ -68,8 +68,16 @@ export class AuthController {
   async logout(@CurrentUser() user: AuthUser, @Res({ passthrough: true }) response: Response) {
     await this.authService.logout(user.userId);
 
-    response.cookie('access_token', '', { expires: new Date(0), path: '/api/v1' });
-    response.cookie('refresh_token', '', { expires: new Date(0), path: '/api/v1/auth/refresh' });
+    response.cookie('access_token', '', {
+      ...authCookieOptions('/api/v1'),
+      maxAge: 0,
+      expires: new Date(0),
+    });
+    response.cookie('refresh_token', '', {
+      ...authCookieOptions('/api/v1/auth/refresh'),
+      maxAge: 0,
+      expires: new Date(0),
+    });
 
     return { message: 'Logged out successfully' };
   }
