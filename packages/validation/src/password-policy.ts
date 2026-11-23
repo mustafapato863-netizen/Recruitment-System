@@ -106,7 +106,10 @@ function secureRandomInt(max: number): number {
   const buffer = new Uint32Array(1);
   for (;;) {
     cryptoRef.getRandomValues(buffer);
+    // noUncheckedIndexedAccess: the index is always in range, but the
+    // type is number | undefined, so guard explicitly.
     const value = buffer[0];
+    if (value === undefined) continue;
     if (value < limit) return value % max;
   }
 }
@@ -127,17 +130,26 @@ export function generateStrongPassword(length = 14): string {
     );
   }
   const classes = [UPPERCASE, LOWERCASE, DIGITS, SPECIAL];
+  // charAt (not [index]) so indexing stays `string` under
+  // noUncheckedIndexedAccess.
   const chars: string[] = classes.map(
-    (charsForClass) => charsForClass[secureRandomInt(charsForClass.length)],
+    (charsForClass) => charsForClass.charAt(secureRandomInt(charsForClass.length)),
   );
   while (chars.length < length) {
-    chars.push(ALL_CHARS[secureRandomInt(ALL_CHARS.length)]);
+    chars.push(ALL_CHARS.charAt(secureRandomInt(ALL_CHARS.length)));
   }
   // Fisher-Yates shuffle so the guaranteed class characters are not pinned
   // to the first four positions.
   for (let i = chars.length - 1; i > 0; i -= 1) {
     const j = secureRandomInt(i + 1);
-    [chars[i], chars[j]] = [chars[j], chars[i]];
+    const tmp = chars[i];
+    const other = chars[j];
+    // i and j are always in range by construction; the guard is only for
+    // noUncheckedIndexedAccess (both are string | undefined).
+    if (tmp !== undefined && other !== undefined) {
+      chars[i] = other;
+      chars[j] = tmp;
+    }
   }
   return chars.join('');
 }
