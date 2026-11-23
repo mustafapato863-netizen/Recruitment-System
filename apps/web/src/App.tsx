@@ -61,6 +61,7 @@ const V2Shell = lazy(() => import('./layout/V2Shell').then((m) => ({ default: m.
 
 const ForgotPasswordPage = lazy(() => import('./auth/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import('./auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
+const ChangePasswordRequiredPage = lazy(() => import('./auth/ChangePasswordRequiredPage').then((m) => ({ default: m.ChangePasswordRequiredPage })));
 const AcceptInvitationPage = lazy(() => import('./auth/AcceptInvitationPage').then((m) => ({ default: m.AcceptInvitationPage })));
 const VerifyEmailPage = lazy(() => import('./auth/VerifyEmailPage').then((m) => ({ default: m.VerifyEmailPage })));
 const PublicJobsPage = lazy(() => import('./public/PublicJobsPage').then((m) => ({ default: m.PublicJobsPage })));
@@ -81,6 +82,7 @@ function App() {
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/change-password" element={<ChangePasswordRequiredPage />} />
                 <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/schedule/:token" element={<CandidateSelfSchedulePage />} />

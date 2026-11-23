@@ -4,9 +4,10 @@ import { PrismaService } from '../database/prisma.service';
 import { RolesService } from '../roles/roles.service';
 import { UserPermissionsService } from '../common/user-permissions.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
-import type { CreateUserDto, UpdateUserDto } from './users.dto';
+import type { CreateUserDto, UpdateUserDto, AdminChangeUserPasswordDto } from './users.dto';
 import * as bcrypt from 'bcryptjs';
 import type { UserRecord } from '@recruitflow/contracts';
+import { evaluateStrongPassword } from '@recruitflow/validation';
 import type { Prisma } from '@recruitflow/database';
 import { reportIds } from './reporting-scope';
 import { normalizeUserIdentity } from '../common/user-name-normalization';
@@ -61,9 +62,31 @@ export class UsersService {
   }
 
   async create(organizationId: string, data: CreateUserDto): Promise<UserRecord> {
+    const passwordCheck = evaluateStrongPassword(data.password, data.email);
+    if (!passwordCheck.valid) {
+      throw new BadRequestException({
+        code: 'WEAK_PASSWORD',
+        message: 'Password does not meet the strength requirements.',
+        fields: { password: passwordCheck.errors },
+      });
+    }
+    const normalizedEmail = data.email.toLowerCase();
+    const existing = await this.prisma.user.findFirst({
+      where: { organizationId, emailNormalized: normalizedEmail },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException({
+        code: 'EMAIL_ALREADY_EXISTS',
+        message: 'A user with this email already exists in this organization.',
+      });
+    }
     const branchId = data.branchId === undefined || data.branchId === null
       ? null
       : await this.resolveBranchId(organizationId, data.branchId);
+    const managerId = data.managerId === undefined || data.managerId === null
+      ? null
+      : await this.resolveManagerId(organizationId, null, data.managerId);
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(data.password, salt);
     const requestedRoles = Array.from(new Set((data.roles || []).map((role) => role.trim().toUpperCase()).filter(Boolean)));
@@ -80,15 +103,24 @@ export class UsersService {
     if (roles.length !== requestedRoles.length) {
       throw new BadRequestException('One or more selected roles are unavailable for this organization.');
     }
+    // Role UUIDs are accepted alongside role codes; both resolve to role ids.
+    const roleIdsFromCodes = roles.map((role) => role.id);
+    const roleIdsFromIds = data.roleIds && data.roleIds.length > 0
+      ? await this.resolveRoleIds(organizationId, data.roleIds)
+      : [];
+    const roleIds = Array.from(new Set([...roleIdsFromCodes, ...roleIdsFromIds]));
 
     const user = await this.prisma.user.create({
       data: {
         email: data.email,
-        emailNormalized: data.email.toLowerCase(),
+        emailNormalized: normalizedEmail,
         displayName: data.displayName,
         jobTitle: data.jobTitle?.trim() || null,
         branchId,
+        managerId,
         passwordHash,
+        mustChangePassword: data.mustChangePassword ?? true,
+        passwordChangedAt: null,
         organizationId,
         status: 'Active',
       },
@@ -101,12 +133,51 @@ export class UsersService {
       },
     });
 
-    if (requestedRoles.length > 0) {
+    if (roleIds.length > 0) {
       await this.prisma.userRole.createMany({
-        data: roles.map((role) => ({ userId: user.id, roleId: role.id })),
+        data: roleIds.map((roleId) => ({ userId: user.id, roleId })),
         skipDuplicates: true,
       });
     }
+
+    return this.getById(organizationId, user.id);
+  }
+
+  /**
+   * Admin-set password: strong-policy enforced, all other sessions are
+   * invalidated (tokenVersion++), and the user is forced to change it on
+   * next login unless the admin explicitly opts out.
+   */
+  async adminChangePassword(
+    organizationId: string,
+    userId: string,
+    data: AdminChangeUserPasswordDto,
+  ): Promise<UserRecord> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, organizationId },
+      select: { id: true, email: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const passwordCheck = evaluateStrongPassword(data.password, user.email);
+    if (!passwordCheck.valid) {
+      throw new BadRequestException({
+        code: 'WEAK_PASSWORD',
+        message: 'Password does not meet the strength requirements.',
+        fields: { password: passwordCheck.errors },
+      });
+    }
+    const passwordHash = await bcrypt.hash(data.password, 10);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordChangedAt: new Date(),
+        tokenVersion: { increment: 1 },
+        mustChangePassword: data.requireChangeOnNextLogin ?? true,
+      },
+    });
 
     return this.getById(organizationId, user.id);
   }
@@ -258,10 +329,12 @@ export class UsersService {
    * Validate a reports-to link: the manager must be an active user in the
    * same organization, must not be the user themselves, and must not create
    * a reporting cycle. Returns the normalized managerId (null clears it).
+   * `userId` is null when the user does not exist yet (create): self-reference
+   * and cycles are impossible then, only the manager lookup applies.
    */
-  private async resolveManagerId(organizationId: string, userId: string, managerId: string | null): Promise<string | null> {
+  private async resolveManagerId(organizationId: string, userId: string | null, managerId: string | null): Promise<string | null> {
     if (managerId === null) return null;
-    if (managerId === userId) {
+    if (userId !== null && managerId === userId) {
       throw new BadRequestException('A user cannot report to themselves.');
     }
     const manager = await this.prisma.user.findFirst({
@@ -274,7 +347,7 @@ export class UsersService {
     // Walk up the chain to reject cycles (bounded for safety).
     let cursor: string | null = manager.managerId;
     for (let depth = 0; depth < 50 && cursor; depth += 1) {
-      if (cursor === userId) {
+      if (userId !== null && cursor === userId) {
         throw new BadRequestException('This reporting link would create a circular reporting chain.');
       }
       const next = await this.prisma.user.findFirst({
@@ -310,6 +383,7 @@ export class UsersService {
         code: ur.role.code,
         name: ur.role.name,
       })),
+      mustChangePassword: user.mustChangePassword ?? false,
       lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),

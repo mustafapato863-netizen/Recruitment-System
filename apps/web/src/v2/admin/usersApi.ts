@@ -16,14 +16,39 @@ import { PROVISIONAL_ROLE_SEATS, SEAT_LABEL, isSeat, type Seat } from '../seat';
 export interface AdminUser {
   id: string; email: string; displayName: string; jobTitle?: string | null; status: string; managerId: string | null;
   roles: Array<{ id: string; code: string; name: string }>; lastLoginAt: string | null;
+  /** True when the account must pick a new password on next sign-in (admin-created or admin-reset). Contracts UserRecord.mustChangePassword. */
+  mustChangePassword?: boolean;
   /** B10 may send the seat per user; else derived from role codes (provisional table). */
   seat?: string | null; branchId?: string | null; branchName?: string | null; branch?: { id: string; name: string } | null; site?: string | null;
 }
 export interface AdminUserUpdate {
+  displayName?: string;
+  jobTitle?: string | null;
   managerId?: string | null;
   branchId?: string | null;
   status?: 'Active' | 'Inactive';
   roleIds?: string[];
+  mustChangePassword?: boolean;
+}
+/**
+ * Admin-created user (POST /users). Matches contracts CreateUserInput:
+ * `roles` are role codes, `roleIds` are role ids — send at most one.
+ */
+export interface AdminCreateUserInput {
+  email: string;
+  displayName: string;
+  jobTitle?: string | null;
+  password: string;
+  roles?: string[];
+  roleIds?: string[];
+  managerId?: string | null;
+  branchId?: string | null;
+  mustChangePassword?: boolean;
+}
+/** Admin password reset for one user (POST /users/:id/password). Matches contracts AdminChangeUserPasswordInput. */
+export interface AdminChangeUserPasswordInput {
+  password: string;
+  requireChangeOnNextLogin?: boolean;
 }
 const RANK: Record<Seat, number> = { employee: 0, manager: 1, admin: 2 };
 export function seatOf(u: Pick<AdminUser, 'roles' | 'seat'>): Seat {
@@ -48,6 +73,11 @@ export const updateUser = (id: string, update: AdminUserUpdate) => patchApi<Admi
 export const setStatus = (id: string, status: 'Active' | 'Inactive') => updateUser(id, { status });
 export const setManager = (id: string, managerId: string | null) => updateUser(id, { managerId });
 export const inviteUser = (body: { email: string; displayName: string; roleIds?: string[] }) => postApi<{ id: string }>('/users/invitations', body);
+/** Admin creates a user with a temporary password (POST /users). */
+export const createUser = (input: AdminCreateUserInput) => postApi<AdminUser>('/users', input);
+/** Admin sets a user's password (POST /users/:id/password). */
+export const adminChangePassword = (userId: string, input: AdminChangeUserPasswordInput) =>
+  postApi<{ id: string; message?: string }>(`/users/${encodeURIComponent(userId)}/password`, input);
 
 export interface OwnedWork { openApplicationsPrimary: number; openApplicationsTaskOwner: number; openJobsPrimary: number; openRequisitions: number; countsUnknown?: boolean }
 /**

@@ -1,13 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, Res, UseGuards } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { ChangePasswordDto, UpdateSelfProfileDto, UpdateUserPreferencesDto } from './auth.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { AuthService } from './auth.service';
+import { authCookieOptions } from './auth.controller';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
+import type { Response } from 'express';
 
 @UseGuards(JwtAuthGuard)
 @Controller('me')
@@ -36,8 +38,19 @@ export class MeController {
 
   @Post('password')
   @HttpCode(HttpStatus.OK)
-  async changePassword(@CurrentUser() user: AuthUser, @Body() body: ChangePasswordDto) {
-    await this.authService.changeOwnPassword(user.userId, user.organizationId, body);
-    return { message: 'Password updated successfully' };
+  async changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() body: ChangePasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    // tokenVersion++ inside changeOwnPassword invalidates the caller's own
+    // tokens too, so reissue fresh cookies (same helper as login/refresh)
+    // and return the updated profile with mustChangePassword cleared.
+    const result = await this.authService.changeOwnPassword(user.userId, user.organizationId, body);
+    const accessToken = await this.authService.generateAccessToken(user.userId, user.organizationId, result.tokenVersion);
+    const refreshToken = await this.authService.generateRefreshToken(user.userId, user.organizationId, result.tokenVersion);
+    response.cookie('access_token', accessToken, authCookieOptions('/api/v1'));
+    response.cookie('refresh_token', refreshToken, authCookieOptions('/api/v1/auth/refresh'));
+    return { message: 'Password updated successfully', user: result.user };
   }
 }

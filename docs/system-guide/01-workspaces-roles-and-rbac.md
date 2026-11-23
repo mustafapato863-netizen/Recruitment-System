@@ -27,7 +27,7 @@ flowchart TD
   Seat -->|"employee (standard Recruiter)"| RecruiterHome["/my-work"]
 ```
 
-- **Workspace Switching (`availableWorkspaceSeats`):** An Administrator sees all three workspaces (`employee`, `manager`, `admin`) in the header account menu; multi-role users see `employee` plus any seat mapped by their assigned role codes.
+- **Workspace Switching (`availableWorkspaceSeats`):** An Administrator sees all three workspaces (`employee`, `manager`, `admin`) in the header account menu; multi-role users see `employee` plus any seat mapped by their assigned role codes. The seeded `demo.multi@recruitflow.local` user (`ADMINISTRATOR` + `HIRING_MANAGER` + `RECRUITER`) sees all three seats and is the demo account for multi-role behavior.
 - **V2 Seat Rollout Flags (B10):** Controlled via organization integration config (`Integration.name = 'ROLLOUT_SEATS'`, `configJson.v2Seats`) or `RF_V2_SEATS` env var (defaults to `employee`).
 
 ---
@@ -50,6 +50,12 @@ flowchart TD
 - **Cookies:** `access_token` (scoped to `Path=/api/v1`, `HttpOnly`, `SameSite=Lax`, default TTL `15m`) and `refresh_token` (scoped to `Path=/api/v1/auth/refresh`, `HttpOnly`, `SameSite=Lax`, default TTL `7d`). `POST /api/v1/auth/logout` clears both cookies using identical path/attribute options (`Max-Age=0`) and invalidates the session.
 - **Account Protection:** Failed logins track both per-account (`AUTH_MAX_ATTEMPTS=5`) and per-IP (`AUTH_IP_MAX_ATTEMPTS=25`) counters in `AuthRateLimit` over `AUTH_WINDOW_DURATION=300s` with `AUTH_LOCKOUT_DURATION=900s`.
 - **Anti-Enumeration:** Password reset requests and email verification requests return `{ accepted: true }` (`HTTP 200`) identically for known and unknown emails. Outbox auth tokens are AES-256-GCM encrypted (`EMAIL_OUTBOX_ENCRYPTION_KEY`).
+
+### Strong Passwords & Forced First-Login Change (`packages/validation/src/password-policy.ts`)
+- **Strong password policy (all password sets/resets):** Minimum **10** characters, maximum 128, at least one uppercase letter, one lowercase letter, one digit, and one special (non-alphanumeric) character; the password must not contain the local part of the user's email address (when that local part is at least 3 characters). Evaluated by `evaluateStrongPassword`; violations fail with `WEAK_PASSWORD` (`HTTP 400`), never as a generic validation error.
+- **Self-service change:** `POST /api/v1/me/password` (`MeController`, `ChangePasswordDto`: `currentPassword` + `newPassword`) clears the forced-change flag and stamps `User.passwordChangedAt`.
+- **Admin reset:** `POST /api/v1/users/:id/password` (`UsersController.adminChangePassword`, admin seat + `USERS_MANAGE`, tenant-scoped, audited as `USER_PASSWORD_CHANGE`) sets a new password and, unless `requireChangeOnNextLogin: false` is passed explicitly, forces the user to change it at next login (`mustChangePassword: true`, `passwordChangedAt` stamped at reset time).
+- **Forced-change flow (`User.mustChangePassword`, `User.passwordChangedAt`):** `POST /api/v1/auth/login` and `GET /api/v1/auth/me` expose `mustChangePassword`; while it is `true` the JWT guard restricts the user to the password-change path and the app routes them to `/change-password`. Creating a user (`POST /api/v1/users`, see 04 §2) defaults `mustChangePassword` to `true` with `passwordChangedAt: null`, so every new account must set its own password at first login. The seeded first-login test account is `new.employee@recruitflow.local` (`RECRUITER`, reports to `demo.multi@recruitflow.local`, `mustChangePassword: true`).
 
 ### Multi-Tenant Isolation & Safe Error Envelopes
 - **Tenant Extraction:** Every query scopes strictly by the authenticated caller's session `organizationId`. Global `ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })` rejects injected `organizationId` / `orgId` fields with `HTTP 400 VALIDATION_ERROR`.

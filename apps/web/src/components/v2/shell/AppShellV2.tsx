@@ -8,7 +8,7 @@ import type { UserProfile } from '@recruitflow/contracts';
 import { getApi } from '../../../api/client';
 import { BreadcrumbProvider, useBreadcrumb } from '../../../context/BreadcrumbContext';
 import { QuickGuideModal, QuickGuideProvider } from '../../../quickguide';
-import { SEAT_LABEL, type Seat, availableWorkspaceSeats } from '../../../v2/seat';
+import { SEAT_LABEL, type Seat, availableWorkspaceSeats, distinctSeatCount } from '../../../v2/seat';
 import { canUseRequisitions, isInterviewerOnly, specialHome, isRecruiterOnly, SEAT_HOME, v2Redirect } from '../../../v2/destinations';
 import { NavItem } from '../NavItem';
 import { canUseMyInterviews } from '../../../auth/interviewer';
@@ -127,7 +127,7 @@ function UserMenu({ user, seat, availableSeats, onSignOut, onWorkspaceChange }: 
           <button type="button" role="menuitem" className="rf2-user-menu__item" onClick={() => { toggleTheme(); close(); }}>
             {theme === 'light' ? <Moon aria-hidden="true" /> : <Sun aria-hidden="true" />} Switch to {theme === 'light' ? 'dark' : 'light'} mode
           </button>
-          {import.meta.env.DEV && availableSeats.length > 1 ? (
+          {availableSeats.length > 1 ? (
             <div className="rf2-user-menu__workspaces" role="group" aria-label="Workspace switcher">
               <span className="rf2-user-menu__section">Switch workspace</span>
               {availableSeats.map((option) => (
@@ -406,7 +406,9 @@ function ShellFrame({ user, seat, onSignOut, children, availableSeats, approvalC
 
 /** v2 shell (F4). Wraps the existing pages unchanged. */
 export function AppShellV2(props: AppShellV2Props) {
-  const workspaceSwitcherEnabled = import.meta.env.DEV;
+  // Production shows the switcher only to users holding >= 2 distinct seats
+  // (single-role admins never see it); dev keeps every seat switchable.
+  const workspaceSwitcherEnabled = import.meta.env.DEV || distinctSeatCount(props.user) >= 2;
   const availableSeats = useMemo(
     () => (workspaceSwitcherEnabled ? availableWorkspaceSeats(props.user) : [props.seat]),
     [workspaceSwitcherEnabled, props.user, props.seat],

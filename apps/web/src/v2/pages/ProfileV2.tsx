@@ -18,8 +18,11 @@ import type {
   UserPreferences,
   UserProfile,
 } from '@recruitflow/contracts';
-import { getApi, patchApi, postApi } from '../../api/client';
+import { getApi, patchApi } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { changeOwnPassword } from '../../auth/passwordApi';
+import { evaluateStrongPassword } from '../../auth/passwordPolicy';
+import { PasswordStrengthMeter } from '../../components/auth/PasswordStrengthMeter';
 import { Avatar } from '../../components/ui/Avatar';
 import { Alert } from '../../components/ui/Alert';
 import { Button } from '../../components/ui/Button';
@@ -187,14 +190,15 @@ export function ProfilePage() {
       setPasswordError('New password and confirmation must match.');
       return;
     }
-    if (password.newPassword.length < 8) {
-      setPasswordError('Use at least 8 characters for your new password.');
+    const evaluation = evaluateStrongPassword(password.newPassword, activeUser?.email);
+    if (!evaluation.valid) {
+      setPasswordError(`Your new password must meet every requirement: ${evaluation.unmetLabels.join('; ')}.`);
       return;
     }
 
     setChangingPassword(true);
     try {
-      await postApi<{ message: string }>('/me/password', {
+      await changeOwnPassword({
         currentPassword: password.currentPassword,
         newPassword: password.newPassword,
       });
@@ -409,17 +413,20 @@ export function ProfilePage() {
                 />
               </FormField>
 
-              <FormField id="new-password" label="New Password" required hint="At least 8 characters with numbers and letters.">
+              <FormField id="new-password" label="New Password" required hint="At least 10 characters with upper and lower case, a number and a symbol.">
                 <Input
                   id="new-password"
                   type="password"
                   autoComplete="new-password"
                   placeholder="••••••••"
                   required
-                  minLength={8}
+                  minLength={10}
                   value={password.newPassword}
                   onChange={(event) => setPassword((current) => ({ ...current, newPassword: event.target.value }))}
                 />
+                <span className="mt-3 block">
+                  <PasswordStrengthMeter password={password.newPassword} email={activeUser?.email} />
+                </span>
               </FormField>
 
               <FormField id="confirm-password" label="Confirm New Password" required error={passwordError ?? undefined}>

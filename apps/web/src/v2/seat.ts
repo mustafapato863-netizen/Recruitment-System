@@ -51,7 +51,7 @@ const MANAGER_PERMISSIONS = ['VACANCY_REQUEST_APPROVE', 'APPROVE_OFFERS', 'FINAL
 
 const RANK: Record<Seat, number> = { employee: 0, manager: 1, admin: 2 };
 
-type MeLike = Pick<UserProfile, 'roles' | 'permissions'> & { seat?: unknown };
+type MeLike = Pick<UserProfile, 'roles' | 'permissions' | 'v2Seats' | 'flags'> & { seat?: unknown };
 
 /**
  * The ONE place the frontend decides a seat.
@@ -87,4 +87,23 @@ export function availableWorkspaceSeats(me: MeLike | null | undefined): Seat[] {
     if (mapped) available.add(mapped);
   }
   return SEATS.filter((seat) => available.has(seat));
+}
+
+/**
+ * How many distinct seats this user holds (role codes mapped through the
+ * provisional table, plus `me.seat` / `v2Seats` when the backend sends them).
+ * Drives the workspace switcher gate: production shows it only at >= 2, so
+ * a single-role admin (or any single-seat user) never sees it in prod.
+ */
+export function distinctSeatCount(me: MeLike | null | undefined): number {
+  if (!me) return 0;
+  const seats = new Set<Seat>();
+  if (isSeat(me.seat)) seats.add(String(me.seat).toLowerCase() as Seat);
+  const granted = [...(me.v2Seats ?? []), ...(me.flags?.v2Seats ?? [])];
+  for (const seat of granted) if (isSeat(seat)) seats.add(String(seat).toLowerCase() as Seat);
+  for (const role of me.roles ?? []) {
+    const mapped = PROVISIONAL_ROLE_SEATS[String(role?.code ?? '').trim().toUpperCase()];
+    if (mapped) seats.add(mapped);
+  }
+  return seats.size;
 }

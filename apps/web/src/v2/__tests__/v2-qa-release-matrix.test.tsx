@@ -45,12 +45,12 @@ function TriageHarness({ dialogOpen = false }: { dialogOpen?: boolean }) {
   );
 }
 
-describe('QA Release Matrix — 1. Complete 64-Route V2 Registry & Zero Legacy App.tsx Imports', () => {
-  it('enforces 64 registered routes (39 native V2, 0 retained, 12 public, 13 redirect) and zero ./pages/* imports in App.tsx', () => {
-    expect(SCREEN_ROUTES).toHaveLength(64);
+describe('QA Release Matrix — 1. Complete 65-Route V2 Registry & Zero Legacy App.tsx Imports', () => {
+  it('enforces 65 registered routes (39 native V2, 0 retained, 13 public, 13 redirect) and zero ./pages/* imports in App.tsx', () => {
+    expect(SCREEN_ROUTES).toHaveLength(65);
     expect(SCREEN_ROUTES.filter((r) => r.surface === 'v2')).toHaveLength(39);
     expect(SCREEN_ROUTES.filter((r) => r.surface === 'retained')).toHaveLength(0);
-    expect(SCREEN_ROUTES.filter((r) => r.surface === 'public')).toHaveLength(12);
+    expect(SCREEN_ROUTES.filter((r) => r.surface === 'public')).toHaveLength(13);
     expect(SCREEN_ROUTES.filter((r) => r.surface === 'redirect')).toHaveLength(13);
     expect(appSource).not.toMatch(/import\(['"]\.\/pages\//);
   });

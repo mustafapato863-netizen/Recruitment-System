@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto, CreateInvitationDto } from './users.dto';
+import { CreateUserDto, UpdateUserDto, CreateInvitationDto, AdminChangeUserPasswordDto } from './users.dto';
 import { AuthService } from '../auth/auth.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -47,6 +47,7 @@ export class UsersController {
   }
 
   @Post()
+  @RequireAdmin()
   @RequirePermissions('USERS_MANAGE')
   @AuditAction('USER_CREATE')
   create(@CurrentUser() user: AuthUser, @Body() body: CreateUserDto) {
@@ -73,6 +74,24 @@ export class UsersController {
   @TenantResource({ resource: 'user', param: 'id' })
   update(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: UpdateUserDto) {
     return this.usersService.update(user.organizationId, id, body);
+  }
+
+  /**
+   * Admin-set password. No route conflict with POST 'invitations' or
+   * PATCH/DELETE ':id': this is the only two-segment POST under ':id'.
+   */
+  @Post(':id/password')
+  @RequireAdmin()
+  @RequirePermissions('USERS_MANAGE')
+  @AuditAction('USER_PASSWORD_CHANGE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'user', param: 'id' })
+  adminChangePassword(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: AdminChangeUserPasswordDto,
+  ) {
+    return this.usersService.adminChangePassword(user.organizationId, id, body);
   }
 
   @Post(':id/roles/:roleId')

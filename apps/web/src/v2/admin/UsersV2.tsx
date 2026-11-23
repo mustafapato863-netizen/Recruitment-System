@@ -1,8 +1,10 @@
 import { bannerError, fieldError, serverFormErrors } from '../forms/serverErrors';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, CircleCheck, Info, Network, RotateCw, Search, ShieldCheck, UserMinus, UserPlus, UserCheck, Users, TriangleAlert } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, CircleCheck, Copy, Info, KeyRound, Network, RotateCw, Search, ShieldCheck, UserMinus, UserPlus, UserCheck, Users, TriangleAlert } from 'lucide-react';
 import { ButtonV2, DangerConfirmButton, DrawerV2, EmptyStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, TextareaV2 } from '../../components/v2';
+import { PasswordStrengthMeter } from '../../components/auth/PasswordStrengthMeter';
+import { evaluateStrongPassword, generateStrongPassword } from '../../auth/passwordPolicy';
 import { SEAT_LABEL, SEATS, type Seat } from '../seat';
 import { domainError } from '../api/gates';
 import { override403Text } from './overrideErrors';
@@ -11,7 +13,7 @@ import { fetchOptions, type CatalogValue } from './configApi';
 import { fetchRoles, roleSeat, type AdminRole } from './rolesApi';
 import { getInitials } from '../userIdentity';
 import {
-  fetchUsers, inviteUser, isActive, isDescendant, ownedWork, seatOf, setStatus, statusTone, updateUser,
+  adminChangePassword, createUser, fetchUsers, inviteUser, isActive, isDescendant, ownedWork, seatOf, setStatus, statusTone, updateUser,
   type AdminUser, type OwnedWork,
   overrideReassign,
 } from './usersApi';
@@ -227,6 +229,7 @@ export function UsersV2() {
           </SelectV2>
         </div>
         <div className="rf2-admin-toolbar__end">
+          <ButtonV2 kind="secondary" icon={<UserPlus />} onClick={() => go({ drawer: 'create' })}>Create user</ButtonV2>
           <ButtonV2 icon={<UserPlus />} onClick={() => go({ drawer: 'invite' })}>Invite user</ButtonV2>
         </div>
       </div>
@@ -246,11 +249,21 @@ export function UsersV2() {
                       <span><span className="rf2-jtable__name">{u.displayName}</span><span className="rf2-jtable__sub">{u.email}</span></span>
                     </button>
                   </th>
-                  <td className="rf2-admin__seat">{SEAT_LABEL[seatOf(u)]}</td>
+                  <td className="rf2-admin__seat">{SEAT_LABEL[seatOf(u)]}{u.roles.length > 1 ? ` · ${u.roles.length} roles` : ''}</td>
                   <td>{u.managerId && byId.has(u.managerId) ? byId.get(u.managerId)?.displayName : isActive(u) && seatOf(u) === 'employee' ? <button type="button" className="rf2-admin-users__orphan rf2-admin-users__orphan-btn" onClick={() => go({ view: 'tree' })} aria-label={`Assign manager for ${u.displayName}`}><TriangleAlert aria-hidden="true" /> Unassigned manager</button> : '—'}</td>
                   <td>{siteOf(u, branchesById)}</td>
-                  <td><StatusChip tone={statusTone(u.status)} label={u.status} /></td>
-                  <td><ButtonV2 kind="secondary" size="sm" aria-label={`Edit ${u.displayName}`} onClick={() => go({ user: u.id, drawer: 'edit' })}>Edit</ButtonV2></td>
+                  <td>
+                    <span style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                      <StatusChip tone={statusTone(u.status)} label={u.status} />
+                      {u.mustChangePassword ? <StatusChip tone="warning" label="Must change password" /> : null}
+                    </span>
+                  </td>
+                  <td>
+                    <span style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <ButtonV2 kind="secondary" size="sm" aria-label={`Edit ${u.displayName}`} onClick={() => go({ user: u.id, drawer: 'edit' })}>Edit</ButtonV2>
+                      <ButtonV2 kind="secondary" size="sm" aria-label={`Change password for ${u.displayName}`} onClick={() => go({ user: u.id, drawer: 'password' })}>Change password</ButtonV2>
+                    </span>
+                  </td>
                 </tr>
               ))}
               {rows.length === 0 ? <tr><td colSpan={6}>No users match these filters.</td></tr> : null}
@@ -266,9 +279,11 @@ export function UsersV2() {
         </div>
       ) : null}
       <p className="rf2-inline-note"><ShieldCheck aria-hidden="true" /> Interviewer is not a role. Any user picked as an interviewer can read that candidate’s CV and submit the scorecard, nothing else.</p>
-      {open && users && drawer === 'edit' ? <UserEditDrawer user={open} users={users} branches={branches} branchError={branchError} onRetryBranches={() => setBranchAttempt((n) => n + 1)} onClose={() => go({ user: null, drawer: null })} onDone={done} /> : null}
-      {open && users && drawer !== 'edit' ? <UserDrawer user={open} users={users} onClose={() => go({ user: null })} onDone={done} /> : null}
+      {open && users && drawer === 'edit' ? <UserEditDrawer user={open} users={users} branches={branches} branchError={branchError} onRetryBranches={() => setBranchAttempt((n) => n + 1)} onClose={() => go({ user: null, drawer: null })} onDone={done} onChangePassword={() => go({ user: open.id, drawer: 'password' })} /> : null}
+      {open && users && drawer === 'password' ? <ChangePasswordDrawer user={open} onClose={() => go({ user: null, drawer: null })} onDone={done} /> : null}
+      {open && users && drawer !== 'edit' && drawer !== 'password' ? <UserDrawer user={open} users={users} onClose={() => go({ user: null })} onDone={done} onChangePassword={() => go({ user: open.id, drawer: 'password' })} /> : null}
       {drawer === 'invite' ? <InviteDrawer onClose={() => go({ drawer: null })} onDone={done} /> : null}
+      {drawer === 'create' ? <CreateUserDrawer users={users ?? []} branches={branches} branchError={branchError} onRetryBranches={() => setBranchAttempt((n) => n + 1)} onClose={() => go({ drawer: null })} onDone={done} /> : null}
     </div>
   );
 }
@@ -283,11 +298,88 @@ export function workSummary(w: OwnedWork): string[] {
   ].filter(Boolean);
 }
 
-type UserEditValues = { roleId: string; managerId: string; branchId: string; status: string };
-const capabilityRoleCodes = new Set(['INTERVIEWER', 'LICENSE_SPECIALIST']);
+/** Multi-role checkboxes shared by the create and edit drawers (same role source: fetchRoles, active first). */
+function RoleCheckboxes({
+  roles, checkedIds, onToggle, disabled, error,
+}: {
+  roles: Array<{ role: AdminRole; seat: Seat | null }>;
+  checkedIds: string[];
+  onToggle: (roleId: string, checked: boolean) => void;
+  disabled?: boolean;
+  error?: string;
+}) {
+  return (
+    <fieldset className="rf2-field" style={{ border: 0, margin: 0, padding: 0 }}>
+      <legend className="rf2-field__label">Roles</legend>
+      {roles.length === 0 ? <p className="rf2-jtable__sub" role="status">Loading roles…</p> : null}
+      <span style={{ display: 'grid', gap: '8px' }}>
+        {roles.map(({ role, seat }) => (
+          <label key={role.id} className="rf2-check">
+            <input
+              type="checkbox"
+              checked={checkedIds.includes(role.id)}
+              disabled={disabled}
+              onChange={(event) => onToggle(role.id, event.target.checked)}
+            />
+            <span>{seat ? `${SEAT_LABEL[seat]} · ` : ''}{role.name}{role.status !== 'Active' ? ' (current)' : ''}</span>
+          </label>
+        ))}
+      </span>
+      {error ? <p className="rf2-form-error" role="alert">{error}</p> : null}
+    </fieldset>
+  );
+}
 
+/** Password field with Generate strong password + Copy + live strength meter, shared by the create and admin-reset drawers. */
+function PasswordWithTools({
+  id, label, value, email, onChange, error, disabled,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  email?: string;
+  onChange: (value: string) => void;
+  error?: string;
+  disabled?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [show, setShow] = useState(false);
+  const generate = () => { onChange(generateStrongPassword()); setCopied(false); };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <span style={{ display: 'grid', gap: '8px' }}>
+      <InputV2
+        id={id}
+        label={label}
+        required
+        type={show ? 'text' : 'password'}
+        autoComplete="new-password"
+        value={value}
+        onChange={(event) => { onChange(event.target.value); setCopied(false); }}
+        error={error}
+        disabled={disabled}
+      />
+      <span style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        <ButtonV2 kind="secondary" size="sm" onClick={generate} disabled={disabled}>Generate strong password</ButtonV2>
+        <ButtonV2 kind="secondary" size="sm" icon={<Copy />} onClick={() => void copy()} disabled={disabled || !value}>{copied ? 'Copied' : 'Copy'}</ButtonV2>
+        <ButtonV2 kind="secondary" size="sm" onClick={() => setShow((current) => !current)} disabled={disabled}>{show ? 'Hide' : 'Show'}</ButtonV2>
+      </span>
+      {copied ? <p role="status" className="rf2-jtable__sub">Password copied to clipboard.</p> : null}
+      <PasswordStrengthMeter password={value} email={email} />
+    </span>
+  );
+}
+
+type UserEditValues = { displayName: string; jobTitle: string; roleIds: string[]; managerId: string; branchId: string; status: string };
 function UserEditDrawer({
-  user, users, branches, branchError, onRetryBranches, onClose, onDone,
+  user, users, branches, branchError, onRetryBranches, onClose, onDone, onChangePassword,
 }: {
   user: AdminUser;
   users: AdminUser[];
@@ -296,12 +388,15 @@ function UserEditDrawer({
   onRetryBranches: () => void;
   onClose: () => void;
   onDone: (message: string) => void;
+  onChangePassword: () => void;
 }) {
   const [roles, setRoles] = useState<AdminRole[] | null>(null);
   const [rolesError, setRolesError] = useState<string | null>(null);
   const [rolesAttempt, setRolesAttempt] = useState(0);
   const [form, setForm] = useState<UserEditValues>({
-    roleId: user.roles[0]?.id ?? '',
+    displayName: user.displayName,
+    jobTitle: user.jobTitle ?? '',
+    roleIds: user.roles.map((role) => role.id),
     managerId: user.managerId ?? '',
     branchId: user.branchId ?? '',
     status: user.status,
@@ -330,16 +425,15 @@ function UserEditDrawer({
     return combined.map((role) => ({ role, seat: roleSeat(role) }));
   }, [roles, user.roles]);
   const originalRoleIds = user.roles.map((role) => role.id);
-  const originalRoleId = roleOptions.find(({ role }) => originalRoleIds.includes(role.id))?.role.id ?? '';
-  useEffect(() => {
-    if (roles) setForm((current) => ({ ...current, roleId: originalRoleId }));
-  }, [roles, originalRoleId]);
-
   const roleReady = roles !== null && roleOptions.length > 0;
   const branchReady = branches !== null && !branchError;
   const initialBranchId = user.branchId ?? '';
   const initialManagerId = user.managerId ?? '';
-  const dirty = form.roleId !== originalRoleId || form.managerId !== initialManagerId || form.branchId !== initialBranchId || form.status !== user.status;
+  const sameRoleIds = form.roleIds.length === originalRoleIds.length && form.roleIds.every((id) => originalRoleIds.includes(id));
+  const dirty = form.displayName.trim() !== user.displayName
+    || (form.jobTitle.trim() || null) !== (user.jobTitle ?? null)
+    || !sameRoleIds
+    || form.managerId !== initialManagerId || form.branchId !== initialBranchId || form.status !== user.status;
   const manager = users.find((candidate) => candidate.id === user.managerId) ?? null;
   const managers = users
     .filter((candidate) => candidate.id !== user.id && isActive(candidate) && seatOf(candidate) !== 'employee' && !isDescendant(users, user.id, candidate.id))
@@ -349,7 +443,7 @@ function UserEditDrawer({
   const currentBranch = user.branchId && !branchOptions.some((branch) => branch.id === user.branchId)
     ? [{ id: user.branchId, name: user.branchName || user.site || 'Current branch', status: 'Active' }]
     : [];
-  const setValue = (key: keyof UserEditValues) => (value: string) => {
+  const setValue = (key: keyof UserEditValues) => (value: string | string[]) => {
     setForm((current) => ({ ...current, [key]: value }));
     setErr(null);
     setFieldErrs({});
@@ -358,22 +452,25 @@ function UserEditDrawer({
   const requestClose = () => { if (allowClose()) onClose(); };
   const save = async () => {
     if (!roleReady) return;
+    const nextErrors: Record<string, string> = {};
+    if (!form.displayName.trim()) nextErrors.displayName = 'Enter a name.';
+    if (form.roleIds.length === 0) nextErrors.roleIds = 'Pick at least one role.';
+    if (Object.keys(nextErrors).length) { setFieldErrs(nextErrors); return; }
     setBusy(true);
     setErr(null);
     setFieldErrs({});
     setOwned(null);
     setMoved(null);
     try {
-      const roleIds = form.roleId === originalRoleId
-        ? originalRoleIds
-        : [...new Set([...user.roles.filter((role) => capabilityRoleCodes.has(role.code.toUpperCase())).map((role) => role.id), ...(form.roleId ? [form.roleId] : [])])];
       await updateUser(user.id, {
+        ...(form.displayName.trim() !== user.displayName ? { displayName: form.displayName.trim() } : {}),
+        ...((form.jobTitle.trim() || null) !== (user.jobTitle ?? null) ? { jobTitle: form.jobTitle.trim() || null } : {}),
         managerId: form.managerId || null,
         branchId: form.branchId || null,
         ...(form.status !== user.status ? { status: form.status as 'Active' | 'Inactive' } : {}),
-        roleIds,
+        roleIds: form.roleIds,
       });
-      onDone(`${user.displayName} updated.`);
+      onDone(`${form.displayName.trim() || user.displayName} updated.`);
     } catch (e) {
       const work = ownedWork(e);
       if (work) {
@@ -382,13 +479,15 @@ function UserEditDrawer({
       }
       const fields = serverFormErrors(e);
       const mapped = {
+        displayName: fieldError(fields, 'displayName'),
+        jobTitle: fieldError(fields, 'jobTitle'),
         managerId: fieldError(fields, 'managerId'),
         branchId: fieldError(fields, 'branchId'),
-        roleId: fieldError(fields, 'roleIds') ?? fieldError(fields, 'roleId'),
+        roleIds: fieldError(fields, 'roleIds') ?? fieldError(fields, 'roleId'),
         status: fieldError(fields, 'status'),
       };
       setFieldErrs(Object.fromEntries(Object.entries(mapped).filter(([, message]) => message)) as Record<string, string>);
-      setErr(bannerError(fields, ['managerId', 'branchId', 'roleIds', 'roleId', 'status']) || fields.message || (e as { message?: string })?.message || 'Could not save user changes.');
+      setErr(bannerError(fields, ['displayName', 'jobTitle', 'managerId', 'branchId', 'roleIds', 'roleId', 'status']) || fields.message || (e as { message?: string })?.message || 'Could not save user changes.');
     } finally { setBusy(false); }
   };
 
@@ -404,13 +503,18 @@ function UserEditDrawer({
       status={loadStatus}
       errorMessage={rolesError ?? undefined}
       onRetry={() => setRolesAttempt((current) => current + 1)}
-      primaryAction={<ButtonV2 icon={<CircleCheck />} loading={busy} disabled={!dirty || !roleReady || !branchReady || busy || !form.roleId} onClick={() => void save()}>Save changes</ButtonV2>}
+      primaryAction={<ButtonV2 icon={<CircleCheck />} loading={busy} disabled={!dirty || !roleReady || !branchReady || busy || form.roleIds.length === 0 || !form.displayName.trim()} onClick={() => void save()}>Save changes</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={requestClose} disabled={busy}>Cancel</ButtonV2>}
     >
-      <SelectV2 label="Role and seat" required value={form.roleId} onChange={(event) => setValue('roleId')(event.target.value)} error={fieldErrs.roleId} disabled={!roleReady || busy}>
-        <option value="">Choose a role</option>
-        {roleOptions.map(({ role, seat }) => <option key={role.id} value={role.id}>{seat ? `${SEAT_LABEL[seat]} · ` : ''}{role.name}{role.status !== 'Active' ? ' (current)' : ''}</option>)}
-      </SelectV2>
+      <InputV2 label="Display name" required value={form.displayName} onChange={(event) => setValue('displayName')(event.target.value)} error={fieldErrs.displayName} disabled={busy} />
+      <InputV2 label="Job title" value={form.jobTitle} onChange={(event) => setValue('jobTitle')(event.target.value)} error={fieldErrs.jobTitle} disabled={busy} />
+      <RoleCheckboxes
+        roles={roleOptions}
+        checkedIds={form.roleIds}
+        onToggle={(roleId, checked) => setValue('roleIds')(checked ? [...form.roleIds, roleId] : form.roleIds.filter((id) => id !== roleId))}
+        disabled={!roleReady || busy}
+        error={fieldErrs.roleIds}
+      />
       <SelectV2 label="Reports to" value={form.managerId} onChange={(event) => setValue('managerId')(event.target.value)} error={fieldErrs.managerId} disabled={busy}>
         <option value="">Nobody</option>
         {currentManagerUnavailable ? <option value={form.managerId}>{manager?.displayName ?? 'Current manager unavailable'}</option> : null}
@@ -428,6 +532,10 @@ function UserEditDrawer({
         <option value="Active">Active</option>
         <option value="Inactive">Deactivated</option>
       </SelectV2>
+      {user.mustChangePassword ? <p className="rf2-inline-note" data-tone="warning" role="status"><TriangleAlert aria-hidden="true" /> This user must change their password on next sign-in.</p> : null}
+      <span>
+        <ButtonV2 kind="secondary" icon={<KeyRound />} onClick={onChangePassword} disabled={busy}>Change password</ButtonV2>
+      </span>
       {err ? <p className="rf2-form-error" role="alert">{err}</p> : null}
       {owned ? <OwnedWorkPanel user={user} users={users} manager={manager} owned={owned} onMoved={(message) => { setOwned(null); setMoved(message.replace('Deactivate again.', 'Save changes again.')); }} /> : null}
       {moved ? <p className="rf2-inline-note" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {moved}</p> : null}
@@ -437,7 +545,7 @@ function UserEditDrawer({
 }
 
 /** User detail: deactivate (PATCH status) / reactivate; 409 USER_OWNS_OPEN_WORK → counts + reassign offer. */
-function UserDrawer({ user, users, onClose, onDone }: { user: AdminUser; users: AdminUser[]; onClose: () => void; onDone: (m: string) => void }) {
+function UserDrawer({ user, users, onClose, onDone, onChangePassword }: { user: AdminUser; users: AdminUser[]; onClose: () => void; onDone: (m: string) => void; onChangePassword: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [owned, setOwned] = useState<OwnedWork | null>(null);
@@ -459,9 +567,11 @@ function UserDrawer({ user, users, onClose, onDone }: { user: AdminUser; users: 
       primaryAction={active
         ? <DangerConfirmButton icon={<UserMinus />} confirmLabel="Confirm deactivate" loading={busy} disabled={busy || !!owned} onConfirm={() => void change('Inactive')}>Deactivate</DangerConfirmButton>
         : <ButtonV2 icon={<UserCheck />} loading={busy} onClick={() => void change('Active')}>Reactivate</ButtonV2>}
-      secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Close</ButtonV2>}>
+      secondaryAction={<><ButtonV2 kind="secondary" icon={<KeyRound />} onClick={onChangePassword} disabled={busy}>Change password</ButtonV2><ButtonV2 kind="secondary" onClick={onClose}>Close</ButtonV2></>}>
       <dl className="rf2-decide__facts">
         <dt>Role</dt><dd>{SEAT_LABEL[seatOf(user)]}{user.roles.length ? ` · ${user.roles.map((r) => r.name).join(', ')}` : ''}</dd>
+        <dt>Roles</dt><dd>{user.roles.length ? `${user.roles.length} ${user.roles.length === 1 ? 'role' : 'roles'} · ${user.roles.map((r) => r.name).join(', ')}` : '—'}</dd>
+        <dt>Password</dt><dd>{user.mustChangePassword ? <StatusChip tone="warning" label="Must change password" /> : 'No change required'}</dd>
         <dt>Reports to</dt><dd>{manager?.displayName ?? '—'}</dd>
         <dt>Status</dt><dd><StatusChip tone={statusTone(user.status)} label={user.status} /></dd>
         <dt>Last sign-in</dt><dd>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('en-GB', { timeZone: 'Africa/Cairo', dateStyle: 'medium', timeStyle: 'short' }) : 'Never'}</dd>
@@ -544,6 +654,169 @@ function OwnedWorkPanel({ user, users, manager, owned, onMoved }: { user: AdminU
 }
 
 
+
+/** Admin creates a user with a temporary password; "Require password change on first sign-in" is on by default. */
+function CreateUserDrawer({
+  users, branches, branchError, onRetryBranches, onClose, onDone,
+}: {
+  users: AdminUser[];
+  branches: CatalogValue[] | null;
+  branchError: string | null;
+  onRetryBranches: () => void;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const [roles, setRoles] = useState<AdminRole[] | null>(null);
+  const [rolesError, setRolesError] = useState<string | null>(null);
+  const [f, setF] = useState({ displayName: '', email: '', jobTitle: '', roleIds: [] as string[], managerId: '', branchId: '', password: '', mustChangePassword: true });
+  const [errs, setErrs] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void fetchRoles().then((r) => setRoles(r.filter((x) => x.status === 'Active'))).catch(() => setRolesError('Could not load roles.')); }, []);
+  const roleOptions = useMemo(
+    () => (roles ?? []).map((role) => ({ role, seat: roleSeat(role) })),
+    [roles],
+  );
+  const managers = useMemo(
+    () => users.filter((candidate) => isActive(candidate) && seatOf(candidate) !== 'employee').sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [users],
+  );
+  const branchOptions = branches ?? [];
+  const evaluation = evaluateStrongPassword(f.password, f.email);
+  const submit = async () => {
+    const e: Record<string, string> = {};
+    if (!f.displayName.trim()) e.displayName = 'Enter a name.';
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email.trim())) e.email = 'Enter a valid email.';
+    if (!evaluation.valid) e.password = `The temporary password must meet every requirement: ${evaluation.unmetLabels.join('; ')}.`;
+    if (f.roleIds.length === 0) e.roleIds = 'Pick at least one role.';
+    setErrs(e);
+    if (Object.keys(e).length) return;
+    setBusy(true);
+    try {
+      await createUser({
+        email: f.email.trim(),
+        displayName: f.displayName.trim(),
+        jobTitle: f.jobTitle.trim() || null,
+        password: f.password,
+        roleIds: f.roleIds,
+        managerId: f.managerId || null,
+        branchId: f.branchId || null,
+        mustChangePassword: f.mustChangePassword,
+      });
+      onDone(`Created ${f.displayName.trim()}.${f.mustChangePassword ? ' They must change their password on first sign-in.' : ''}`);
+    } catch (x) {
+      const sf = serverFormErrors(x);
+      if (Object.keys(sf.byField).length) {
+        const inline = {
+          displayName: fieldError(sf, 'displayName'),
+          email: fieldError(sf, 'email'),
+          jobTitle: fieldError(sf, 'jobTitle'),
+          password: fieldError(sf, 'password'),
+          roleIds: fieldError(sf, 'roleIds'),
+          managerId: fieldError(sf, 'managerId'),
+          branchId: fieldError(sf, 'branchId'),
+        };
+        const banner = bannerError(sf, ['displayName', 'email', 'jobTitle', 'password', 'roleIds', 'managerId', 'branchId']);
+        setErrs(Object.fromEntries(Object.entries({ ...inline, ...(banner ? { form: banner } : {}) }).filter(([, v]) => v)) as Record<string, string>);
+      } else setErrs({ form: (x as { message?: string })?.message || 'Could not create user.' });
+    } finally { setBusy(false); }
+  };
+  return (
+    <DrawerV2 open onClose={onClose} kicker="Users" title="Create user"
+      primaryAction={<ButtonV2 icon={<UserPlus />} loading={busy} onClick={() => void submit()}>Create user</ButtonV2>}
+      secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
+      <InputV2 label="Name" required value={f.displayName} onChange={(e) => setF({ ...f, displayName: e.target.value })} error={errs.displayName} />
+      <InputV2 label="Email" required type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} error={errs.email} />
+      <InputV2 label="Job title" value={f.jobTitle} onChange={(e) => setF({ ...f, jobTitle: e.target.value })} error={errs.jobTitle} />
+      {rolesError ? <p className="rf2-form-error" role="alert">{rolesError}</p> : null}
+      <RoleCheckboxes
+        roles={roleOptions}
+        checkedIds={f.roleIds}
+        onToggle={(roleId, checked) => setF((current) => ({ ...current, roleIds: checked ? [...current.roleIds, roleId] : current.roleIds.filter((id) => id !== roleId) }))}
+        disabled={!roles || busy}
+        error={errs.roleIds}
+      />
+      <SelectV2 label="Reports to" value={f.managerId} onChange={(e) => setF({ ...f, managerId: e.target.value })} error={errs.managerId} disabled={busy}>
+        <option value="">Nobody</option>
+        {managers.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.displayName} · {SEAT_LABEL[seatOf(candidate)]}</option>)}
+      </SelectV2>
+      <SelectV2 label="Branch" value={f.branchId} onChange={(e) => setF({ ...f, branchId: e.target.value })} error={errs.branchId} disabled={!branches || busy}>
+        <option value="">No branch</option>
+        {branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+      </SelectV2>
+      {!branches && !branchError ? <p className="rf2-jtable__sub" role="status">Loading branch choices…</p> : null}
+      {branchError ? <p className="rf2-form-error" role="alert">{branchError} <ButtonV2 kind="secondary" size="sm" icon={<RotateCw />} onClick={onRetryBranches}>Retry branches</ButtonV2></p> : null}
+      <PasswordWithTools
+        id="create-user-password"
+        label="Temporary password"
+        value={f.password}
+        email={f.email}
+        onChange={(password) => setF((current) => ({ ...current, password }))}
+        error={errs.password}
+        disabled={busy}
+      />
+      <label className="rf2-check">
+        <input
+          type="checkbox"
+          checked={f.mustChangePassword}
+          disabled={busy}
+          onChange={(event) => setF((current) => ({ ...current, mustChangePassword: event.target.checked }))}
+        />
+        <span>Require password change on first sign-in</span>
+      </label>
+      {errs.form ? <p className="rf2-form-error" role="alert">{errs.form}</p> : null}
+      <p className="rf2-inline-note"><Info aria-hidden="true" /> Share the temporary password with the new user over a trusted channel. With the checkbox on, they must replace it before using a workspace.</p>
+    </DrawerV2>
+  );
+}
+
+/** Admin sets a user's password; "Require password change on next sign-in" is on by default. */
+function ChangePasswordDrawer({ user, onClose, onDone }: { user: AdminUser; onClose: () => void; onDone: (m: string) => void }) {
+  const [password, setPassword] = useState('');
+  const [requireChange, setRequireChange] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    const evaluation = evaluateStrongPassword(password, user.email);
+    if (!evaluation.valid) {
+      setErr(`The new password must meet every requirement: ${evaluation.unmetLabels.join('; ')}.`);
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await adminChangePassword(user.id, { password, requireChangeOnNextLogin: requireChange });
+      onDone(`${user.displayName}'s password was changed.${requireChange ? ' They must change it on next sign-in.' : ''}`);
+    } catch (x) {
+      const sf = serverFormErrors(x);
+      setErr(bannerError(sf, ['password']) || fieldError(sf, 'password') || (x as { message?: string })?.message || 'Could not change the password.');
+    } finally { setBusy(false); }
+  };
+  return (
+    <DrawerV2 open onClose={onClose} kicker="Users" title={`Change password for ${user.displayName}`} subtitle={user.email}
+      primaryAction={<ButtonV2 icon={<KeyRound />} loading={busy} onClick={() => void submit()}>Change password</ButtonV2>}
+      secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
+      <PasswordWithTools
+        id="admin-change-password"
+        label="New password"
+        value={password}
+        email={user.email}
+        onChange={(value) => { setPassword(value); setErr(null); }}
+        error={err ?? undefined}
+        disabled={busy}
+      />
+      <label className="rf2-check">
+        <input
+          type="checkbox"
+          checked={requireChange}
+          disabled={busy}
+          onChange={(event) => setRequireChange(event.target.checked)}
+        />
+        <span>Require password change on next sign-in</span>
+      </label>
+      <p className="rf2-inline-note"><Info aria-hidden="true" /> The user keeps their current sessions until they sign in again. With the checkbox on, they must replace this password before using a workspace.</p>
+    </DrawerV2>
+  );
+}
 
 function InviteDrawer({ onClose, onDone }: { onClose: () => void; onDone: (m: string) => void }) {
   const [roles, setRoles] = useState<AdminRole[] | null>(null);

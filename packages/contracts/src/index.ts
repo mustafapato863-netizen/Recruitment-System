@@ -57,6 +57,8 @@ export const errorCodes = [
   'EVIDENCE_SOURCE_INVALID', 'NOT_JOB_OWNER', 'USER_OWNS_OPEN_WORK', 'JOB_HAS_OPEN_APPLICATIONS', 'CANDIDATE_EXISTS', 'SKILL_INACTIVE', 'SKILL_NOT_IN_LIBRARY',
   // B9 admin
   'SINGLE_PIPELINE_TEMPLATE', 'OVERRIDE_REASON_REQUIRED', 'OVERRIDE_NOT_ALLOWED', 'USER_DELETE_NOT_ALLOWED',
+  // User management + strong passwords
+  'WEAK_PASSWORD', 'PASSWORD_CHANGE_REQUIRED', 'EMAIL_ALREADY_EXISTS',
 ] as const;
 
 /**
@@ -486,6 +488,8 @@ export interface AuthUser {
   organizationId: string;
   tokenVersion: number;
   roleCodes: string[];
+  /** True when the user must change their password before using the API (forced first-login / admin-set password). */
+  mustChangePassword?: boolean;
 }
 
 export interface LoginRequest {
@@ -506,6 +510,8 @@ export interface UserProfile {
   roles: RoleSummary[];
   permissions: string[];
   lastLoginAt: string | null;
+  /** True when the user must change their password before using the API (forced first-login / admin-set password). */
+  mustChangePassword?: boolean;
   /** B10 rollout switch: the caller's seat, the seats on v2 (org config > env RF_V2_SEATS > ['employee']), and whether this user gets v2. */
   seat?: 'employee' | 'manager' | 'admin';
   v2Seats?: Array<'employee' | 'manager' | 'admin'>;
@@ -623,6 +629,8 @@ export interface UserRecord {
   managerId: string | null;
   roles: RoleSummary[];
   lastLoginAt: string | null;
+  /** True when the user must change their password on next login (set at creation or by an admin password change). */
+  mustChangePassword?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -631,9 +639,22 @@ export interface CreateUserInput {
   email: string;
   displayName: string;
   password: string;
+  /** Role CODES (e.g. 'ADMINISTRATOR'); resolved by the backend. */
   roles?: string[];
+  /** Role UUIDs; the backend accepts `roles` (codes) and/or `roleIds` (UUIDs), or both (deduped). */
+  roleIds?: string[];
   jobTitle?: string | null;
   branchId?: string | null;
+  /** Reports-to manager (user UUID in the same organization); null clears the link. */
+  managerId?: string | null;
+  /** Force a password change on next login; defaults to true. */
+  mustChangePassword?: boolean;
+}
+
+export interface AdminChangeUserPasswordInput {
+  password: string;
+  /** Force another password change on next login; defaults to true. */
+  requireChangeOnNextLogin?: boolean;
 }
 
 export interface UpdateUserInput {

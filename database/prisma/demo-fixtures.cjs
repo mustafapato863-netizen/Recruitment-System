@@ -350,6 +350,38 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     create: { id: fixtureId(156), organizationId: organization.id, email: 'heba.salem@recruitflow.local', emailNormalized: 'heba.salem@recruitflow.local', displayName: 'Heba Salem', jobTitle: 'Legal', passwordHash: DEMO_PASSWORD_HASH, status: 'Active' },
   });
 
+  // ── 1b. User-Management Demo Personas ─────────────────────
+  // demo.multi is the 3-role demo user (ADMINISTRATOR + HIRING_MANAGER +
+  // RECRUITER); new.employee is the forced first-login password-change test
+  // user (mustChangePassword: true, reports to demo.multi). All four share
+  // the standard local-dev seed password hash (DEMO_PASSWORD_HASH, same
+  // literal as every other demo user). NOTE: mustChangePassword /
+  // passwordChangedAt come from the user-management migration on User; that
+  // migration must be applied before this seed runs against a database.
+  const demoMulti = await tx.user.upsert({
+    where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'demo.multi@recruitflow.local' } },
+    update: { displayName: 'Demo Multi-Role Lead', jobTitle: 'Multi-Role Lead', status: 'Active', mustChangePassword: false },
+    create: { id: fixtureId(157), organizationId: organization.id, email: 'demo.multi@recruitflow.local', emailNormalized: 'demo.multi@recruitflow.local', displayName: 'Demo Multi-Role Lead', jobTitle: 'Multi-Role Lead', passwordHash: DEMO_PASSWORD_HASH, status: 'Active', mustChangePassword: false, passwordChangedAt: null },
+  });
+
+  const karimRecruiter = await tx.user.upsert({
+    where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'karim.recruiter@recruitflow.local' } },
+    update: { displayName: 'Karim Recruiter', jobTitle: 'Recruiter', status: 'Active', mustChangePassword: false },
+    create: { id: fixtureId(158), organizationId: organization.id, email: 'karim.recruiter@recruitflow.local', emailNormalized: 'karim.recruiter@recruitflow.local', displayName: 'Karim Recruiter', jobTitle: 'Recruiter', passwordHash: DEMO_PASSWORD_HASH, status: 'Active', mustChangePassword: false, passwordChangedAt: null },
+  });
+
+  const karimInterviewer = await tx.user.upsert({
+    where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'dr.karim.interviewer@recruitflow.local' } },
+    update: { displayName: 'Dr. Karim Interviewer', jobTitle: 'Interviewer', status: 'Active', mustChangePassword: false },
+    create: { id: fixtureId(159), organizationId: organization.id, email: 'dr.karim.interviewer@recruitflow.local', emailNormalized: 'dr.karim.interviewer@recruitflow.local', displayName: 'Dr. Karim Interviewer', jobTitle: 'Interviewer', passwordHash: DEMO_PASSWORD_HASH, status: 'Active', mustChangePassword: false, passwordChangedAt: null },
+  });
+
+  const newEmployee = await tx.user.upsert({
+    where: { organizationId_emailNormalized: { organizationId: organization.id, emailNormalized: 'new.employee@recruitflow.local' } },
+    update: { displayName: 'New Employee', jobTitle: 'Recruiter', status: 'Active', mustChangePassword: true },
+    create: { id: fixtureId(160), organizationId: organization.id, email: 'new.employee@recruitflow.local', emailNormalized: 'new.employee@recruitflow.local', displayName: 'New Employee', jobTitle: 'Recruiter', passwordHash: DEMO_PASSWORD_HASH, status: 'Active', mustChangePassword: true, passwordChangedAt: null },
+  });
+
   // Assign roles
   const recruiterRole = await tx.role.findUnique({ where: { code: 'RECRUITER' } });
   const hmRole = await tx.role.findUnique({ where: { code: 'HIRING_MANAGER' } });
@@ -363,6 +395,23 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
       await tx.userRole.upsert({ where: { userId_roleId: { userId: u.id, roleId: hmRole.id } }, update: {}, create: { userId: u.id, roleId: hmRole.id } });
     }
   }
+  // User-management personas: demo.multi holds 3 roles at once; the two
+  // Karims and new.employee hold one role each.
+  const adminRole = await tx.role.findUnique({ where: { code: 'ADMINISTRATOR' } });
+  const interviewerRole = await tx.role.findUnique({ where: { code: 'INTERVIEWER' } });
+  if (adminRole && hmRole && recruiterRole) {
+    for (const role of [adminRole, hmRole, recruiterRole]) {
+      await tx.userRole.upsert({ where: { userId_roleId: { userId: demoMulti.id, roleId: role.id } }, update: {}, create: { userId: demoMulti.id, roleId: role.id } });
+    }
+  }
+  if (recruiterRole) {
+    for (const u of [karimRecruiter, newEmployee]) {
+      await tx.userRole.upsert({ where: { userId_roleId: { userId: u.id, roleId: recruiterRole.id } }, update: {}, create: { userId: u.id, roleId: recruiterRole.id } });
+    }
+  }
+  if (interviewerRole) {
+    await tx.userRole.upsert({ where: { userId_roleId: { userId: karimInterviewer.id, roleId: interviewerRole.id } }, update: {}, create: { userId: karimInterviewer.id, roleId: interviewerRole.id } });
+  }
 
   // Hassan (top) -> Mona and Omar. Mona -> Sarah, Sindu, Zenah. Omar -> Lady.
   const talentManagerMona = usersByEmail['mona.manager@recruitflow.local'] ?? null;
@@ -373,6 +422,18 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     await tx.user.update({ where: { id: recruiterSindu.id }, data: { managerId: talentManagerMona.id } });
     await tx.user.update({ where: { id: recruiterZenah.id }, data: { managerId: talentManagerMona.id } });
     await tx.user.update({ where: { id: recruiterLady.id }, data: { managerId: hiringManagerOmarH.id } });
+    // User-management hierarchy (3 levels, visible in /users?view=tree):
+    // Hassan -> Demo Multi -> New Employee; Omar Hassan -> Karim Recruiter
+    // + Dr. Karim Interviewer (Team B); Mona -> Omar Nasser (License
+    // Specialist, Team A). Every new RECRUITER above has a non-null
+    // managerId, so seedDecisionDemo's recruiter sweep (seed.cjs) leaves
+    // them alone instead of re-parenting them under Mona.
+    await tx.user.update({ where: { id: demoMulti.id }, data: { managerId: hiringManagerHassan.id } });
+    await tx.user.update({ where: { id: newEmployee.id }, data: { managerId: demoMulti.id } });
+    await tx.user.update({ where: { id: karimRecruiter.id }, data: { managerId: hiringManagerOmarH.id } });
+    await tx.user.update({ where: { id: karimInterviewer.id }, data: { managerId: hiringManagerOmarH.id } });
+    const omarNasser = usersByEmail['omar.nasser@recruitflow.local'];
+    if (omarNasser) await tx.user.update({ where: { id: omarNasser.id }, data: { managerId: talentManagerMona.id } });
   }
 
   // ── 2. Real Branches from 2026 Manpower List ───────────────
@@ -388,7 +449,7 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   };
 
   await tx.user.updateMany({ where: { id: admin.id }, data: { branchId: branches.group.id } });
-  await tx.user.updateMany({ where: { id: { in: [recruiterSarah.id, recruiterSindu.id, recruiterZenah.id, hiringManagerHassan.id, hiringManagerOmarH.id, talentManagerMona?.id].filter(Boolean) } }, data: { branchId: branches.dubai.id } });
+  await tx.user.updateMany({ where: { id: { in: [recruiterSarah.id, recruiterSindu.id, recruiterZenah.id, hiringManagerHassan.id, hiringManagerOmarH.id, talentManagerMona?.id, demoMulti.id, karimRecruiter.id, karimInterviewer.id, newEmployee.id].filter(Boolean) } }, data: { branchId: branches.dubai.id } });
   await tx.user.updateMany({ where: { id: recruiterLady.id }, data: { branchId: branches.ajman.id } });
   await tx.user.updateMany({ where: { id: { in: [financeYousef.id, legalHeba.id] } }, data: { branchId: branches.group.id } });
   await tx.user.updateMany({ where: { id: hiringManagerHassan.id }, data: { displayName: 'Hassan Ali', jobTitle: 'Hiring Manager' } });
@@ -511,6 +572,8 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     { id: fixtureId(312), code: 'VR-2026-012', pos: positions.dermatologist, br: branches.dubai, req: talentManagerMona ?? hiringManagerHassan, status: 'Changes Requested', headcount: 1, empType: 'Full-time', reason: 'Laser clinic expansion', budget: 'Budgeted', crit: 'High', startDays: 40 },
     { id: fixtureId(313), code: 'VR-2026-013', pos: positions.cyberSec, br: branches.group, req: talentManagerMona ?? hiringManagerHassan, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Security operations hire', budget: 'Budgeted', crit: 'High', startDays: 30 },
     { id: fixtureId(314), code: 'VR-2026-014', pos: positions.dentAsst, br: branches.sharjah, req: recruiterLady, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Dental chair coverage', budget: 'Budgeted', crit: 'Normal', startDays: 25 },
+    { id: fixtureId(315), code: 'VR-2026-015', pos: positions.csrLead, br: branches.dubai, req: admin, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'CSR team backfill (closed before opening)', budget: 'Budgeted', crit: 'Normal', startDays: 30 },
+    { id: fixtureId(316), code: 'VR-2026-016', pos: positions.obsGyn, br: branches.dubai, req: demoMulti, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Obstetrics coverage owned by Demo Multi-Role Lead', budget: 'Budgeted', crit: 'High', startDays: 21 },
   ];
 
   const reqMap = {};
@@ -550,6 +613,8 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     { id: fixtureId(407), code: 'VAC-2026-007', reqCode: 'VR-2026-008', pos: positions.midwife, br: branches.ajman, target: 2, days: 30 },
     { id: fixtureId(408), code: 'VAC-2026-008', reqCode: 'VR-2026-009', pos: positions.medCoder, br: branches.dubai, target: 2, days: 36 },
     { id: fixtureId(409), code: 'VAC-2026-009', reqCode: 'VR-2026-014', pos: positions.dentAsst, br: branches.sharjah, target: 1, days: 12, status: 'On Hold', holdUntil: dateFromNow(14) },
+    { id: fixtureId(410), code: 'VAC-2026-010', reqCode: 'VR-2026-015', pos: positions.csrLead, br: branches.dubai, target: 1, days: 20, status: 'Closed' },
+    { id: fixtureId(411), code: 'VAC-2026-011', reqCode: 'VR-2026-016', pos: positions.obsGyn, br: branches.dubai, target: 1, days: 5 },
   ];
 
   const requiredSkillsByVacancy = {
@@ -562,6 +627,8 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     'VAC-2026-007': ['DHA/MOH License', 'Labor & Delivery', 'Fetal Monitoring'],
     'VAC-2026-008': ['ICD-10', 'CPT', 'Revenue Cycle'],
     'VAC-2026-009': ['Clinical Experience'],
+    'VAC-2026-010': ['Clinical Experience'],
+    'VAC-2026-011': ['DHA/MOH License', 'Labor & Delivery', 'Fetal Monitoring'],
   };
   const ownerByVacancy = {
     'VAC-2026-001': recruiterSarah,
@@ -573,6 +640,8 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     'VAC-2026-007': recruiterLady,
     'VAC-2026-008': recruiterSarah,
     'VAC-2026-009': recruiterSarah,
+    'VAC-2026-010': recruiterSarah,
+    'VAC-2026-011': demoMulti,
   };
 
   const vacMap = {};
@@ -601,6 +670,21 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
         data: {
           id: fixtureId(430), vacancyId: held.id, fromStatus: 'Open', toStatus: 'On Hold',
           reason: 'Budget review', holdUntil: dateFromNow(14), changedById: hiringManagerHassan.id,
+        },
+      });
+    }
+  }
+
+  // Closed vacancy (VAC-2026-010): opened then closed, with history, so the
+  // Closed state is demonstrable alongside Open / On Hold / Filled.
+  if (vacMap['VAC-2026-010']) {
+    const closed = vacMap['VAC-2026-010'];
+    const closeHistory = await tx.vacancyStatusHistory.findFirst({ where: { vacancyId: closed.id, toStatus: 'Closed' } });
+    if (!closeHistory) {
+      await tx.vacancyStatusHistory.create({
+        data: {
+          id: fixtureId(433), vacancyId: closed.id, fromStatus: 'Open', toStatus: 'Closed',
+          reason: 'Position no longer needed', changedById: hiringManagerHassan.id,
         },
       });
     }
@@ -682,6 +766,7 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   const urolVacId = vacMap['VAC-2026-006']?.id ?? fixtureId(406);
   const midwifeVacId = vacMap['VAC-2026-007']?.id ?? fixtureId(407);
   const medCoderVacId = vacMap['VAC-2026-008']?.id ?? fixtureId(408);
+  const demoVacId = vacMap['VAC-2026-011']?.id ?? fixtureId(411);
 
   const appSeeds = [
     // Interview
@@ -712,15 +797,23 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     { id: fixtureId(520), code: 'APP-100203', email: 'salam.arikat@sample.com', vacId: midwifeVacId, stage: 'Joined', src: 'LinkedIn' },
     { id: fixtureId(521), code: 'APP-100204', email: 'hala.midwife@sample.com', vacId: midwifeVacId, stage: 'Screening', src: 'Referral' },
     { id: fixtureId(522), code: 'APP-100205', email: 'huda.pharm@sample.com', vacId: pharmVacId, stage: 'Screening', src: 'Career Site' },
+    // Exit stages (were missing: all other 6 stages already had coverage)
+    { id: fixtureId(523), code: 'APP-100206', email: 'farida.nabil@sample.com', vacId: nurseVacId, stage: 'Rejected', src: 'Upload' },
+    { id: fixtureId(524), code: 'APP-100207', email: 'walid.gamal@sample.com', vacId: pharmVacId, stage: 'Withdrawn', src: 'Upload' },
+    // Demo Multi-Role Lead's owned vacancy (VAC-2026-011)
+    { id: fixtureId(525), code: 'APP-100208', email: 'rania.kamel@sample.com', vacId: demoVacId, stage: 'Applied', src: 'Upload' },
+    { id: fixtureId(526), code: 'APP-100209', email: 'tariq.mansour@sample.com', vacId: demoVacId, stage: 'Screening', src: 'Upload' },
   ];
 
   const sarahOwned = new Set(['APP-100184', 'APP-100185', 'APP-100187', 'APP-100188', 'APP-100190', 'APP-100191', 'APP-100193', 'APP-100194', 'APP-100195', 'APP-100196', 'APP-100197', 'APP-100201']);
+  const demoMultiOwned = new Set(['APP-100208', 'APP-100209']);
   const appMap = {};
   for (const a of appSeeds) {
     const cand = cByEmail[a.email];
     if (!cand) continue;
     let owner = recruiterSarah;
-    if (!sarahOwned.has(a.code)) {
+    if (demoMultiOwned.has(a.code)) owner = demoMulti;
+    else if (!sarahOwned.has(a.code)) {
       if (a.vacId === radVacId || a.vacId === pharmVacId) owner = recruiterSindu;
       else if (a.vacId === psychVacId || a.vacId === counsVacId || a.vacId === urolVacId) owner = recruiterZenah;
       else if (a.vacId === midwifeVacId) owner = recruiterLady;
@@ -732,6 +825,12 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
       appliedAt: dateFromNow(-40),
     });
     appMap[a.code] = createdApp;
+  }
+
+  // Rejected applications carry a master-data reason (B5: the Rejected exit
+  // is Rejected + a reason from 'rejection-reasons').
+  if (appMap['APP-100206']) {
+    await tx.application.update({ where: { id: appMap['APP-100206'].id }, data: { rejectionReason: 'Did not pass screening' } });
   }
 
   // ── 8. Real Interview + Scorecard ──────────────────────────
@@ -856,6 +955,15 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   await ensureAttendee(fixtureId(653), interviewHeba.id, recruiterSarah.id, 'Lead Recruiter');
   await ensureAttendee(fixtureId(654), interviewHeba.id, monaId, 'Hiring Manager');
 
+  // Draft scorecard (not yet submitted) on the pending Heba interview —
+  // the Submitted scorecards already exist on the Nour/Sara/Yousef
+  // interviews, but no Draft one did.
+  await tx.interviewScorecard.upsert({
+    where: { interviewId_interviewerId_revision: { interviewId: interviewHeba.id, interviewerId: monaId, revision: 1 } },
+    update: { overallRating: 4, recommendation: 'Hire', status: 'Draft', submittedAt: null, notes: 'Draft — strong ICU judgment; confirm on-call availability before submitting.', strengths: 'Strong ICU judgment.' },
+    create: { id: fixtureId(705), interviewId: interviewHeba.id, interviewerId: monaId, overallRating: 4, recommendation: 'Hire', status: 'Draft', submittedAt: null, notes: 'Draft — strong ICU judgment; confirm on-call availability before submitting.', strengths: 'Strong ICU judgment.' },
+  });
+
   const saraStart = dateFromNow(-2);
   const interviewSara = await upsertInterview(tx, fixtureId(603), {
     organizationId: orgId, applicationId: appId('APP-100187'),
@@ -944,6 +1052,17 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     applicationId: appId('APP-100203'), offerCode: 'OFF-2026-0149', status: 'Accepted',
     approvalStatus: 'Approved', versionStatus: 'Accepted', monthly: 13000, sentAt: sentNow, workLocation: 'SGH Ajman - Labor & Delivery',
   });
+  // Approved-but-unsent offer (the Draft / Pending Approval / Changes
+  // Requested / Sent / Accepted states already had coverage; Approved did not).
+  const christinaOffer = await ensureSimpleOffer(fixtureId(810), fixtureId(830), fixtureId(843), {
+    applicationId: appId('APP-100198'), offerCode: 'OFF-2026-0150', status: 'Approved',
+    approvalStatus: 'Approved', versionStatus: 'Approved', monthly: 15500, workLocation: 'SGH Mental Health - Counseling',
+  });
+  await tx.offerApproval.upsert({
+    where: { id: fixtureId(857) },
+    update: { offerVersionId: christinaOffer.version.id, approverUserId: monaId, roleCode: 'OFFER_APPROVER', status: 'Approved', comment: 'Within Grade 6 band; approved to send.', decidedAt: dateFromNow(-1) },
+    create: { id: fixtureId(857), offerVersionId: christinaOffer.version.id, approverUserId: monaId, roleCode: 'OFFER_APPROVER', status: 'Approved', comment: 'Within Grade 6 band; approved to send.', decidedAt: dateFromNow(-1) },
+  });
 
   await tx.offerApproval.upsert({
     where: { id: fixtureId(855) },
@@ -1000,6 +1119,10 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   await ensureCompliance(fixtureId(873), tasabeehCase.id, { type: 'License', name: 'DHA/MOH Medical License', status: 'Verified', isRequired: true });
   await ensureCompliance(fixtureId(874), tasabeehCase.id, { type: 'Check', name: 'Medical Fitness Check', status: 'Verified', isRequired: true });
   await ensureCompliance(fixtureId(875), tasabeehCase.id, { type: 'Check', name: 'Credential Primary Source Verification', status: 'Verified', isRequired: true });
+  // Pre-hire SCFHS license check: still Pending on the in-progress Mozna
+  // case, Verified on the Tasabeeh case awaiting final approval.
+  await ensureCompliance(fixtureId(878), moznaCase.id, { type: 'License', name: 'SCFHS License Verification', status: 'Pending', isRequired: true });
+  await ensureCompliance(fixtureId(879), tasabeehCase.id, { type: 'License', name: 'SCFHS License Verification', status: 'Verified', isRequired: true });
   const tasabeehApproval = await tx.hiringCaseApproval.findFirst({ where: { hiringCaseId: tasabeehCase.id, roleCode: 'FINAL_HIRING_APPROVER' } });
   if (tasabeehApproval) {
     await tx.hiringCaseApproval.update({
@@ -1045,6 +1168,13 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     await ensureStage(id, 'Pre-Hire', 'Joined', joined.at, joined.ownerId);
   }
 
+  // Exit-stage history for the Rejected / Withdrawn applications (reopen testing).
+  await ensureStage(appId('APP-100206'), null, 'Applied', dateFromNow(-40), recruiterSarah.id);
+  await ensureStage(appId('APP-100206'), 'Applied', 'Screening', dateFromNow(-25), recruiterSarah.id);
+  await ensureStage(appId('APP-100206'), 'Screening', 'Rejected', dateFromNow(-10), recruiterSarah.id);
+  await ensureStage(appId('APP-100207'), null, 'Applied', dateFromNow(-40), recruiterSindu.id);
+  await ensureStage(appId('APP-100207'), 'Applied', 'Withdrawn', dateFromNow(-5), recruiterSindu.id);
+
   await tx.vacancy.update({ where: { id: urolVacId }, data: { joinedHeadcount: 1, status: 'Filled' } });
   await tx.vacancy.update({ where: { id: midwifeVacId }, data: { joinedHeadcount: 1, status: 'Partially Filled' } });
   if (!(await tx.vacancyStatusHistory.findFirst({ where: { vacancyId: urolVacId, toStatus: 'Filled' } }))) {
@@ -1078,6 +1208,15 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     await ensureScreen(appId(code), recruiterLady.id, 'Midwifery screen complete; labor and delivery experience confirmed.', 45);
   }
 
+  // ── 9b. Screening Draft (unsaved work) ─────────────────────
+  // APP-100191 (Kareem Fathy, Screening) has no submitted screening log
+  // yet; Sarah holds an in-progress draft for it.
+  await tx.screeningDraft.upsert({
+    where: { organizationId_userId_applicationId: { organizationId: orgId, userId: recruiterSarah.id, applicationId: appId('APP-100191') } },
+    update: { outcome: 'Passed', notes: 'Draft — strong AD/Networking background; confirm notice period before moving to interview.', noticePeriodDays: 30, method: 'Phone', moveToInterview: true },
+    create: { id: fixtureId(960), organizationId: orgId, userId: recruiterSarah.id, applicationId: appId('APP-100191'), outcome: 'Passed', notes: 'Draft — strong AD/Networking background; confirm notice period before moving to interview.', noticePeriodDays: 30, method: 'Phone', moveToInterview: true },
+  });
+
   // ── 10. Real Notifications ─────────────────────────────────
   const notifs = [
     { id: fixtureId(901), title: 'Interview Scheduled', msg: 'Omar Hassan scheduled Clinical Interview for Registered Nurse with Nour Ali on May 12 at 10:00 AM.', type: 'InterviewScheduled' },
@@ -1107,6 +1246,59 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     }
   }
 
+  // Notifications for the new demo personas (the §10 loop only notifies admin).
+  const personaNotifs = [
+    { id: fixtureId(908), recipient: demoMulti, type: 'TaskAssigned', title: 'Task assigned: Review requisition VR-2026-016', message: 'Hassan Ali assigned you an approval review for the Specialist Obs/Gyn requisition (VR-2026-016).' },
+    { id: fixtureId(909), recipient: newEmployee, type: 'PasswordChangeRequired', title: 'Set your RecruitFlow password', message: 'Your administrator created your account. Sign in with your temporary password and set a new password (minimum 10 characters) to continue.' },
+  ];
+  for (const n of personaNotifs) {
+    const existingNotif = await tx.notification.findUnique({ where: { id: n.id } });
+    if (existingNotif) {
+      await tx.notification.update({ where: { id: n.id }, data: { title: n.title, message: n.message } });
+    } else {
+      await tx.notification.create({
+        data: { id: n.id, organizationId: orgId, recipientUserId: n.recipient.id, type: n.type, title: n.title, message: n.message },
+      });
+    }
+  }
+
+  // ── 10b. Tasks (incl. user-management demo owners) ─────────
+  // No tasks were seeded before; these cover ApprovalReview,
+  // ComplianceCheck, and OfferReview for the new personas and the
+  // approved-but-unsent offer.
+  const taskSeeds = [
+    { id: fixtureId(961), assignee: demoMulti, creator: hiringManagerHassan, type: 'ApprovalReview', title: 'Review requisition VR-2026-016 — Specialist Obs/Gyn', description: 'Approval review for the Obs/Gyn requisition owned by the Demo Multi-Role Lead.', priority: 'High', status: 'Open', entityType: 'VacancyRequest', entityId: reqMap['VR-2026-016']?.id ?? null, dueDays: 3 },
+    { id: fixtureId(962), assignee: newEmployee, creator: demoMulti, type: 'ComplianceCheck', title: 'Complete SCFHS license verification for Tasabeeh Mustafa', description: 'First task for the new starter; SCFHS check on the hiring case awaiting final approval.', priority: 'Normal', status: 'In Progress', entityType: 'HiringCase', entityId: tasabeehCase.id, dueDays: 5 },
+    { id: fixtureId(963), assignee: recruiterSarah, creator: talentManagerMona ?? hiringManagerHassan, type: 'OfferReview', title: 'Send approved offer OFF-2026-0150 to Christina Beatric', description: 'Offer approved within the Grade 6 band; send it to the candidate.', priority: 'Normal', status: 'Open', entityType: 'Offer', entityId: christinaOffer.offer.id, dueDays: 2 },
+  ];
+  for (const t of taskSeeds) {
+    const existingTask = await tx.task.findUnique({ where: { id: t.id } });
+    const taskData = { organizationId: orgId, assigneeUserId: t.assignee.id, createdById: t.creator.id, type: t.type, title: t.title, description: t.description, priority: t.priority, status: t.status, entityType: t.entityType, entityId: t.entityId, dueAt: dateFromNow(t.dueDays) };
+    if (existingTask) await tx.task.update({ where: { id: t.id }, data: taskData });
+    else await tx.task.create({ data: { id: t.id, ...taskData } });
+  }
+
+  // ── 10c. Current-Month Recruiter Targets ───────────────────
+  // Same dynamic Cairo-month pattern as seedEmployeeActivityTargets in
+  // seed.cjs (never a hard-coded month): RecruiterTarget.month is 'YYYY-MM'.
+  // EmployeeActivityTarget rows for Sarah/Sindu/Mona/Hassan already exist
+  // in seed.cjs; RecruiterTarget rows did not exist at all.
+  const targetMonth = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit' }).format(new Date());
+  const recruiterTargetSeeds = [
+    { recruiter: recruiterSarah, screenings: 20, interviews: 8, offers: 3, hires: 2, cvSourced: 10 },
+    { recruiter: recruiterSindu, screenings: 15, interviews: 6, offers: 2, hires: 1, cvSourced: 8 },
+    { recruiter: demoMulti, screenings: 10, interviews: 5, offers: 2, hires: 1, cvSourced: 5 },
+    { recruiter: karimRecruiter, screenings: 12, interviews: 5, offers: 2, hires: 1, cvSourced: 6 },
+    { recruiter: newEmployee, screenings: 5, interviews: 2, offers: 1, hires: 0, cvSourced: 4 },
+  ];
+  for (const t of recruiterTargetSeeds) {
+    await tx.recruiterTarget.upsert({
+      where: { organizationId_recruiterId_period_month: { organizationId: orgId, recruiterId: t.recruiter.id, period: 'monthly', month: targetMonth } },
+      update: { screenings: t.screenings, interviews: t.interviews, offers: t.offers, hires: t.hires, cvSourced: t.cvSourced, isActive: true },
+      create: { organizationId: orgId, recruiterId: t.recruiter.id, setById: hiringManagerHassan.id, period: 'monthly', month: targetMonth, calls: 0, screenings: t.screenings, interviews: t.interviews, offers: t.offers, hires: t.hires, cvSourced: t.cvSourced, isActive: true },
+    });
+  }
+
   // ── 11. Real Talent Pools ──────────────────────────────────
   await tx.talentPool.upsert({
     where: { id: fixtureId(951) },
@@ -1133,10 +1325,13 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     vacancies: vacancySeeds.length,
     applications: appSeeds.length,
     interviews: 5,
-    offers: 9,
+    offers: 10,
     hiringCases: 4,
-    notifications: notifs.length,
+    notifications: notifs.length + personaNotifs.length,
     talentPools: 3,
+    tasks: taskSeeds.length,
+    recruiterTargets: recruiterTargetSeeds.length,
+    screeningDrafts: 1,
   };
 }
 

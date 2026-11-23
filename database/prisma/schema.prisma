@@ -116,6 +116,8 @@ model User {
   emailVerifiedAt          DateTime?                  @db.Timestamptz(6)
   invitationAcceptedAt     DateTime?                  @db.Timestamptz(6)
   tokenVersion             Int                        @default(0)
+  mustChangePassword         Boolean                    @default(false)
+  passwordChangedAt          DateTime?                  @db.Timestamptz(6)
   lastLoginAt              DateTime?                  @db.Timestamptz(6)
   theme                    String                     @default("light") @db.VarChar(10)
   timezone                 String                     @default("UTC") @db.VarChar(80)

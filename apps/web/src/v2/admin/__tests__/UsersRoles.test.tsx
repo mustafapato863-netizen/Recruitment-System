@@ -127,14 +127,18 @@ describe('A02 Users', () => {
     const table = await screen.findByRole('table', { name: 'Users' });
     await u.click(within(within(table).getByRole('row', { name: /Ahmed Fathy/ })).getByRole('button', { name: 'Edit Ahmed Fathy' }));
     const d = await screen.findByRole('dialog', { name: 'Edit Ahmed Fathy' });
-    const role = await within(d).findByLabelText(/Role and seat/);
+    const recruiter = await within(d).findByRole('checkbox', { name: /Employee · Recruiter/ });
+    const hiringManager = within(d).getByRole('checkbox', { name: /Manager · Hiring Manager/ });
+    expect(recruiter).toBeChecked();
     await waitFor(() => expect(within(d).getByLabelText('Branch')).not.toBeDisabled());
-    await u.selectOptions(role, 'r-hm');
+    await u.click(recruiter);
+    await u.click(hiringManager);
     await u.selectOptions(within(d).getByLabelText('Branch'), 'b-cairo');
     await u.selectOptions(within(d).getByLabelText('Status'), 'Inactive');
     await u.click(within(d).getByRole('button', { name: 'Save changes' }));
     expect(await within(d).findByRole('alert')).toHaveTextContent('Server unavailable');
-    expect(within(d).getByLabelText(/Role and seat/)).toHaveValue('r-hm');
+    expect(hiringManager).toBeChecked();
+    expect(recruiter).not.toBeChecked();
     expect(within(d).getByLabelText('Status')).toHaveValue('Inactive');
     expect(api.patchApi).toHaveBeenCalledWith('/users/u-ahmed', {
       managerId: 'u-hala', branchId: 'b-cairo', status: 'Inactive', roleIds: ['r-hm'],
@@ -150,7 +154,9 @@ describe('A02 Users', () => {
     const table = await screen.findByRole('table', { name: 'Users' });
     await u.click(within(within(table).getByRole('row', { name: /Ahmed Fathy/ })).getByRole('button', { name: 'Edit Ahmed Fathy' }));
     const d = await screen.findByRole('dialog', { name: 'Edit Ahmed Fathy' });
-    await u.selectOptions(await within(d).findByLabelText(/Role and seat/), 'r-hm');
+    const recruiter = await within(d).findByRole('checkbox', { name: /Employee · Recruiter/ });
+    await u.click(recruiter);
+    await u.click(within(d).getByRole('checkbox', { name: /Manager · Hiring Manager/ }));
     await waitFor(() => expect(within(d).getByLabelText('Branch')).not.toBeDisabled());
     await u.selectOptions(within(d).getByLabelText('Reports to'), 'u-karim');
     await u.selectOptions(within(d).getByLabelText('Branch'), 'b-cairo');
@@ -168,7 +174,7 @@ describe('A02 Users', () => {
     const table = await screen.findByRole('table', { name: 'Users' });
     await u.click(within(within(table).getByRole('row', { name: /Ahmed Fathy/ })).getByRole('button', { name: 'Edit Ahmed Fathy' }));
     const d = await screen.findByRole('dialog', { name: 'Edit Ahmed Fathy' });
-    await u.selectOptions(await within(d).findByLabelText(/Role and seat/), 'r-hm');
+    await u.click(await within(d).findByRole('checkbox', { name: /Manager · Hiring Manager/ }));
     await u.click(within(d).getByRole('button', { name: 'Cancel' }));
     expect(confirm).toHaveBeenCalledWith('Discard your unsaved user changes?');
     expect(screen.getByRole('dialog', { name: 'Edit Ahmed Fathy' })).toBeInTheDocument();

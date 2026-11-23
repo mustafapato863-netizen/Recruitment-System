@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import { mustChangePassword } from './userProfile';
 import { Spinner } from '../components/Spinner';
 
 export function ProtectedRoute() {
@@ -33,6 +34,19 @@ export function ProtectedRoute() {
     return (
       <Navigate
         to="/login"
+        replace
+        state={{ from: `${location.pathname}${location.search}` }}
+      />
+    );
+  }
+
+  // Forced password change: a signed-in user whose account requires a new
+  // password goes to /change-password before any workspace. /change-password
+  // itself is a public route (outside ProtectedRoute), so this cannot loop.
+  if (mustChangePassword(user) && location.pathname !== '/change-password') {
+    return (
+      <Navigate
+        to="/change-password"
         replace
         state={{ from: `${location.pathname}${location.search}` }}
       />
