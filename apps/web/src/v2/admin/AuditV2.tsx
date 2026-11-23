@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, RotateCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Download, FileCheck2, RotateCw, ShieldAlert } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, SelectV2, SkeletonV2, StatusChip, initials } from '../../components/v2';
 import { auditArea, downloadCsv, fetchAudit, humanize, namedAuditText, toCsv, type AuditEntry, type AuditPage, type AuditQuery } from './opsApi';
 import { fetchUsers } from './usersApi';
@@ -95,7 +95,35 @@ export function AuditV2({ now = () => Date.now() }: { now?: () => number } = {})
         actions={<ButtonV2 kind="secondary" icon={<Download />} onClick={() => void exportCsv()} disabled={!data || data.total === 0 || exporting}>Export</ButtonV2>}
       />
       {exportError ? <p className="rf2-form-error" role="alert">{exportError}</p> : null}
-      <div className="rf2-row-between">
+      {data ? (
+        <ul className="rf2-admin-kpis rf2-admin-kpis--3" aria-label="Audit summary">
+          <li className="rf2-admin-kpi">
+            <span className="rf2-admin-kpi__icon" aria-hidden="true"><FileCheck2 /></span>
+            <span className="rf2-admin-kpi__copy">
+              <span className="rf2-admin-kpi__value">{rows.length}</span>
+              <span className="rf2-admin-kpi__label">Shown on page</span>
+              <span className="rf2-admin-kpi__sub">Matching active filters</span>
+            </span>
+          </li>
+          <li className="rf2-admin-kpi">
+            <span className="rf2-admin-kpi__icon" data-tone="success" aria-hidden="true"><Database /></span>
+            <span className="rf2-admin-kpi__copy">
+              <span className="rf2-admin-kpi__value">{data.total}</span>
+              <span className="rf2-admin-kpi__label">Total recorded</span>
+              <span className="rf2-admin-kpi__sub">Immutable audit trail</span>
+            </span>
+          </li>
+          <li className="rf2-admin-kpi">
+            <span className="rf2-admin-kpi__icon" data-tone={rows.some((r) => auditArea(r) === 'Override') ? 'warning' : 'neutral'} aria-hidden="true"><ShieldAlert /></span>
+            <span className="rf2-admin-kpi__copy">
+              <span className="rf2-admin-kpi__value">{rows.filter((r) => auditArea(r) === 'Override').length}</span>
+              <span className="rf2-admin-kpi__label">Admin overrides</span>
+              <span className="rf2-admin-kpi__sub">In current page slice</span>
+            </span>
+          </li>
+        </ul>
+      ) : null}
+      <div className="rf2-admin-filterbar">
         <div className="rf2-admin__filterset">
           <SelectV2 label="Period" fieldClassName="rf2-sr-label" value={period} onChange={(e) => { setPeriod(e.target.value); setPage(1); }}>{PERIODS.map(([k, l]) => <option key={k} value={k}>Period: {l}</option>)}</SelectV2>
           <SelectV2 label="Who" fieldClassName="rf2-sr-label" value={who} onChange={(e) => { setWho(e.target.value); setPage(1); }}><option value="all">Who: Anyone</option>{actors.map(([id, n]) => <option key={id} value={id}>Who: {n}</option>)}</SelectV2>

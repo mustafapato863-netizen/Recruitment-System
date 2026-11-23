@@ -5,6 +5,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { AppModule } from './app.module';
 import { validationExceptionFactory } from './common/errors/validation-exception';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { createResponseCompressionMiddleware } from './common/middleware';
 import * as cookieParser from 'cookie-parser';
 
 async function bootstrap(): Promise<void> {
@@ -33,24 +34,34 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  // Configure trust proxy from explicit environment configuration or dev default
+  // Disable X-Powered-By fingerprinting and configure trust proxy from environment
+  const expressApp = app.getHttpAdapter().getInstance() as {
+    disable?: (key: string) => void;
+    set?: (key: string, val: unknown) => void;
+  };
+  if (typeof expressApp.disable === 'function') {
+    expressApp.disable('x-powered-by');
+  }
   const trustProxyConfig = config.get<string>('TRUST_PROXY') ?? process.env.TRUST_PROXY ?? (!isProduction ? 'true' : undefined);
-  if (trustProxyConfig) {
-    const expressApp = app.getHttpAdapter().getInstance() as { set: (key: string, val: unknown) => void };
-    if (typeof expressApp.set === 'function') {
-      const parsedTrust = isNaN(Number(trustProxyConfig)) ? (trustProxyConfig === 'true') : Number(trustProxyConfig);
-      expressApp.set('trust proxy', parsedTrust);
-    }
+  if (trustProxyConfig && typeof expressApp.set === 'function') {
+    const parsedTrust = isNaN(Number(trustProxyConfig)) ? (trustProxyConfig === 'true') : Number(trustProxyConfig);
+    expressApp.set('trust proxy', parsedTrust);
   }
 
   // Global security headers middleware
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http: https:;");
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+    res.setHeader(
+      'Content-Security-Policy',
+      isProduction
+        ? "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+        : "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http: https:;",
+    );
     if (isProduction) {
       res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     }
@@ -62,6 +73,7 @@ async function bootstrap(): Promise<void> {
     next();
   });
 
+  app.use(createResponseCompressionMiddleware());
   app.setGlobalPrefix('api/v1');
   app.use(cookieParser());
   app.useGlobalFilters(new HttpExceptionFilter());

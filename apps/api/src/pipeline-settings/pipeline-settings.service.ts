@@ -5,6 +5,23 @@ import { PrismaService } from '../database/prisma.service';
 import type { CreatePipelineTemplateDto, UpdatePipelineTemplateDto, CreatePipelineStageDto, UpdatePipelineStageDto, ReorderStagesDto } from './pipeline-settings.dto';
 import type { PipelineTemplateItem } from '@recruitflow/contracts';
 
+const CANONICAL_PIPELINE_STAGES: ReadonlyArray<{
+  name: string;
+  stageType: string;
+  sortOrder: number;
+  required: boolean;
+  isHiredStage: boolean;
+}> = [
+  { name: 'Applied', stageType: 'Applied', sortOrder: 0, required: true, isHiredStage: false },
+  { name: 'Screening', stageType: 'Screening', sortOrder: 1, required: true, isHiredStage: false },
+  { name: 'Interview', stageType: 'Interview', sortOrder: 2, required: true, isHiredStage: false },
+  { name: 'Offer', stageType: 'Offer', sortOrder: 3, required: true, isHiredStage: false },
+  { name: 'Pre-Hire', stageType: 'Pre-Hire', sortOrder: 4, required: true, isHiredStage: false },
+  { name: 'Joined', stageType: 'Joined', sortOrder: 5, required: true, isHiredStage: true },
+  { name: 'Rejected', stageType: 'exit', sortOrder: 6, required: false, isHiredStage: false },
+  { name: 'Withdrawn', stageType: 'exit', sortOrder: 7, required: false, isHiredStage: false },
+];
+
 @Injectable()
 export class PipelineSettingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -54,6 +71,26 @@ export class PipelineSettingsService {
       throw new NotFoundException('Template not found');
     }
 
+    if (template.stages.length === 0) {
+      await this.prisma.pipelineStage.createMany({
+        data: CANONICAL_PIPELINE_STAGES.map((stage) => ({
+          templateId: template.id,
+          ...stage,
+          status: 'Active',
+        })),
+      });
+      const hydrated = await this.prisma.pipelineTemplate.findFirst({
+        where: { id, organizationId, status: { not: 'Archived' } },
+        include: {
+          stages: {
+            where: { status: { not: 'Archived' } },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      });
+      if (hydrated) return hydrated;
+    }
+
     return template;
   }
 
@@ -70,7 +107,15 @@ export class PipelineSettingsService {
         await tx.pipelineTemplate.updateMany({ where: { organizationId, isDefault: true }, data: { isDefault: false } });
       }
       return tx.pipelineTemplate.create({
-        data: { organizationId, name: dto.name.trim(), isDefault: dto.isDefault ?? false, status: 'Active' },
+        data: {
+          organizationId,
+          name: dto.name.trim(),
+          isDefault: dto.isDefault ?? false,
+          status: 'Active',
+          stages: {
+            create: CANONICAL_PIPELINE_STAGES.map((stage) => ({ ...stage, status: 'Active' })),
+          },
+        },
       });
     });
   }

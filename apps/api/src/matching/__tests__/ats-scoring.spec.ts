@@ -352,6 +352,62 @@ describe('AtsScoringService', () => {
       // Low match job has lower score
       const lowRec = recs.find((r) => r.vacancyId === 'vac-unapplied-low');
       expect(lowRec?.atsScore).toBeLessThan(recs[0].atsScore);
+
+      // Keyword & reason explainability
+      expect(recs[0].matchedKeywords).toEqual(['React', 'TypeScript', 'Node.js']);
+      expect(recs[0].missingKeywords).toEqual([]);
+      expect(recs[0].fitReasons?.some((r) => r.includes('Matched main keywords'))).toBe(true);
+      expect(recs[0].keywordEvidence?.length).toBe(3);
+      expect(lowRec?.missingKeywords).toEqual(['Python', 'Machine Learning', 'TensorFlow']);
+    });
+
+    it('matches extracted candidate skills and clinical synonyms immediately after CV upload without waiting for background evidence', async () => {
+      mockPrisma.candidate.findFirst.mockResolvedValue({
+        id: 'cand-fresh',
+        experienceYears: 6,
+        currentTitle: 'Intensive Care Nurse',
+        summary: '6 years managing ventilated ICU patients.',
+        skills: ['Intensive Care', 'ACLS', 'Ventilator Management'],
+        certifications: ['ACLS'],
+        location: 'Dubai',
+        skillLinks: [], // Async deriveEvidenceInBackground has not completed yet
+        applications: [],
+        documents: [],
+      });
+      mockPrisma.vacancy.findMany.mockResolvedValue([
+        {
+          id: 'vac-icu',
+          vacancyCode: 'VAC-ICU-9',
+          department: 'Critical Care',
+          position: { title: 'Senior ICU Nurse' },
+          branch: { name: 'SGH Dubai' },
+          minExperienceYears: 4,
+          requiredSkills: ['ICU', 'ACLS'],
+          jdCriteria: null,
+          createdAt: new Date(),
+        },
+        {
+          id: 'vac-fin',
+          vacancyCode: 'VAC-FIN-2',
+          department: 'Finance',
+          position: { title: 'Senior Accountant' },
+          branch: { name: 'SGH Dubai' },
+          minExperienceYears: 4,
+          requiredSkills: ['IFRS', 'Auditing'],
+          jdCriteria: null,
+          createdAt: new Date(),
+        },
+      ]);
+
+      const recs = await service.getJobRecommendationsForCandidate('org-1', 'cand-fresh');
+
+      expect(recs[0].vacancyId).toBe('vac-icu');
+      expect(recs[0].matchedSkillsCount).toBe(2);
+      expect(recs[0].matchedKeywords).toEqual(['ICU', 'ACLS']);
+      expect(recs[0].atsScore).toBe(100);
+      expect(recs[1].vacancyId).toBe('vac-fin');
+      expect(recs[1].matchedSkillsCount).toBe(0);
+      expect(recs[1].atsScore).toBeLessThan(recs[0].atsScore);
     });
   });
 });

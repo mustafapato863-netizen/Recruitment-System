@@ -169,14 +169,16 @@ export async function fetchMyScorecards(): Promise<WaitingScorecard[]> {
 
 export async function fetchTeamWork(): Promise<TeamWork> {
   const today = cairoToday();
-  let api: TeamWorkApi | null = null;
-  try { api = stripPay(await getApi<TeamWorkApi>('/team/work')); } catch (e) {
-    if (!NOT_THERE.has((e as { statusCode?: number })?.statusCode ?? 0)) throw e;
-  }
+  const [api, people] = await Promise.all([
+    getApi<TeamWorkApi>('/team/work').then((raw) => stripPay(raw)).catch((e) => {
+      if (!NOT_THERE.has((e as { statusCode?: number })?.statusCode ?? 0)) throw e;
+      return null;
+    }),
+    fetchPeople(),
+  ]);
   if (api && Array.isArray(api.reports)) {
     // #21 (B2-16): the people list is GET /users/assignable (any signed-in user, the caller's own reports), so a
     // report with no open files still has a row and is a reassign target. /team/work supplies each person's files.
-    const people = await fetchPeople();
     const byId = new Map(api.reports.map((r) => [r.user.id, r]));
     const roster: Person[] = people ?? api.reports.map((r) => {
       const identity = splitPersonIdentity(r.user.displayName ?? r.user.name ?? 'Unnamed', r.user.roleName);
@@ -196,7 +198,6 @@ export async function fetchTeamWork(): Promise<TeamWork> {
     }));
     return { reports, waiting, scorecards: serverCards.length ? serverCards : await fetchMyScorecards(), source: 'team-work' };
   }
-  const people = await fetchPeople();
   if (!people) return { reports: null, waiting: [], scorecards: await fetchMyScorecards(), source: 'composed' };
   const reports = await Promise.all([...people].sort((a, b) => a.name.localeCompare(b.name)).map(async (person) => buildReport(person, await fetchReportFiles(person.id), today)));
   const owners = new Map<string, string>();

@@ -65,9 +65,12 @@
 }
 
 [data-ui='v2'] .rf2-rep-select {
-  height: 38px;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
   min-width: 132px;
-  padding: 0 32px 0 13px;
+  padding: 6px 32px 6px 12px;
+  line-height: 1.4;
   border-radius: 9px;
   border: 1px solid var(--rf2-divider, #e2e8f0);
   background-color: var(--rf2-card, #ffffff);
@@ -76,7 +79,7 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  box-shadow: var(--rf2-btn-shadow);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 

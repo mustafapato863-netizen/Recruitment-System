@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarClock, CircleCheck, CircleX, ClipboardCheck, FileSignature, History, Users } from 'lucide-react';
 import { ButtonV2 } from '../../components/v2/Button';
 import { SkeletonV2 } from '../../components/v2/PageStates';
 import { fetchMyWorkActivity, type MyWorkActivityItem } from '../api/myWorkActivity';
+import { useCachedResource } from '../api/useCachedResource';
 import { withReturnTo } from '../returnTarget';
 
-type ActivityRead = { key: string } & ({ status: 'loading' } | { status: 'ready'; items: MyWorkActivityItem[] } | { status: 'error' });
 const visuals = {
   Applied: { Icon: Users, tone: 'info' }, Screening: { Icon: ClipboardCheck, tone: 'info' }, Interview: { Icon: CalendarClock, tone: 'info' },
   Offer: { Icon: FileSignature, tone: 'success' }, 'Pre-Hire': { Icon: ClipboardCheck, tone: 'warning' }, Joined: { Icon: CircleCheck, tone: 'success' },
@@ -17,23 +17,19 @@ export function MyWorkActivity({ employeeId, canView, refreshKey, returnTo, time
   employeeId?: string; canView: boolean; refreshKey: number; returnTo: string | null; timezone: string;
 }) {
   const [attempt, setAttempt] = useState(0);
-  const key = `${employeeId ?? ''}:${refreshKey}:${attempt}`;
-  const [read, setRead] = useState<ActivityRead>({ key: '', status: 'loading' });
-  useEffect(() => {
-    if (!canView || !employeeId) return undefined;
-    let live = true;
-    setRead({ key, status: 'loading' });
-    fetchMyWorkActivity(employeeId).then(items => { if (live) setRead({ key, status: 'ready', items }); })
-      .catch(() => { if (live) setRead({ key, status: 'error' }); });
-    return () => { live = false; };
-  }, [canView, employeeId, key]);
-  useEffect(() => {
-    const refresh = () => { if (document.visibilityState === 'visible') setAttempt(value => value + 1); };
-    document.addEventListener('visibilitychange', refresh);
-    return () => document.removeEventListener('visibilitychange', refresh);
-  }, []);
+  const res = useCachedResource<MyWorkActivityItem[]>({
+    key: `my-work:activity:${employeeId ?? ''}`,
+    enabled: canView && Boolean(employeeId),
+    attempt: attempt + refreshKey,
+    revalidateOnVisible: true,
+    fetcher: () => fetchMyWorkActivity(employeeId!),
+  });
   if (!canView || !employeeId) return null;
-  const current = read.key === key ? read : { status: 'loading' as const };
+  const current = res.kind === 'loading'
+    ? { status: 'loading' as const }
+    : res.kind === 'error'
+      ? { status: 'error' as const }
+      : { status: 'ready' as const, items: res.data };
   const shortDate = (date: string) => new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(date));
   const fullDate = (date: string) => new Intl.DateTimeFormat('en-GB', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(date));
   return <section className="rf2-mywork__card rf2-mywork-activity" aria-labelledby="mywork-activity-title">

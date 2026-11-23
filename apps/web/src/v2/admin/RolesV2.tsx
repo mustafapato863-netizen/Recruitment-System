@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
-import { CircleCheck, CircleMinus, Info, RotateCw, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
+import { CircleCheck, CircleMinus, Info, KeyRound, Layers, RotateCw, ShieldCheck } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { SEAT_LABEL } from '../seat';
 import { CAPABILITIES, POLICY, fetchPermissions, fetchRoles, grant, revoke, roleSeat, type AdminRole, type Permission } from './rolesApi';
 import { fetchUsers } from './usersApi';
 import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
+import { useCachedResource } from '../api/useCachedResource';
 import '../pages/jobs.css';
 import './admin.css';
 
@@ -16,18 +17,17 @@ function capabilityChange(count: number, roleName: string): string {
 
 /** A04 Roles (Admin seat): the three-seat policy plus Interviewer / Licence check granted as permissions on roles. */
 export function RolesV2() {
-  const [data, setData] = useState<{ roles: AdminRole[]; perms: Permission[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [pending, setPending] = useState<{ role: AdminRole; perm: Permission; on: boolean; label: string; count: number } | null>(null);
-  useEffect(() => {
-    let live = true; setError(null);
-    Promise.all([fetchRoles(), fetchPermissions().catch(() => [] as Permission[])]).then(([roles, perms]) => live && setData({ roles, perms }))
-      .catch((e: { message?: string }) => live && setError(e?.message || 'Something went wrong.'));
-    return () => { live = false; };
-  }, [attempt]);
+  const rolesRes = useCachedResource<{ roles: AdminRole[]; perms: Permission[] }>({
+    key: 'admin:roles',
+    attempt,
+    fetcher: () => Promise.all([fetchRoles(), fetchPermissions().catch(() => [] as Permission[])]).then(([roles, perms]) => ({ roles, perms })),
+  });
+  const data = rolesRes.kind === 'ready' ? rolesRes.data : null;
+  const error = rolesRes.kind === 'error' ? ((rolesRes.error as { message?: string })?.message || 'Something went wrong.') : null;
   const roles = (data?.roles ?? []).filter((r) => r.status === 'Active').sort((a, b) => a.name.localeCompare(b.name));
   const ask = async (role: AdminRole, perm: Permission, on: boolean, label: string) => {
     if (busy || pending) return;
@@ -59,6 +59,32 @@ export function RolesV2() {
         title="Roles"
         subtitle="Review role capabilities, permission grants and seat mapping."
       />
+      <ul className="rf2-admin-kpis rf2-admin-kpis--3" aria-label="Roles overview">
+        <li className="rf2-admin-kpi">
+          <span className="rf2-admin-kpi__icon" aria-hidden="true"><Layers /></span>
+          <span className="rf2-admin-kpi__copy">
+            <span className="rf2-admin-kpi__value">3</span>
+            <span className="rf2-admin-kpi__label">Workspace seats</span>
+            <span className="rf2-admin-kpi__sub">Employee · Manager · Admin</span>
+          </span>
+        </li>
+        <li className="rf2-admin-kpi">
+          <span className="rf2-admin-kpi__icon" data-tone="success" aria-hidden="true"><ShieldCheck /></span>
+          <span className="rf2-admin-kpi__copy">
+            <span className="rf2-admin-kpi__value">{data ? roles.length : '—'}</span>
+            <span className="rf2-admin-kpi__label">Active production roles</span>
+            <span className="rf2-admin-kpi__sub">Mapped to workspace seats</span>
+          </span>
+        </li>
+        <li className="rf2-admin-kpi">
+          <span className="rf2-admin-kpi__icon" aria-hidden="true"><KeyRound /></span>
+          <span className="rf2-admin-kpi__copy">
+            <span className="rf2-admin-kpi__value">{CAPABILITIES.length}</span>
+            <span className="rf2-admin-kpi__label">Configurable capabilities</span>
+            <span className="rf2-admin-kpi__sub">Permission-based grants</span>
+          </span>
+        </li>
+      </ul>
       <div className="rf2-panel rf2-admin__card">
         <table className="rf2-jtable rf2-admin__matrix" aria-label="What each role can do">
           <thead><tr><th scope="col">Capability</th><th scope="col">Employee</th><th scope="col">Manager</th><th scope="col">Admin</th><th scope="col" className="rf2-admin__cap">Interviewer (capability)</th></tr></thead>

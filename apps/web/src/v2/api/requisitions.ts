@@ -24,7 +24,7 @@
  * - Target update (seats + due date + reason) on a live job. Seats cannot drop below joined headcount.
  * - GET /vacancy-requests/:id/cancel-impact names commitments that block cancellation.
  */
-import { getApi, patchApi, postApi } from '../../api/client';
+import { getApi, patchApi, postApi, postFormDataApi } from '../../api/client';
 import { stripPay } from './paySafety';
 import { domainError } from './gates';
 import { bannerError, serverFormErrors } from '../forms/serverErrors';
@@ -109,6 +109,11 @@ export const requestRequisitionChanges = (id: string, comment: string) =>
   postApi<Requisition>(`/vacancy-requests/${enc(id)}/request-changes`, { comment });
 export const declineRequisition = (id: string, comment: string) =>
   postApi<Requisition>(`/vacancy-requests/${enc(id)}/reject`, { comment });
+export const uploadRequisitionJd = (id: string, file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return postFormDataApi<{ document: unknown; criteria: unknown }>(`/vacancy-requests/${enc(id)}/jd`, formData);
+};
 
 export interface CancellationImpact {
   canClose: boolean;

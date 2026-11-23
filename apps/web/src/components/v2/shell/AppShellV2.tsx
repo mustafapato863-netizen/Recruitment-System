@@ -23,6 +23,7 @@ import { HeaderSearch } from '../../../v2/search/HeaderSearch';
 import { NotificationsBell, NOTIFICATIONS_CHANGED } from '../../../v2/search/NotificationsBell';
 import '../../../v2/search/search.css';
 import { formatPersonName, getInitials } from '../../../v2/userIdentity';
+import { preloadRouteChunk, scheduleIdleRoutePreload } from '../../../v2/routePreload';
 
 const ICONS: Record<NavIconName, ReactNode> = {
   'my-work': <ListChecks />, interviews: <CalendarCheck />, 'my-interviews': <CalendarClock />, jobs: <BriefcaseBusiness />, candidates: <Users />,
@@ -250,9 +251,13 @@ function ShellFrame({ user, seat, onSignOut, children, availableSeats, approvalC
       </ol>
     </nav>
   );
-  const showGlobalSearch = location.pathname !== '/users';
 
   useEffect(() => { setMenuOpen(false); }, [location.pathname, location.hash]);
+  const sidebarPathsKey = sidebarItems.map((item) => item.to).join('|');
+  useEffect(() => {
+    if (!sidebarPathsKey) return undefined;
+    return scheduleIdleRoutePreload(sidebarPathsKey.split('|'));
+  }, [sidebarPathsKey]);
   useEffect(() => { if (!compactNav) setMenuOpen(false); }, [compactNav]);
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -276,7 +281,7 @@ function ShellFrame({ user, seat, onSignOut, children, availableSeats, approvalC
   }, [menuOpen]);
   const headerTools = (
     <>
-      {showGlobalSearch ? <HeaderSearch placeholder={config.searchPlaceholder} meId={user.id} /> : null}
+      <HeaderSearch placeholder={config.searchPlaceholder} meId={user.id} />
       <div className="rf2-shell__actions">
         <button type="button" className="rf2-icon-button" aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={toggleTheme}>
           {theme === 'light' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
@@ -293,7 +298,7 @@ function ShellFrame({ user, seat, onSignOut, children, availableSeats, approvalC
           <NavItem asChild label={item.label} icon={ICONS[item.icon]} active={item.key === activeKey} title={collapsed ? item.label : undefined}
             badge={item.key === 'approvals' ? approvalCount ?? undefined : undefined} badgeLabel={item.key === 'approvals' ? `${approvalCount ?? 0} waiting on you` : undefined}>
             {/* Link, not NavLink: aria-current is decided once by activeNavKey (hash-aware). */}
-            <Link to={item.to} />
+            <Link to={item.to} onMouseEnter={() => preloadRouteChunk(item.to)} onFocus={() => preloadRouteChunk(item.to)} />
           </NavItem>
         </li>
       ))}

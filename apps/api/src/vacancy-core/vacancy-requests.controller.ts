@@ -14,7 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { AuthUser } from '@recruitflow/contracts';
+import type { AuthUser, JdCriteriaDefinition } from '@recruitflow/contracts';
 // DTO classes must remain runtime imports so Nest can reflect their metadata.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import {
@@ -226,5 +226,33 @@ export class VacancyRequestsController {
   ) {
     if (!file) throw new BadRequestException('A PDF, DOCX, or text file is required.');
     return this.vacancyDocuments.uploadRequisitionJd(user.organizationId, id, file, user);
+  }
+
+  @Get(':id/jd')
+  @RequireAnyPermissions('VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE', 'VACANCY_VIEW', 'VACANCY_MANAGE')
+  getJd(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.vacancyDocuments.getVacancyJd(user.organizationId, id);
+  }
+
+  @Patch(':id/criteria')
+  @RequireAnyPermissions('VACANCY_REQUEST_CREATE', 'VACANCY_MANAGE')
+  updateCriteria(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() criteria: Partial<JdCriteriaDefinition>,
+  ) {
+    return this.vacancyDocuments.updateVacancyCriteria(user.organizationId, id, criteria, user);
+  }
+
+  @Post(':id/jd-text')
+  @RequireAnyPermissions('VACANCY_REQUEST_CREATE', 'VACANCY_MANAGE')
+  saveJdText(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('text') text: string,
+    @Body('fileName') fileName?: string,
+  ) {
+    if (!text || typeof text !== 'string') throw new BadRequestException('Job description text is required.');
+    return this.vacancyDocuments.saveJdText(user.organizationId, id, text, user, fileName);
   }
 }

@@ -9,15 +9,35 @@ import type {
   AtsMatchBreakdown,
   AtsSkillMatchItem,
   AuthUser,
+  CandidateJobKeywordEvidence,
   CandidateJobRecommendation,
   JdCriteriaDefinition,
 } from '@recruitflow/contracts';
+import {
+  calculateCandidateFitScore,
+  SYNONYM_GROUPS,
+} from '@recruitflow/validation';
 import { PrismaService } from '../database/prisma.service';
 import { UserPermissionsService } from '../common/user-permissions.service';
 import { findSkillSnippet } from './skill-evidence';
 import { isSkillLinkActive } from './skill-links';
 
 const ATS_VERSION = 'v2-ats-1.1';
+
+function expandSkillAliases(skill: string): string[] {
+  const clean = skill.trim();
+  if (!clean) return [];
+  const lower = clean.toLowerCase();
+  const terms = new Set<string>([clean]);
+  for (const group of SYNONYM_GROUPS) {
+    if (group.some((item) => item.toLowerCase() === lower)) {
+      for (const alias of group) {
+        if (alias.trim()) terms.add(alias.trim());
+      }
+    }
+  }
+  return [...terms];
+}
 
 @Injectable()
 export class AtsScoringService {
@@ -291,7 +311,7 @@ export class AtsScoringService {
       where: { id: candidateId, organizationId },
       include: {
         applications: { select: { id: true, vacancyId: true, stage: true } },
-        skillLinks: { include: { skill: { select: { name: true } }, evidence: { select: { sourceType: true } } } },
+        skillLinks: { include: { skill: { select: { name: true } }, evidence: { select: { sourceType: true, snippet: true }, take: 2 } } },
         documents: {
           where: { deletedAt: null, extractionText: { not: null } },
           select: { extractionText: true },
@@ -320,32 +340,146 @@ export class AtsScoringService {
     });
 
     const candidateExp = candidate.experienceYears ?? 0;
-    const evidencedSkills = new Set(candidate.skillLinks
-      .filter((link) => link.evidence.length > 0 && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence))
-      .map((link) => link.skill.name.toLowerCase()));
+    const evidencedSkillMap = new Map<string, string | null>();
+    for (const link of candidate.skillLinks) {
+      if (link.evidence.length > 0 && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence)) {
+        evidencedSkillMap.set(link.skill.name.toLowerCase(), link.evidence[0]?.snippet ?? null);
+      }
+    }
+    const candidateSkillsLower = new Set(
+      (candidate.skills ?? [])
+        .map((s) => (typeof s === 'string' ? s.trim().toLowerCase() : ''))
+        .filter(Boolean),
+    );
     const combinedCvText = candidate.documents.map((d) => d.extractionText || '').join('\n');
+    const candidateTextPool = [
+      combinedCvText,
+      candidate.currentTitle || '',
+      candidate.summary || '',
+    ].filter(Boolean).join('\n');
+
+    const matchSkillForCandidate = (skill: string): { matched: boolean; source: 'verified-skill' | 'cv-text'; snippet: string | null } => {
+      const aliases = expandSkillAliases(skill);
+      for (const alias of aliases) {
+        const lower = alias.toLowerCase();
+        if (evidencedSkillMap.has(lower)) {
+          return { matched: true, source: 'verified-skill', snippet: evidencedSkillMap.get(lower) ?? null };
+        }
+      }
+      for (const alias of aliases) {
+        const cvSnippet = findSkillSnippet(candidateTextPool, alias);
+        if (cvSnippet) {
+          return { matched: true, source: 'cv-text', snippet: cvSnippet };
+        }
+      }
+      for (const alias of aliases) {
+        if (candidateSkillsLower.has(alias.toLowerCase())) {
+          return { matched: true, source: 'cv-text', snippet: `Matched candidate skill: ${alias}` };
+        }
+      }
+      return { matched: false, source: 'cv-text', snippet: null };
+    };
 
     const recommendations: CandidateJobRecommendation[] = [];
 
     for (const vac of openVacancies) {
       const criteria = (vac.jdCriteria as unknown as JdCriteriaDefinition) || null;
-      const mustHaves = criteria?.mustHaveSkills?.map((s) => s.name) || vac.requiredSkills || [];
+      const mustHaves = criteria?.mustHaveSkills?.length
+        ? criteria.mustHaveSkills.map((s) => s.name)
+        : (vac.requiredSkills || []);
+      const niceToHaves = criteria?.niceToHaveSkills?.map((s) => s.name) ?? [];
 
       let matchedCount = 0;
+      const matchedKeywords: string[] = [];
+      const missingKeywords: string[] = [];
+      const keywordEvidence: CandidateJobKeywordEvidence[] = [];
+      const seenKeywords = new Set<string>();
+
       for (const reqSkill of mustHaves) {
-        // Reuse all V1-backed evidence, including screening and scorecard links.
-        if (evidencedSkills.has(reqSkill.toLowerCase()) || findSkillSnippet(combinedCvText, reqSkill)) {
+        const key = reqSkill.toLowerCase();
+        const hit = matchSkillForCandidate(reqSkill);
+        if (hit.matched) {
           matchedCount += 1;
+          if (!seenKeywords.has(key)) {
+            seenKeywords.add(key);
+            matchedKeywords.push(reqSkill);
+            keywordEvidence.push({
+              keyword: reqSkill,
+              source: hit.source,
+              snippet: hit.snippet,
+            });
+          }
+        } else if (!seenKeywords.has(key)) {
+          seenKeywords.add(key);
+          missingKeywords.push(reqSkill);
+        }
+      }
+
+      for (const bonusSkill of niceToHaves) {
+        const key = bonusSkill.toLowerCase();
+        if (seenKeywords.has(key)) continue;
+        const hit = matchSkillForCandidate(bonusSkill);
+        if (hit.matched) {
+          seenKeywords.add(key);
+          matchedKeywords.push(bonusSkill);
+          keywordEvidence.push({
+            keyword: bonusSkill,
+            source: hit.source,
+            snippet: hit.snippet,
+          });
         }
       }
 
       const totalSkills = mustHaves.length;
-      const skillRatio = totalSkills > 0 ? matchedCount / totalSkills : 0.8;
       const reqExp = vac.minExperienceYears || criteria?.minExperienceYears || 1;
       const expRatio = Math.min(candidateExp / reqExp, 1.0);
-
-      const computedScore = Math.round((skillRatio * 60 + expRatio * 40) * 10) / 10;
+      let computedScore: number;
+      if (totalSkills > 0) {
+        const skillRatio = matchedCount / totalSkills;
+        computedScore = Math.round((skillRatio * 60 + expRatio * 40) * 10) / 10;
+      } else {
+        const engineFit = calculateCandidateFitScore(
+          {
+            skills: candidate.skills ?? [],
+            experienceYears: candidateExp,
+            location: candidate.location ?? null,
+            certifications: candidate.certifications ?? [],
+            currentTitle: candidate.currentTitle ?? null,
+            summary: candidate.summary ?? null,
+            rawText: combinedCvText || null,
+          },
+          {
+            requiredSkills: [],
+            minExperienceYears: vac.minExperienceYears ?? 0,
+            location: vac.branch?.name ?? '',
+            qualifications: [vac.position?.title, vac.qualifications].filter(Boolean).join(' '),
+            department: vac.department ?? '',
+          },
+        );
+        computedScore = Math.round(engineFit.score * 10) / 10;
+      }
       const existingAppId = appliedVacancyMap.get(vac.id);
+
+      const fitReasons: string[] = [];
+      if (matchedKeywords.length > 0) {
+        fitReasons.push(
+          `Matched main keywords: ${matchedKeywords.slice(0, 5).join(', ')}${matchedKeywords.length > 5 ? ` (+${matchedKeywords.length - 5} more)` : ''}`,
+        );
+      } else if (totalSkills > 0) {
+        fitReasons.push(`No verified keyword matches yet across ${totalSkills} required skills`);
+      } else if (vac.position?.title || vac.department) {
+        fitReasons.push(`Evaluated against role title & department (${[vac.position?.title, vac.department].filter(Boolean).join(' · ')})`);
+      }
+      if (reqExp > 0) {
+        fitReasons.push(
+          candidateExp >= reqExp
+            ? `Experience fits: ${candidateExp} yrs (${reqExp}+ yrs required)`
+            : `Experience: ${candidateExp} yrs vs ${reqExp}+ yrs required`,
+        );
+      }
+      if (missingKeywords.length > 0) {
+        fitReasons.push(`Missing keywords: ${missingKeywords.slice(0, 3).join(', ')}${missingKeywords.length > 3 ? ` (+${missingKeywords.length - 3} more)` : ''}`);
+      }
 
       recommendations.push({
         vacancyId: vac.id,
@@ -359,6 +493,11 @@ export class AtsScoringService {
         totalRequiredSkillsCount: totalSkills,
         alreadyApplied: Boolean(existingAppId),
         existingApplicationId: existingAppId ?? null,
+        requiredExperienceYears: reqExp,
+        matchedKeywords,
+        missingKeywords,
+        keywordEvidence,
+        fitReasons,
       });
     }
 

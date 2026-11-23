@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchVacancyList } from '../../utils/vacancyAccess';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  BriefcaseBusiness, Building2, Calendar, Check, ChevronDown, MapPin,
-  MoreVertical, Pencil, PlusCircle, RotateCcw, Search, Users,
+  AlertCircle, BriefcaseBusiness, Building2, Calendar, Check, ChevronDown,
+  ChevronLeft, ChevronRight, ExternalLink, FileText, MapPin, MoreVertical,
+  Pencil, PlusCircle, RotateCcw, Search, Sparkles, Tags, Users,
 } from 'lucide-react';
 import { getApi, postApi } from '../../api/client';
 import { PageState } from '../../components/ui/PageState';
@@ -14,6 +15,7 @@ import { CandidateFitScorecard } from '../../components/candidate/CandidateFitSc
 import { EditPositionRequirementsModal } from '../../components/vacancy/EditPositionRequirementsModal';
 import { calculateCandidateFitScore, type CriteriaBreakdown } from '@recruitflow/validation';
 import type { Candidate, Vacancy } from '@recruitflow/contracts';
+import { formatSkillLabel } from '../drawers/skillFormat';
 import '../../pages/PageEnhancementsV2.css';
 import './match-skills.css';
 
@@ -112,6 +114,9 @@ function readStatusCode(err: unknown): number | null {
 
 const ACCEPTING_APPLICATION_STATUSES = new Set(['Open', 'Partially Filled']);
 const MATCH_TIERS: readonly MatchTier[] = ['all', 'best', 'good', 'potential', 'low'];
+const PAGE_SIZE = 15;
+const CANDIDATE_FETCH_PAGE_SIZE = 100;
+const SUGGESTIONS_CACHE_TTL_MS = 2 * 60 * 1000;
 
 function parseTier(value: string | null): MatchTier {
   return MATCH_TIERS.includes(value as MatchTier) ? (value as MatchTier) : 'all';
@@ -119,6 +124,25 @@ function parseTier(value: string | null): MatchTier {
 
 function parseSort(value: string | null): 'best' | 'exp' | 'name' {
   return value === 'exp' || value === 'name' ? value : 'best';
+}
+
+function parsePage(value: string | null): number {
+  const n = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
+
+function buildPageWindow(current: number, total: number): Array<number | 'ellipsis'> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, idx) => idx + 1);
+  }
+  const pages = new Set<number>([1, total, current - 1, current, current + 1]);
+  const sorted = Array.from(pages).filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+  const out: Array<number | 'ellipsis'> = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) out.push('ellipsis');
+    out.push(sorted[i]);
+  }
+  return out;
 }
 
 function sameQuery(left: URLSearchParams, right: URLSearchParams): boolean {
@@ -312,6 +336,8 @@ export function TalentPoolPage() {
   const [vacancies, setVacancies] = useState<MatchSkillsVacancy[]>([]);
   const [selectedVacancyId, setSelectedVacancyId] = useState<string>('');
   const [benchCandidates, setBenchCandidates] = useState<Candidate[]>([]);
+  const [candidateServerTotal, setCandidateServerTotal] = useState<number | null>(null);
+  const [isPrefetchingMore, setIsPrefetchingMore] = useState(false);
   const [serverJobMatch, setServerJobMatch] = useState<ServerJobMatch | null>(null);
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
   const [suggestionsRetryTick, setSuggestionsRetryTick] = useState(0);
@@ -319,14 +345,20 @@ export function TalentPoolPage() {
   const [pipelineMembership, setPipelineMembership] = useState<Record<string, LocalPipelineMembership>>({});
   const loadGeneration = useRef(0);
   const suggestionGeneration = useRef(0);
+  const suggestionsCacheRef = useRef<Map<string, { data: ServerJobMatch; cachedAt: number }>>(new Map());
+  const prefetchedServerPagesRef = useRef<Set<number>>(new Set([1]));
+  const nextPageSliceCacheRef = useRef<{ source: ScoredBenchCandidate[]; page: number; rows: ScoredBenchCandidate[] } | null>(null);
+  const listTopRef = useRef<HTMLDivElement | null>(null);
+  const isFirstFilterSyncRef = useRef(true);
 
-  // Filters for Match Skills
+  // Filters & Pagination for Match Skills
   const [benchSearch, setBenchSearch] = useState(() => searchParams.get('q') ?? '');
   const [locationFilter, setLocationFilter] = useState('');
   const [expFilter, setExpFilter] = useState('');
   const [availFilter, setAvailFilter] = useState('');
   const [sortBy, setSortBy] = useState<'best' | 'exp' | 'name'>(() => parseSort(searchParams.get('sort')));
   const [tierFilter, setTierFilter] = useState<MatchTier>(() => parseTier(searchParams.get('tier')));
+  const [currentPage, setCurrentPage] = useState<number>(() => parsePage(searchParams.get('page')));
   const [expandedCandidateId, setExpandedCandidateId] = useState<string | null>(null);
 
   // Edit Position Requirements Modal
@@ -374,14 +406,19 @@ export function TalentPoolPage() {
             }));
           return [...fullRows, ...extra];
         }),
-        getApi<{ data?: Candidate[] } | Candidate[]>('/candidates?pageSize=100'),
+        getApi<{ data?: Candidate[]; total?: number } | Candidate[]>(`/candidates?pageSize=${CANDIDATE_FETCH_PAGE_SIZE}`),
       ]);
 
       if (generation !== loadGeneration.current) return;
 
       const vacList = vacsRes;
       const candList = Array.isArray(candsRes) ? candsRes : candsRes?.data || [];
+      const totalFromServer = !Array.isArray(candsRes) && typeof candsRes?.total === 'number'
+        ? candsRes.total
+        : null;
 
+      prefetchedServerPagesRef.current = new Set([1]);
+      setCandidateServerTotal(totalFromServer);
       setVacancies(vacList);
       setBenchCandidates(candList);
 
@@ -429,22 +466,36 @@ export function TalentPoolPage() {
     else next.delete('tier');
     if (sortBy !== 'best') next.set('sort', sortBy);
     else next.delete('sort');
+    if (currentPage > 1) next.set('page', String(currentPage));
+    else next.delete('page');
     if (sameQuery(next, searchParams)) return;
     if (selectedVacancyId && selectedVacancyId !== vacancyQuery) {
       suppressVacancyReload.current = selectedVacancyId;
     }
     setSearchParams(next, { replace: true });
-  }, [selectedVacancyId, benchSearch, tierFilter, sortBy, searchParams, setSearchParams, vacancyQuery]);
+  }, [selectedVacancyId, benchSearch, tierFilter, sortBy, currentPage, searchParams, setSearchParams, vacancyQuery]);
 
   useEffect(() => {
     if (document.activeElement?.id === 'rf2-ms-candidate-search') return;
     const nextQuery = searchParams.get('q') ?? '';
     const nextTier = parseTier(searchParams.get('tier'));
     const nextSort = parseSort(searchParams.get('sort'));
+    const nextPage = parsePage(searchParams.get('page'));
     setBenchSearch((current) => (current === nextQuery ? current : nextQuery));
     setTierFilter((current) => (current === nextTier ? current : nextTier));
     setSortBy((current) => (current === nextSort ? current : nextSort));
+    setCurrentPage((current) => (current === nextPage ? current : nextPage));
   }, [searchParams]);
+
+  // Reset pagination to page 1 whenever filters, search, sort, tier, or target job change
+  useEffect(() => {
+    if (isFirstFilterSyncRef.current) {
+      isFirstFilterSyncRef.current = false;
+      return;
+    }
+    setCurrentPage(1);
+    setExpandedCandidateId(null);
+  }, [selectedVacancyId, benchSearch, locationFilter, expFilter, availFilter, tierFilter, sortBy]);
 
   useEffect(() => {
     const vacancy = vacancies.find((item) => item.id === selectedVacancyId) ?? null;
@@ -454,8 +505,16 @@ export function TalentPoolPage() {
       setSuggestionsError(null);
       return;
     }
-    const generation = ++suggestionGeneration.current;
     const vacancyId = selectedVacancyId;
+    const cached = suggestionsRetryTick === 0 ? suggestionsCacheRef.current.get(vacancyId) : undefined;
+    if (cached && Date.now() - cached.cachedAt < SUGGESTIONS_CACHE_TTL_MS) {
+      suggestionGeneration.current += 1;
+      setServerJobMatch(cached.data);
+      setSuggestionsError(null);
+      return;
+    }
+
+    const generation = ++suggestionGeneration.current;
     let active = true;
     setSuggestionsError(null);
     setServerJobMatch((current) => (current?.vacancyId === vacancyId ? current : null));
@@ -465,6 +524,7 @@ export function TalentPoolPage() {
         if (!active || generation !== suggestionGeneration.current) return;
         const parsed = parseSuggestions(raw, vacancyId);
         if (!parsed) return;
+        suggestionsCacheRef.current.set(vacancyId, { data: parsed, cachedAt: Date.now() });
         setServerJobMatch(parsed);
         setSuggestionsError(null);
       } catch (err: unknown) {
@@ -624,6 +684,90 @@ export function TalentPoolPage() {
     return list;
   }, [scoredCandidates, benchSearch, locationFilter, expFilter, availFilter, tierFilter, sortBy]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safePage - 1) * PAGE_SIZE;
+
+  const paginatedCandidates = useMemo(() => {
+    const cached = nextPageSliceCacheRef.current;
+    if (cached && cached.source === filteredCandidates && cached.page === safePage) {
+      return cached.rows;
+    }
+    return filteredCandidates.slice(pageStartIndex, pageStartIndex + PAGE_SIZE);
+  }, [filteredCandidates, safePage, pageStartIndex]);
+
+  // Pre-warm the next 15-row page slice and proactively prefetch the next server candidate chunk when approaching the end
+  useEffect(() => {
+    if (safePage < totalPages) {
+      const nextStart = safePage * PAGE_SIZE;
+      nextPageSliceCacheRef.current = {
+        source: filteredCandidates,
+        page: safePage + 1,
+        rows: filteredCandidates.slice(nextStart, nextStart + PAGE_SIZE),
+      };
+    } else {
+      nextPageSliceCacheRef.current = null;
+    }
+
+    if (
+      candidateServerTotal === null ||
+      benchCandidates.length >= candidateServerTotal ||
+      benchCandidates.length === 0
+    ) {
+      return;
+    }
+    const nearLoadedEnd = (safePage + 1) * PAGE_SIZE >= benchCandidates.length;
+    if (!nearLoadedEnd) return;
+
+    const nextServerPage = Math.floor(benchCandidates.length / CANDIDATE_FETCH_PAGE_SIZE) + 1;
+    if (prefetchedServerPagesRef.current.has(nextServerPage)) return;
+    prefetchedServerPagesRef.current.add(nextServerPage);
+
+    const activeLoadGen = loadGeneration.current;
+    let alive = true;
+    setIsPrefetchingMore(true);
+    void (async () => {
+      try {
+        const res = await getApi<{ data?: Candidate[]; total?: number } | Candidate[]>(
+          `/candidates?pageSize=${CANDIDATE_FETCH_PAGE_SIZE}&page=${nextServerPage}`,
+        );
+        if (!alive || activeLoadGen !== loadGeneration.current) return;
+        const incoming = Array.isArray(res) ? res : res?.data || [];
+        if (!Array.isArray(res) && typeof res?.total === 'number') {
+          setCandidateServerTotal(res.total);
+        }
+        if (incoming.length > 0) {
+          setBenchCandidates((prev) => {
+            const seen = new Set(prev.map((c) => c.id));
+            const fresh = incoming.filter((c) => !seen.has(c.id));
+            return fresh.length > 0 ? [...prev, ...fresh] : prev;
+          });
+        }
+      } catch {
+        // Release page mark so a subsequent visit can retry prefetching silently
+        prefetchedServerPagesRef.current.delete(nextServerPage);
+      } finally {
+        if (alive) setIsPrefetchingMore(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [filteredCandidates, safePage, totalPages, candidateServerTotal, benchCandidates.length]);
+
+  const pageWindow = useMemo(() => buildPageWindow(safePage, totalPages), [safePage, totalPages]);
+
+  const goToPage = (targetPage: number) => {
+    const clamped = Math.max(1, Math.min(totalPages, targetPage));
+    if (clamped === safePage) return;
+    setCurrentPage(clamped);
+    setExpandedCandidateId(null);
+    if (typeof listTopRef.current?.scrollIntoView === 'function') {
+      listTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   const resetFilters = () => {
     setBenchSearch('');
     setLocationFilter('');
@@ -631,6 +775,7 @@ export function TalentPoolPage() {
     setAvailFilter('');
     setTierFilter('all');
     setSortBy('best');
+    setCurrentPage(1);
   };
 
   const toggleSelect = (id: string) => {
@@ -639,6 +784,7 @@ export function TalentPoolPage() {
 
   // Handle Fast-Track to Pipeline
   const rememberInPipeline = (candidateId: string, vacancyId: string, applicationId: string | null) => {
+    suggestionsCacheRef.current.delete(vacancyId);
     setPipelineMembership((current) => ({
       ...current,
       [`${vacancyId}:${candidateId}`]: { applicationId, stage: 'Applied' },
@@ -696,6 +842,9 @@ export function TalentPoolPage() {
     qualifications?: string | null;
     jobSummary?: string | null;
   }) => {
+    if (selectedVacancyId) {
+      suggestionsCacheRef.current.delete(selectedVacancyId);
+    }
     setVacancies((prev) =>
       prev.map((v) =>
         v.id === selectedVacancyId
@@ -774,20 +923,59 @@ export function TalentPoolPage() {
 
       {/* Top Job Context Card */}
       <section className="rf2-ms__job-card" aria-label="Target job specification">
-        <div className="rf2-ms__job-top">
+        <div className="rf2-ms__job-head">
           <div className="rf2-ms__job-select-col">
-            <label htmlFor="rf2-ms-job-select" className="rf2-ms__field-label">
-              Select a job<span className="rf2-ms__field-req">*</span>
-            </label>
+            <div className="rf2-ms__job-label-row">
+              <label htmlFor="rf2-ms-job-select" className="rf2-ms__field-label">
+                <BriefcaseBusiness aria-hidden="true" />
+                <span>Select a job<span className="rf2-ms__field-req">*</span></span>
+              </label>
+              {selectedVacancy ? (
+                <span
+                  className="rf2-ms__readiness-pill"
+                  data-tone={skillMatchReady ? 'ready' : jobIsRedacted ? 'neutral' : 'warning'}
+                >
+                  {skillMatchReady ? (
+                    <>
+                      <Sparkles aria-hidden="true" />
+                      <span>Match ready · {activeRequiredSkills.length} {activeRequiredSkills.length === 1 ? 'skill' : 'skills'}</span>
+                    </>
+                  ) : jobIsRedacted ? (
+                    <span>Restricted view</span>
+                  ) : (
+                    <>
+                      <AlertCircle aria-hidden="true" />
+                      <span>Requirements needed</span>
+                    </>
+                  )}
+                </span>
+              ) : null}
+            </div>
+
             <div className="rf2-ms__select-box">
               <div className="rf2-ms__select-display">
+                <span className="rf2-ms__select-icon" aria-hidden="true">
+                  <BriefcaseBusiness />
+                </span>
                 <span className="rf2-ms__select-title">
                   {jobTitle} <span className="rf2-ms__select-code">({jobCode})</span>
                 </span>
-                <span className="rf2-ms__open-badge">
-                  <Check aria-hidden="true" />
-                  <span>{selectedVacancy?.status || 'No job selected'}</span>
-                </span>
+                {selectedVacancy ? (
+                  <span
+                    className={`rf2-ms__open-badge${
+                      selectedVacancy.status === 'Open' || selectedVacancy.status === 'Partially Filled'
+                        ? ''
+                        : ' rf2-ms__open-badge--neutral'
+                    }`}
+                  >
+                    <Check aria-hidden="true" />
+                    <span>{selectedVacancy.status || 'Open'}</span>
+                  </span>
+                ) : (
+                  <span className="rf2-ms__open-badge rf2-ms__open-badge--neutral">
+                    <span>Choose a job</span>
+                  </span>
+                )}
               </div>
               <span className="rf2-ms__select-chevron" aria-hidden="true"><ChevronDown /></span>
               <select
@@ -804,62 +992,122 @@ export function TalentPoolPage() {
                 ))}
               </select>
             </div>
-            <div className="rf2-ms__job-meta">
-              <span className="rf2-ms__job-meta-item"><MapPin aria-hidden="true" /><span>{jobLocation}</span></span>
-              <span className="rf2-ms__job-meta-item"><Building2 aria-hidden="true" /><span>{jobDept}</span></span>
-              <span className="rf2-ms__job-meta-item"><Users aria-hidden="true" /><span>{seatsLabel}</span></span>
-              <span className="rf2-ms__job-meta-item"><Calendar aria-hidden="true" /><span>{postedLabel}</span></span>
-            </div>
-          </div>
 
-          <div className="rf2-ms__job-desc-col">
-            <span className="rf2-ms__desc-heading">Job description</span>
-            <p className="rf2-ms__desc-text">
-              {jobSummary}
-            </p>
-            {selectedVacancy ? (
-              <Link className="rf2-ms__desc-link" to={`/vacancies/${encodeURIComponent(selectedVacancy.id)}`}>
-                View full description →
-              </Link>
-            ) : (
-              <Link className="rf2-ms__desc-link" to="/vacancies">
-                View full description →
-              </Link>
-            )}
+            <div className="rf2-ms__job-meta">
+              <span
+                className="rf2-ms__job-meta-item"
+                data-empty={!selectedVacancy?.location || jobIsRedacted ? 'true' : undefined}
+              >
+                <MapPin aria-hidden="true" />
+                <span>{jobLocation}</span>
+              </span>
+              <span
+                className="rf2-ms__job-meta-item"
+                data-empty={!selectedVacancy?.department || jobIsRedacted ? 'true' : undefined}
+              >
+                <Building2 aria-hidden="true" />
+                <span>{jobDept}</span>
+              </span>
+              <span
+                className="rf2-ms__job-meta-item"
+                data-empty={jobSeats == null ? 'true' : undefined}
+              >
+                <Users aria-hidden="true" />
+                <span>{seatsLabel}</span>
+              </span>
+              <span
+                className="rf2-ms__job-meta-item"
+                data-empty={!openedAt || jobIsRedacted ? 'true' : undefined}
+              >
+                <Calendar aria-hidden="true" />
+                <span>{postedLabel}</span>
+              </span>
+              {!jobIsRedacted && typeof selectedVacancy?.minExperienceYears === 'number' && selectedVacancy.minExperienceYears > 0 ? (
+                <span className="rf2-ms__job-meta-item">
+                  <Sparkles aria-hidden="true" />
+                  <span>{selectedVacancy.minExperienceYears}+ yrs experience</span>
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
 
-        <div className="rf2-ms__job-skills">
-          <div className="rf2-ms__skills-head">
-            <span className="rf2-ms__skills-title">Required skills for this job</span>
-            {selectedVacancy ? (
-              <button
-                type="button"
-                className="rf2-ms__edit-skills-btn"
-                onClick={() => setIsEditRequirementsOpen(true)}
-                disabled={jobIsRedacted}
-              >
-                <Pencil aria-hidden="true" />
-                <span>Add / Edit skills</span>
-              </button>
+        <div className="rf2-ms__spec-grid">
+          <div className="rf2-ms__skills-panel">
+            <div className="rf2-ms__skills-head">
+              <span className="rf2-ms__skills-title">
+                <Tags aria-hidden="true" />
+                <span>Required skills for this job</span>
+                <span className="rf2-ms__skills-count">{activeRequiredSkills.length}</span>
+              </span>
+              {selectedVacancy ? (
+                <button
+                  type="button"
+                  className="rf2-ms__edit-skills-btn"
+                  data-emphasis={activeRequiredSkills.length === 0 && !jobIsRedacted ? 'primary' : undefined}
+                  onClick={() => setIsEditRequirementsOpen(true)}
+                  disabled={jobIsRedacted}
+                >
+                  <Pencil aria-hidden="true" />
+                  <span>Add / Edit skills</span>
+                </button>
+              ) : null}
+            </div>
+
+            {activeRequiredSkills.length === 0 ? (
+              <div className="rf2-ms__skills-empty">
+                <AlertCircle aria-hidden="true" />
+                <div className="rf2-ms__skills-empty-copy">
+                  <p className="rf2-ms__skills-empty-text">
+                    No required skills defined for this job yet. Finish job requirements to calculate skill matches.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="rf2-ms__req-well">
+                <div className="rf2-ms__req-pills">
+                  {activeRequiredSkills.map((skill) => (
+                    <span key={skill} className="rf2-ms__req-pill">{formatSkillLabel(skill)}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {unmappedRequiredSkills.length > 0 ? (
+              <div className="rf2-ms__unmapped-note" role="note">
+                <AlertCircle aria-hidden="true" />
+                <p>
+                  Not in the active skill library: {unmappedRequiredSkills.join(', ')}. These required skills cannot be matched until they are added to the library.
+                </p>
+              </div>
             ) : null}
           </div>
-          {activeRequiredSkills.length === 0 ? (
-            <p>
-              No required skills defined for this job yet. Finish job requirements to calculate skill matches.
-            </p>
-          ) : (
-            <div className="rf2-ms__req-pills">
-              {activeRequiredSkills.map((skill) => (
-                <span key={skill} className="rf2-ms__req-pill">{skill}</span>
-              ))}
+
+          <div className="rf2-ms__desc-panel">
+            <div className="rf2-ms__desc-head">
+              <span className="rf2-ms__desc-heading">
+                <FileText aria-hidden="true" />
+                <span>Job description</span>
+              </span>
+              {selectedVacancy ? (
+                <Link className="rf2-ms__desc-link" to={`/vacancies/${encodeURIComponent(selectedVacancy.id)}`}>
+                  <span>View full description</span>
+                  <ExternalLink className="rf2-ms__desc-icon" aria-hidden="true" />
+                </Link>
+              ) : (
+                <Link className="rf2-ms__desc-link" to="/vacancies">
+                  <span>View full description</span>
+                  <ExternalLink className="rf2-ms__desc-icon" aria-hidden="true" />
+                </Link>
+              )}
             </div>
-          )}
-          {unmappedRequiredSkills.length > 0 ? (
-            <p>
-              Not in the active skill library: {unmappedRequiredSkills.join(', ')}. These required skills cannot be matched until they are added to the library.
+            <p
+              className="rf2-ms__desc-text"
+              data-empty={!selectedVacancy?.jobSummary || jobIsRedacted ? 'true' : undefined}
+            >
+              {jobSummary}
             </p>
-          ) : null}
+          </div>
         </div>
       </section>
 
@@ -878,38 +1126,56 @@ export function TalentPoolPage() {
               className="rf2-ms__search-input"
             />
           </div>
-          <select
-            aria-label="Filter by location"
-            value={locationFilter}
-            onChange={(e) => setLocationFilter(e.target.value)}
-            className="rf2-ms__filter-select"
-          >
-            <option value="">All locations</option>
-            {distinctLocations.map((loc) => (
-              <option key={loc} value={loc}>{loc}</option>
-            ))}
-          </select>
-          <select
-            aria-label="Filter by experience"
-            value={expFilter}
-            onChange={(e) => setExpFilter(e.target.value)}
-            className="rf2-ms__filter-select"
-          >
-            <option value="">All experience</option>
-            <option value="0-3">0–3 years</option>
-            <option value="4-6">4–6 years</option>
-            <option value="7+">7+ years</option>
-          </select>
-          <select
-            aria-label="Filter by availability"
-            value={availFilter}
-            onChange={(e) => setAvailFilter(e.target.value)}
-            className="rf2-ms__filter-select"
-          >
-            <option value="">All availability</option>
-            <option value="available">Available</option>
-            <option value="notice">Notice period</option>
-          </select>
+          <div className="rf2-ms__filter-box" data-active={locationFilter ? 'true' : undefined}>
+            <span className="rf2-ms__filter-label" aria-hidden="true">
+              {locationFilter || 'All locations'}
+            </span>
+            <ChevronDown className="rf2-ms__filter-chevron" aria-hidden="true" />
+            <select
+              aria-label="Filter by location"
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="rf2-ms__native-select"
+            >
+              <option value="">All locations</option>
+              {distinctLocations.map((loc) => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
+          </div>
+          <div className="rf2-ms__filter-box" data-active={expFilter ? 'true' : undefined}>
+            <span className="rf2-ms__filter-label" aria-hidden="true">
+              {expFilter === '0-3' ? '0–3 years' : expFilter === '4-6' ? '4–6 years' : expFilter === '7+' ? '7+ years' : 'All experience'}
+            </span>
+            <ChevronDown className="rf2-ms__filter-chevron" aria-hidden="true" />
+            <select
+              aria-label="Filter by experience"
+              value={expFilter}
+              onChange={(e) => setExpFilter(e.target.value)}
+              className="rf2-ms__native-select"
+            >
+              <option value="">All experience</option>
+              <option value="0-3">0–3 years</option>
+              <option value="4-6">4–6 years</option>
+              <option value="7+">7+ years</option>
+            </select>
+          </div>
+          <div className="rf2-ms__filter-box" data-active={availFilter ? 'true' : undefined}>
+            <span className="rf2-ms__filter-label" aria-hidden="true">
+              {availFilter === 'available' ? 'Available' : availFilter === 'notice' ? 'Notice period' : 'All availability'}
+            </span>
+            <ChevronDown className="rf2-ms__filter-chevron" aria-hidden="true" />
+            <select
+              aria-label="Filter by availability"
+              value={availFilter}
+              onChange={(e) => setAvailFilter(e.target.value)}
+              className="rf2-ms__native-select"
+            >
+              <option value="">All availability</option>
+              <option value="available">Available</option>
+              <option value="notice">Notice period</option>
+            </select>
+          </div>
           <button type="button" className="rf2-ms__reset-btn" onClick={resetFilters}>
             <RotateCcw aria-hidden="true" />
             <span>Reset</span>
@@ -918,21 +1184,27 @@ export function TalentPoolPage() {
 
         <div className="rf2-ms__sort-right">
           <span className="rf2-ms__sort-label">Sort by</span>
-          <select
-            aria-label="Sort candidates"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'best' | 'exp' | 'name')}
-            className="rf2-ms__filter-select"
-          >
-            <option value="best">Best match</option>
-            <option value="exp">Experience: High to low</option>
-            <option value="name">Name: A–Z</option>
-          </select>
+          <div className="rf2-ms__filter-box">
+            <span className="rf2-ms__filter-label" aria-hidden="true">
+              {sortBy === 'exp' ? 'Experience: High to low' : sortBy === 'name' ? 'Name: A–Z' : 'Best match'}
+            </span>
+            <ChevronDown className="rf2-ms__filter-chevron" aria-hidden="true" />
+            <select
+              aria-label="Sort candidates"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'best' | 'exp' | 'name')}
+              className="rf2-ms__native-select"
+            >
+              <option value="best">Best match</option>
+              <option value="exp">Experience: High to low</option>
+              <option value="name">Name: A–Z</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* Match Tier Tabs */}
-      <div className="rf2-ms__tabs" role="tablist" aria-label="Candidate match tiers">
+      <div ref={listTopRef} className="rf2-ms__tabs" role="tablist" aria-label="Candidate match tiers">
         <button
           type="button"
           role="tab"
@@ -1024,17 +1296,18 @@ export function TalentPoolPage() {
           </p>
         </div>
       ) : (
-        <div className="rf2-ms__list">
-          {filteredCandidates.map(({ candidate, fit, matchedSkills, missingSkills, displayScore, availability, evidenceSnippets, alreadyOnJob, applicationId, stage, addable, scoreState }, index) => {
-            const isExpanded = expandedCandidateId === candidate.id;
-            const fullName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Unnamed Candidate';
-            const initials = ((candidate.firstName?.[0] || 'C') + (candidate.lastName?.[0] || 'D')).toUpperCase();
-            const tone = AVATAR_TONES[index % AVATAR_TONES.length];
-            const totalSkillsCount = matchedSkills.length + missingSkills.length;
-            const skillChips = evidenceSnippets.length > 0
-              ? evidenceSnippets
-              : matchedSkills.map((skill) => ({ skill, snippets: [] as string[] }));
-            const addDisabled = pipelineBlocked || addable === false || jobNotAccepting;
+        <>
+          <div className="rf2-ms__list">
+            {paginatedCandidates.map(({ candidate, fit, matchedSkills, missingSkills, displayScore, availability, evidenceSnippets, alreadyOnJob, applicationId, stage, addable, scoreState }, index) => {
+              const isExpanded = expandedCandidateId === candidate.id;
+              const fullName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Unnamed Candidate';
+              const initials = ((candidate.firstName?.[0] || 'C') + (candidate.lastName?.[0] || 'D')).toUpperCase();
+              const tone = AVATAR_TONES[(pageStartIndex + index) % AVATAR_TONES.length];
+              const totalSkillsCount = matchedSkills.length + missingSkills.length;
+              const skillChips = evidenceSnippets.length > 0
+                ? evidenceSnippets
+                : matchedSkills.map((skill) => ({ skill, snippets: [] as string[] }));
+              const addDisabled = pipelineBlocked || addable === false || jobNotAccepting;
 
             return (
               <article key={candidate.id} className="rf2-ms__card">
@@ -1167,7 +1440,64 @@ export function TalentPoolPage() {
               </article>
             );
           })}
-        </div>
+          </div>
+
+          <div className="rf2-ms__pager">
+            <div className="rf2-ms__pager-meta">
+              <span className="rf2-ms__pager-count">
+                Showing <strong>{pageStartIndex + 1}–{Math.min(pageStartIndex + PAGE_SIZE, filteredCandidates.length)}</strong> of <strong>{filteredCandidates.length}</strong> candidates
+              </span>
+              <span className="rf2-ms__pager-pill">{PAGE_SIZE} per page</span>
+              {isPrefetchingMore ? (
+                <span className="rf2-ms__pager-cache">Caching more…</span>
+              ) : safePage < totalPages ? (
+                <span className="rf2-ms__pager-cache">Next page cached</span>
+              ) : null}
+            </div>
+
+            {totalPages > 1 ? (
+              <nav className="rf2-ms__pager-nav" aria-label="Candidate pagination">
+                <button
+                  type="button"
+                  className="rf2-ms__page-btn rf2-ms__page-btn--step"
+                  disabled={safePage <= 1}
+                  onClick={() => goToPage(safePage - 1)}
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft aria-hidden="true" />
+                  <span>Previous</span>
+                </button>
+                {pageWindow.map((item, idx) =>
+                  item === 'ellipsis' ? (
+                    <span key={`e-${idx}`} className="rf2-ms__page-ellipsis" aria-hidden="true">…</span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      className="rf2-ms__page-btn"
+                      data-active={item === safePage ? 'true' : undefined}
+                      aria-current={item === safePage ? 'page' : undefined}
+                      aria-label={`Page ${item}`}
+                      onClick={() => goToPage(item)}
+                    >
+                      {item}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  className="rf2-ms__page-btn rf2-ms__page-btn--step"
+                  disabled={safePage >= totalPages}
+                  onClick={() => goToPage(safePage + 1)}
+                  aria-label="Next page"
+                >
+                  <span>Next</span>
+                  <ChevronRight aria-hidden="true" />
+                </button>
+              </nav>
+            ) : null}
+          </div>
+        </>
       )}
 
       {/* Add to Pipeline Modal */}

@@ -1243,21 +1243,22 @@ html[data-ui='v2'][data-team-work-surface] .rf2-team .rf2-jtable td {
 }
 
 html[data-ui='v2'][data-team-work-surface] :is(.rf2-team, .rf2-drawer) .rf2-field__box {
-  min-height: 44px;
-  border: 0;
+  min-height: 40px;
+  border: 1px solid var(--rf2-border);
   outline: none;
   background: var(--rf2-card);
   box-shadow: var(--rf2-btn-shadow);
 }
 
 html[data-ui='v2'][data-team-work-surface] :is(.rf2-team, .rf2-drawer) .rf2-field__box:hover:not([data-disabled]) {
-  border-color: transparent;
+  border-color: var(--rf2-ink-2);
   box-shadow: var(--rf2-btn-shadow-hover);
 }
 
 html[data-ui='v2'][data-team-work-surface] :is(.rf2-team, .rf2-drawer) .rf2-field__box:focus-within {
-  background: var(--rf2-info-tint);
-  box-shadow: var(--rf2-btn-shadow);
+  border-color: var(--rf2-action);
+  background: var(--rf2-card);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rf2-action) 16%, transparent);
 }
 
 html[data-ui='v2'][data-team-work-surface] :is(.rf2-team, .rf2-drawer) .rf2-field:focus-within>label {
@@ -1271,6 +1272,17 @@ html[data-ui='v2'][data-team-work-surface] :is(.rf2-team, .rf2-drawer) :is(input
   outline: none;
   box-shadow: none;
   background: transparent;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: none;
+}
+
+html[data-ui='v2'][data-team-work-surface] :is(.rf2-team, .rf2-drawer) select.rf2-field__control {
+  padding-right: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 html[data-ui='v2'][data-team-work-surface] :is(.rf2-team, .rf2-drawer) :is(input, select, textarea).rf2-field__control:is(:hover, :focus, :focus-visible) {
@@ -1290,16 +1302,18 @@ html[data-ui='v2'][data-team-work-surface] .rf2-select__menu {
 }
 
 html[data-ui='v2'][data-team-work-surface] :is(.rf2-team, .rf2-drawer) :is(.rf2-btn, .rf2-drawer__close) {
-  min-height: 44px;
-  border: 0;
+  min-height: 40px;
+  border: 1px solid transparent;
   outline: none;
 }
 
 html[data-ui='v2'][data-team-work-surface] :is(.rf2-team, .rf2-drawer) .rf2-btn--secondary {
+  border-color: var(--rf2-border);
   box-shadow: var(--rf2-btn-shadow);
 }
 
 html[data-ui='v2'][data-team-work-surface] :is(.rf2-team, .rf2-drawer) .rf2-btn--secondary:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: var(--rf2-ink-2);
   box-shadow: var(--rf2-btn-shadow-hover);
 }
 
@@ -1362,6 +1376,46 @@ html[data-ui='v2'][data-team-work-surface] .rf2-team__waiting .rf2-chips .rf2-ch
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+[data-ui='v2'] .rf2-team__summary-cards--5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+[data-ui='v2'] .rf2-team__summary-cards--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1120px) {
+  [data-ui='v2'] .rf2-team__summary-cards--5 {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+[data-ui='v2'] .rf2-team__toolbar .rf2-jobs__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='v2'] .rf2-team__toolbar .rf2-jobs__search {
+  flex: 1 1 15rem;
+  min-width: min(100%, 15rem);
+  max-width: 24rem;
+}
+
+[data-ui='v2'] .rf2-team__toolbar .rf2-field:not(.rf2-jobs__search) {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-ui='v2'] .rf2-jscroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 [data-ui='v2'] .rf2-team__summary-cards>li {
@@ -1462,9 +1516,15 @@ html[data-ui='v2'][data-team-work-surface] .rf2-team__waiting .rf2-chips .rf2-ch
 }
 
 [data-ui='v2'] .rf2-team__toolbar .rf2-field {
-  flex: 1 1 9rem;
-  min-width: min(100%, 9rem);
-  max-width: 14rem;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-ui='v2'] .rf2-team__toolbar .rf2-jobs__search {
+  flex: 1 1 19rem;
+  min-width: min(100%, 19rem);
+  max-width: 26rem;
 }
 
 [data-ui='v2'] .rf2-team__member {
@@ -1774,8 +1834,285 @@ html[data-ui='v2'][data-team-work-surface] .rf2-team__waiting .rf2-chips .rf2-ch
   background: var(--rf2-action);
 }
 
+/* Enhanced Activity Feed */
+[data-ui='v2'] .rf2-team__activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+[data-ui='v2'] .rf2-team__act-header-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-team__act-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink-2);
+  font-size: 11px;
+  font-weight: 700;
+  margin-inline-start: 4px;
+}
+
+[data-ui='v2'] .rf2-segmented__btn[aria-checked='true'] .rf2-team__act-count-badge {
+  background: color-mix(in srgb, var(--rf2-action) 18%, var(--rf2-card));
+  color: var(--rf2-action);
+}
+
+[data-ui='v2'] .rf2-team__act-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  max-width: 360px;
+}
+
+[data-ui='v2'] .rf2-team__act-search {
+  width: 100%;
+}
+
+[data-ui='v2'] .rf2-team__act-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-team__act-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-card);
+  box-shadow: var(--rf2-btn-shadow);
+}
+
+[data-ui='v2'] .rf2-team__act-stat-num {
+  font-size: var(--rf2-text-card, 18px);
+  font-weight: 700;
+  color: var(--rf2-ink);
+  line-height: 1.2;
+}
+
+[data-ui='v2'] .rf2-team__act-stat-num[data-tone='info'] { color: var(--rf2-action); }
+[data-ui='v2'] .rf2-team__act-stat-num[data-tone='success'] { color: var(--rf2-success); }
+[data-ui='v2'] .rf2-team__act-stat-num[data-tone='warning'] { color: var(--rf2-warning-ink, var(--rf2-warning)); }
+
+[data-ui='v2'] .rf2-team__act-stat-label {
+  font-size: var(--rf2-text-caption, 12px);
+  color: var(--rf2-ink-2);
+}
+
+[data-ui='v2'] .rf2-team__timeline-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+[data-ui='v2'] .rf2-team__timeline-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-team__timeline-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rf2-divider);
+}
+
+[data-ui='v2'] .rf2-team__timeline-group-title {
+  margin: 0;
+  font-size: var(--rf2-text-label, 12px);
+  font-weight: 700;
+  color: var(--rf2-ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+[data-ui='v2'] .rf2-team__timeline-group-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink-2);
+}
+
+[data-ui='v2'] .rf2-team__timeline-list > li.rf2-team__timeline-item {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 12px;
+  align-items: start;
+  position: relative;
+  padding: 0 0 14px 0;
+  border-inline-start: 0;
+}
+
+[data-ui='v2'] .rf2-team__timeline-list > li.rf2-team__timeline-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 30px;
+  bottom: 0;
+  inset-inline-start: 13px;
+  width: 2px;
+  background: var(--rf2-divider);
+}
+
+[data-ui='v2'] .rf2-team__timeline-icon-node {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--rf2-radius-pill);
+  display: grid;
+  place-items: center;
+  background: var(--rf2-card);
+  border: 1px solid var(--rf2-divider);
+  color: var(--rf2-ink-2);
+  z-index: 1;
+}
+
+[data-ui='v2'] .rf2-team__timeline-icon-node[data-tone='info'] {
+  background: var(--rf2-info-tint);
+  border-color: color-mix(in srgb, var(--rf2-action) 35%, transparent);
+  color: var(--rf2-action);
+}
+
+[data-ui='v2'] .rf2-team__timeline-icon-node[data-tone='success'] {
+  background: var(--rf2-success-tint);
+  border-color: color-mix(in srgb, var(--rf2-success) 35%, transparent);
+  color: var(--rf2-success);
+}
+
+[data-ui='v2'] .rf2-team__timeline-icon-node[data-tone='warning'] {
+  background: var(--rf2-warning-tint);
+  border-color: color-mix(in srgb, var(--rf2-warning) 45%, transparent);
+  color: var(--rf2-warning-ink, var(--rf2-warning));
+}
+
+[data-ui='v2'] .rf2-team__timeline-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-card);
+  box-shadow: var(--rf2-card-shadow);
+  transition: border-color var(--rf2-motion-fast) var(--rf2-ease), box-shadow var(--rf2-motion-fast) var(--rf2-ease);
+}
+
+[data-ui='v2'] .rf2-team__timeline-card:hover {
+  border-color: var(--rf2-action);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+[data-ui='v2'] .rf2-team__timeline-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
+[data-ui='v2'] .rf2-team__timeline-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-team__timeline-candidate {
+  font-size: var(--rf2-text-card, 15px);
+  color: var(--rf2-ink);
+  text-decoration: none;
+}
+
+[data-ui='v2'] .rf2-team__timeline-candidate:hover {
+  color: var(--rf2-action);
+  text-decoration: underline;
+}
+
+[data-ui='v2'] .rf2-team__timeline-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-ui='v2'] .rf2-team__timeline-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--rf2-text-caption, 12px);
+  color: var(--rf2-ink-2);
+}
+
+[data-ui='v2'] .rf2-team__timeline-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink);
+  font-weight: 500;
+}
+
+[data-ui='v2'] .rf2-team__timeline-owner .rf2-team__avatar {
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+}
+
+[data-ui='v2'] .rf2-team__timeline-time-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex: none;
+}
+
+[data-ui='v2'] .rf2-team__timeline-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--rf2-ink-2);
+}
+
+[data-ui='v2'] .rf2-team__timeline-open-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rf2-action);
+  text-decoration: none;
+}
+
+[data-ui='v2'] .rf2-team__timeline-open-link:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 767px) {
-  [data-ui='v2'] .rf2-team__summary-cards {
+  [data-ui='v2'] .rf2-team__summary-cards,
+  [data-ui='v2'] .rf2-team__summary-cards--5,
+  [data-ui='v2'] .rf2-team__summary-cards--3 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1788,7 +2125,10 @@ html[data-ui='v2'][data-team-work-surface] .rf2-team__waiting .rf2-chips .rf2-ch
     width: 100%;
   }
 
-  [data-ui='v2'] .rf2-team__toolbar .rf2-field {
+  [data-ui='v2'] .rf2-team__toolbar .rf2-field,
+  [data-ui='v2'] .rf2-team__toolbar .rf2-jobs__search,
+  [data-ui='v2'] .rf2-team__toolbar .rf2-field:not(.rf2-jobs__search) {
+    flex: 1 1 100%;
     max-width: none;
   }
 
@@ -1798,18 +2138,16 @@ html[data-ui='v2'][data-team-work-surface] .rf2-team__waiting .rf2-chips .rf2-ch
 
   [data-ui='v2'] .rf2-team .rf2-tabs {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: stretch;
+    gap: 4px;
     width: 100%;
     max-width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-snap-type: x mandatory;
+    overflow: visible;
   }
 
   [data-ui='v2'] .rf2-team .rf2-tab {
-    flex: 0 0 auto;
-    scroll-snap-align: start;
+    flex: 0 1 auto;
     min-height: 44px;
   }
 }
@@ -2100,5 +2438,604 @@ html[data-ui='v2'][data-team-work-surface] .rf2-team__waiting .rf2-chips .rf2-ch
 
   [data-ui='v2'] .rf2-intv-mgr__panel .rf2-jtable {
     min-width: 720px;
+  }
+}
+
+/* Microsoft Outlook-Style Calendar for TeamInterviewsV2 */
+[data-ui='v2'] .rf2-cal-ms {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rf2-space-2);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+[data-ui='v2'] .rf2-cal-ms__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rf2-space-1-5) var(--rf2-space-2);
+  padding: var(--rf2-space-2);
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-card);
+  border: 1px solid var(--rf2-border);
+}
+
+[data-ui='v2'] .rf2-cal-ms__nav-group {
+  display: flex;
+  align-items: center;
+  gap: var(--rf2-space-1);
+}
+
+[data-ui='v2'] .rf2-cal-ms__btn-today {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 var(--rf2-space-1-5);
+  border: 1px solid var(--rf2-border);
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-card);
+  color: var(--rf2-ink);
+  font-size: var(--rf2-text-label);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--motion-fast, 0.15s ease);
+}
+
+[data-ui='v2'] .rf2-cal-ms__btn-today:hover {
+  background: var(--rf2-neutral-tint);
+}
+
+[data-ui='v2'] .rf2-cal-ms__btn-today:focus-visible {
+  outline: 2px solid var(--rf2-action);
+  outline-offset: 2px;
+}
+
+[data-ui='v2'] .rf2-cal-ms__nav-arrows {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+[data-ui='v2'] .rf2-cal-ms__btn-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--rf2-border);
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-card);
+  color: var(--rf2-ink-2);
+  cursor: pointer;
+  transition: all var(--motion-fast, 0.15s ease);
+}
+
+[data-ui='v2'] .rf2-cal-ms__btn-nav svg {
+  width: 16px;
+  height: 16px;
+}
+
+[data-ui='v2'] .rf2-cal-ms__btn-nav:hover {
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cal-ms__btn-nav:focus-visible {
+  outline: 2px solid var(--rf2-action);
+  outline-offset: 2px;
+}
+
+[data-ui='v2'] .rf2-cal-ms__title {
+  margin: 0;
+  margin-inline-start: var(--rf2-space-1);
+  font-size: var(--rf2-text-card);
+  font-weight: 700;
+  color: var(--rf2-ink);
+  white-space: nowrap;
+}
+
+[data-ui='v2'] .rf2-cal-ms__filters {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rf2-space-0-5);
+  background: var(--rf2-neutral-tint);
+  padding: 3px;
+  border-radius: var(--rf2-radius-control);
+}
+
+[data-ui='v2'] .rf2-cal-ms__filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--rf2-space-1);
+  border: 0;
+  border-radius: var(--rf2-radius-control);
+  background: transparent;
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--motion-fast, 0.15s ease);
+}
+
+[data-ui='v2'] .rf2-cal-ms__filter-pill:hover {
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cal-ms__filter-pill.is-active {
+  background: var(--rf2-card);
+  color: var(--rf2-action);
+  box-shadow: var(--rf2-btn-shadow);
+}
+
+[data-ui='v2'] .rf2-cal-ms__filter-pill:focus-visible {
+  outline: 2px solid var(--rf2-action);
+  outline-offset: 1px;
+}
+
+[data-ui='v2'] .rf2-cal-ms__filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-neutral-tint);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='v2'] .rf2-cal-ms__filter-pill.is-active .rf2-cal-ms__filter-count {
+  background: var(--rf2-info-tint);
+  color: var(--rf2-action);
+}
+
+[data-ui='v2'] .rf2-cal-ms__view-toggles {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rf2-space-0-5);
+  background: var(--rf2-neutral-tint);
+  padding: 3px;
+  border-radius: var(--rf2-radius-control);
+}
+
+[data-ui='v2'] .rf2-cal-ms__view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 var(--rf2-space-1-5);
+  border: 0;
+  border-radius: var(--rf2-radius-control);
+  background: transparent;
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--motion-fast, 0.15s ease);
+}
+
+[data-ui='v2'] .rf2-cal-ms__view-btn:hover {
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cal-ms__view-btn.is-active {
+  background: var(--rf2-card);
+  color: var(--rf2-action);
+  box-shadow: var(--rf2-btn-shadow);
+}
+
+[data-ui='v2'] .rf2-cal-ms__view-btn:focus-visible {
+  outline: 2px solid var(--rf2-action);
+  outline-offset: 1px;
+}
+
+/* Two-column layout: Calendar on left, Agenda Inspector on right */
+[data-ui='v2'] .rf2-cal-ms__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: var(--rf2-space-2);
+  align-items: start;
+}
+
+[data-ui='v2'] .rf2-cal-ms__main {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rf2-border);
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-card);
+  overflow: hidden;
+}
+
+/* Month Grid */
+[data-ui='v2'] .rf2-cal-ms__month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
+}
+
+[data-ui='v2'] .rf2-cal-ms__day-header {
+  padding: var(--rf2-space-1) var(--rf2-space-1);
+  border-bottom: 1px solid var(--rf2-border);
+  border-inline-end: 1px solid var(--rf2-border);
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[data-ui='v2'] .rf2-cal-ms__day-header:nth-child(7n) {
+  border-inline-end: none;
+}
+
+[data-ui='v2'] .rf2-cal-ms__day-cell {
+  position: relative;
+  min-height: 96px;
+  padding: 6px;
+  border-bottom: 1px solid var(--rf2-border);
+  border-inline-end: 1px solid var(--rf2-border);
+  background: var(--rf2-card);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: background var(--motion-fast, 0.15s ease);
+}
+
+[data-ui='v2'] .rf2-cal-ms__day-cell:nth-child(7n) {
+  border-inline-end: none;
+}
+
+[data-ui='v2'] .rf2-cal-ms__day-cell:hover {
+  background: var(--rf2-neutral-tint);
+}
+
+[data-ui='v2'] .rf2-cal-ms__day-cell.is-other-month {
+  background: var(--rf2-neutral-tint);
+  opacity: 0.55;
+}
+
+[data-ui='v2'] .rf2-cal-ms__day-cell.is-selected {
+  outline: 2px solid var(--rf2-action);
+  outline-offset: -2px;
+  background: var(--rf2-info-tint);
+}
+
+[data-ui='v2'] .rf2-cal-ms__cell-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+[data-ui='v2'] .rf2-cal-ms__day-num {
+  font-size: var(--rf2-text-caption);
+  font-weight: 600;
+  color: var(--rf2-ink);
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--rf2-radius-pill);
+}
+
+/* Outlook signature Today blue circle */
+[data-ui='v2'] .rf2-cal-ms__day-num.is-today-badge {
+  background: var(--rf2-action);
+  color: var(--rf2-on-action);
+  font-weight: 700;
+}
+
+[data-ui='v2'] .rf2-cal-ms__day-count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='v2'] .rf2-cal-ms__day-events {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Outlook Event Chip */
+[data-ui='v2'] .rf2-cal-ms__chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--rf2-card);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+[data-ui='v2'] .rf2-cal-ms__chip--blue {
+  border-inline-start: 3px solid var(--rf2-action);
+  background: var(--rf2-info-tint);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cal-ms__chip--green {
+  border-inline-start: 3px solid var(--rf2-success);
+  background: var(--rf2-success-tint);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cal-ms__chip--amber {
+  border-inline-start: 3px solid var(--rf2-warning);
+  background: var(--rf2-warning-tint);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cal-ms__chip--red {
+  border-inline-start: 3px solid var(--rf2-danger);
+  background: var(--rf2-danger-tint);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cal-ms__chip-time {
+  font-size: 10px;
+  color: var(--rf2-ink-2);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+[data-ui='v2'] .rf2-cal-ms__chip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui='v2'] .rf2-cal-ms__more {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--rf2-action);
+  padding: 1px 4px;
+}
+
+/* Week View */
+[data-ui='v2'] .rf2-cal-ms__week-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow-x: auto;
+}
+
+[data-ui='v2'] .rf2-cal-ms__week-grid {
+  display: grid;
+  grid-template-columns: 60px repeat(7, minmax(110px, 1fr));
+  width: 100%;
+}
+
+[data-ui='v2'] .rf2-cal-ms__week-header-cell {
+  padding: var(--rf2-space-1);
+  text-align: center;
+  border-bottom: 1px solid var(--rf2-border);
+  border-inline-end: 1px solid var(--rf2-border);
+  background: var(--rf2-neutral-tint);
+}
+
+[data-ui='v2'] .rf2-cal-ms__week-header-day {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--rf2-ink-2);
+}
+
+[data-ui='v2'] .rf2-cal-ms__week-header-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--rf2-radius-pill);
+  font-size: var(--rf2-text-caption);
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+[data-ui='v2'] .rf2-cal-ms__week-header-num.is-today-badge {
+  background: var(--rf2-action);
+  color: var(--rf2-on-action);
+}
+
+[data-ui='v2'] .rf2-cal-ms__week-time-label {
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rf2-ink-2);
+  text-align: right;
+  border-bottom: 1px solid var(--rf2-border);
+  border-inline-end: 1px solid var(--rf2-border);
+  background: var(--rf2-neutral-tint);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+[data-ui='v2'] .rf2-cal-ms__week-slot {
+  min-height: 48px;
+  padding: 3px;
+  border-bottom: 1px solid var(--rf2-border);
+  border-inline-end: 1px solid var(--rf2-border);
+  background: var(--rf2-card);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Agenda / Day Inspector Panel */
+[data-ui='v2'] .rf2-cal-ms__agenda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rf2-space-1-5);
+  padding: var(--rf2-space-2);
+  border: 1px solid var(--rf2-border);
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-card);
+}
+
+[data-ui='v2'] .rf2-cal-ms__agenda-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rf2-space-1);
+  padding-bottom: var(--rf2-space-1);
+  border-bottom: 1px solid var(--rf2-border);
+}
+
+[data-ui='v2'] .rf2-cal-ms__agenda-title {
+  margin: 0;
+  font-size: var(--rf2-text-label);
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cal-ms__agenda-subtitle {
+  font-size: var(--rf2-text-caption);
+  color: var(--rf2-ink-2);
+}
+
+[data-ui='v2'] .rf2-cal-ms__btn-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--rf2-border);
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-action);
+  font-size: var(--rf2-text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-cal-ms__btn-jump:hover {
+  background: var(--rf2-info-tint);
+}
+
+[data-ui='v2'] .rf2-cal-ms__agenda-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--rf2-space-3) var(--rf2-space-2);
+  text-align: center;
+  gap: var(--rf2-space-1);
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-label);
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-neutral-tint);
+}
+
+[data-ui='v2'] .rf2-cal-ms__agenda-hint {
+  font-size: var(--rf2-text-caption);
+  color: var(--rf2-muted);
+  margin: 0;
+}
+
+[data-ui='v2'] .rf2-cal-ms__agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rf2-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-ui='v2'] .rf2-cal-ms__agenda-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--rf2-border);
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-card);
+  box-shadow: var(--rf2-btn-shadow);
+}
+
+[data-ui='v2'] .rf2-cal-ms__card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-cal-ms__card-candidate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='v2'] .rf2-cal-ms__candidate-name {
+  margin: 0;
+  font-size: var(--rf2-text-label);
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cal-ms__candidate-job {
+  margin: 0;
+  font-size: var(--rf2-text-caption);
+  color: var(--rf2-ink-2);
+}
+
+[data-ui='v2'] .rf2-cal-ms__card-tz {
+  font-size: var(--rf2-text-caption);
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cal-ms__card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--rf2-border);
+}
+
+@media (max-width: 1023px) {
+  [data-ui='v2'] .rf2-cal-ms__body {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-cal-ms__toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  [data-ui='v2'] .rf2-cal-ms__filters {
+    overflow-x: auto;
+    width: 100%;
+  }
+  
+  [data-ui='v2'] .rf2-cal-ms__month-grid {
+    min-width: 480px;
+  }
+  
+  [data-ui='v2'] .rf2-cal-ms__main {
+    overflow-x: auto;
   }
 }

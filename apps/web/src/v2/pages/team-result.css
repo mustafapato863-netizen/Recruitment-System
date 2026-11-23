@@ -266,7 +266,29 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+}
+
+[data-ui='v2'] .rf2-tres__card-head .rf2-field {
+  flex: 0 1 auto;
+  min-width: max-content;
+  max-width: 100%;
+  margin-inline-start: auto;
+}
+
+[data-ui='v2'] .rf2-tres__card-head .rf2-field__control {
+  min-width: max-content;
+  white-space: nowrap;
+}
+
+[data-ui='v2'] .rf2-tres__empty {
+  margin: 0;
+  padding: 16px;
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-label);
 }
 
 [data-ui='v2'] .rf2-tres__targets-head {

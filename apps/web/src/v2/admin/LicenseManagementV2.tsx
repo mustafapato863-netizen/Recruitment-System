@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, UserCheck, Users } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { InputV2 } from '../../components/v2/Field';
 import { getApi } from '../../api/client';
 import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
-import { type Seat } from '../seat';
+import { PROVISIONAL_ROLE_SEATS, isSeat, type Seat } from '../seat';
+import '../pages/jobs.css';
+import '../pages/team.css';
 import './admin.css';
 
 interface UserSeatRow {
@@ -24,6 +26,7 @@ interface UserSeatWire {
   name?: string | null;
   email?: string | null;
   roles?: Array<string | { code?: string; name?: string }>;
+  seat?: string | null;
   directReportCount?: number;
   hasDirectReports?: boolean;
   status?: string;
@@ -53,18 +56,28 @@ export function LicenseManagementV2() {
     setLoading(true);
     setError(null);
 
-    getApi<UserSeatWire[]>('/users')
+    getApi<UserSeatWire[] | { data?: UserSeatWire[] }>('/users')
       .then((rawUsers) => {
         if (!alive) return;
-        if (!Array.isArray(rawUsers)) throw new Error('The user directory returned an invalid list.');
-        const mappedUsers: UserSeatRow[] = rawUsers.map((u: UserSeatWire) => {
+        const list = Array.isArray(rawUsers) ? rawUsers : Array.isArray(rawUsers?.data) ? rawUsers.data : null;
+        if (!list) throw new Error('The user directory returned an invalid list.');
+        const mappedUsers: UserSeatRow[] = list.map((u: UserSeatWire) => {
           const roles = Array.isArray(u.roles)
             ? u.roles.map((role) => typeof role === 'string' ? role : role.code ?? role.name ?? '').filter(Boolean)
             : [];
           const hasReports = Boolean(u.directReportCount || u.hasDirectReports);
-          let seat: Seat = 'employee';
-          if (roles.includes('ADMINISTRATOR') || roles.includes('ADMIN')) seat = 'admin';
-          else if (roles.includes('HIRING_MANAGER') || hasReports) seat = 'manager';
+          const rank: Record<Seat, number> = { employee: 0, manager: 1, admin: 2 };
+          const fromRoles = roles.reduce<Seat>((acc, code) => {
+            const mapped = PROVISIONAL_ROLE_SEATS[code.toUpperCase()];
+            return mapped && rank[mapped] > rank[acc] ? mapped : acc;
+          }, 'employee');
+          let seat: Seat = fromRoles;
+          if (isSeat(u.seat)) {
+            const explicit = String(u.seat).toLowerCase() as Seat;
+            if (rank[explicit] > rank[seat]) seat = explicit;
+          }
+          if (roles.some((r) => r.toUpperCase() === 'ADMIN')) seat = 'admin';
+          else if (seat === 'employee' && hasReports) seat = 'manager';
 
           return {
             id: u.id,
@@ -108,7 +121,7 @@ export function LicenseManagementV2() {
   };
 
   return (
-    <div className="rf2-admin-workspace">
+    <div className="rf2-jobs rf2-admin">
       <AdminWorkspaceHeader
         group="Users & Access"
         title="User seats & access"
@@ -123,29 +136,36 @@ export function LicenseManagementV2() {
         </div>
       ) : null}
 
-      <p className="rf2-jtable__sub" role="note">
+      <p className="rf2-inline-note" role="note">
         V2 is the signed-in interface. This page does not turn V1 back on.
         Counts reflect active user records, not purchased seats or a verified licensing limit.
       </p>
       <div className="rf2-admin-seat-grid" aria-label="Active users by workspace">
-        {(['employee', 'manager', 'admin'] as const).map((seat) => (
-          <div key={seat} className="rf2-admin-card rf2-admin-seat-card">
-            <div className="rf2-row-between">
-              <div>
-                <h3 className="rf2-admin-seat-card__title">
-                  {seat.charAt(0).toUpperCase() + seat.slice(1)} workspace
-                </h3>
-                <span className="rf2-admin-seat-card__quota">
-                  {loading ? 'Loading users…' : error ? 'Unavailable' : `${activeCounts[seat]} active user${activeCounts[seat] === 1 ? '' : 's'}`}
-                </span>
+        {(['employee', 'manager', 'admin'] as const).map((seat) => {
+          const Icon = seat === 'admin' ? ShieldCheck : seat === 'manager' ? UserCheck : Users;
+          const tone = seat === 'admin' ? 'warning' : seat === 'manager' ? 'success' : 'info';
+          return (
+            <div key={seat} className="rf2-admin-seat-card">
+              <div className="rf2-row-between">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span className="rf2-admin-kpi__icon" data-tone={tone} aria-hidden="true"><Icon /></span>
+                  <div>
+                    <h3 className="rf2-admin-seat-card__title">
+                      {seat.charAt(0).toUpperCase() + seat.slice(1)} workspace
+                    </h3>
+                    <span className="rf2-admin-seat-card__quota">
+                      {loading ? 'Loading users…' : error ? 'Unavailable' : `${activeCounts[seat]} active user${activeCounts[seat] === 1 ? '' : 's'}`}
+                    </span>
+                  </div>
+                </div>
+                <StatusChip tone="neutral" label="V2 interface" />
               </div>
-              <StatusChip tone="neutral" label="V2 interface" />
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div className="rf2-team__toolbar" style={{ marginTop: 24 }}>
+      <div className="rf2-admin-filterbar rf2-team__toolbar">
         <div className="rf2-row-between" style={{ width: '100%', gap: '1rem', flexWrap: 'wrap' }}>
           <div className="rf2-tabs" role="tablist" aria-label="Seat filters">
             <button
@@ -190,7 +210,7 @@ export function LicenseManagementV2() {
             </button>
           </div>
 
-          <div style={{ maxWidth: 280, flex: 1 }}>
+          <div style={{ flex: '1 1 260px', minWidth: 'min(100%, 260px)', maxWidth: 360 }}>
             <InputV2
               label="Search users"
               fieldClassName="rf2-jobs__search rf2-sr-label"
@@ -202,7 +222,7 @@ export function LicenseManagementV2() {
         </div>
       </div>
 
-      <section className="rf2-panel" style={{ marginTop: 16 }}>
+      <section className="rf2-panel rf2-admin__card">
         {loading ? <SkeletonV2 lines={6} label="Loading users and seat assignments…" /> : null}
 
         {!loading && !error && filteredUsers.length === 0 ? (

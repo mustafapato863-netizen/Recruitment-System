@@ -468,4 +468,35 @@ describe('Ticket 10 intake', () => {
     expect(screen.queryByRole('button', { name: 'Add to the bank' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add the chosen person to this job' })).not.toBeInTheDocument();
   });
+
+  it('paginates at 15 rows per page with Next page cached and supports interactive Cards and List views', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (path: string) => {
+      const [p] = String(path).split('?');
+      if (p === '/applications') {
+        return { data: Array.from({ length: 22 }, (_, i) => rawApp(i + 1)), total: 22 };
+      }
+      return defaultGet(path);
+    });
+
+    renderAt('/candidates');
+    const table = await screen.findByRole('table');
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(15);
+    expect(screen.getByText('15 per page')).toBeInTheDocument();
+    expect(screen.getByText('Next page cached')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'P 16' })).not.toBeInTheDocument();
+
+    await u.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(await screen.findByRole('link', { name: 'P 16' })).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getAllByRole('row').slice(1)).toHaveLength(7);
+
+    // Switch to Cards layout view and return to Page 1
+    await u.click(screen.getByRole('button', { name: 'Previous page' }));
+    await u.click(screen.getByRole('button', { name: 'Cards' }));
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(15);
+
+    await u.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.getByRole('table')).toBeInTheDocument();
+  });
 });

@@ -9,10 +9,12 @@ import {
   ShieldCheck,
   Scale,
   AlertTriangle,
+  Edit3,
 } from 'lucide-react';
 import { ButtonV2, DrawerV2, InputV2, SelectV2, StatusChip, SkeletonV2 } from '../../components/v2';
 import type { JdCriteriaDefinition, VacancyDocumentItem } from '@recruitflow/contracts';
-import { fetchVacancyJd, uploadVacancyJd, updateVacancyCriteria } from '../api/ats';
+import { fetchVacancyJd, uploadVacancyJd, updateVacancyCriteria, saveVacancyJdText } from '../api/ats';
+import { parseJobDescriptionText } from '../../utils/jdParser';
 
 export interface JdReviewDrawerProps {
   vacancyId?: string;
@@ -44,6 +46,10 @@ export function JdReviewDrawer({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [analyzingText, setAnalyzingText] = useState(false);
+  const [textFeedback, setTextFeedback] = useState<string | null>(null);
+  const [mode, setMode] = useState<'upload' | 'write'>('upload');
+  const [jdText, setJdText] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const [document, setDocument] = useState<VacancyDocumentItem | null>(null);
@@ -61,6 +67,9 @@ export function JdReviewDrawer({
       .then((data) => {
         if (!active) return;
         setDocument(data.document);
+        if (data.document?.extractionText) {
+          setJdText(data.document.extractionText);
+        }
         setCriteria(
           data.criteria || {
             version: 1,
@@ -101,11 +110,58 @@ export function JdReviewDrawer({
       const res = await uploadVacancyJd(targetId, file);
       setDocument(res.document);
       setCriteria(res.criteria);
+      if (res.document?.extractionText) {
+        setJdText(res.document.extractionText);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to upload and extract JD.');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleExtractFromText = async () => {
+    if (!jdText.trim() || !targetId) return;
+    setAnalyzingText(true);
+    setError(null);
+    setTextFeedback(null);
+    try {
+      // 1. Client-side parse for immediate preview and fallback
+      const parsedLocal = parseJobDescriptionText(jdText);
+      const mustSkills = (parsedLocal.requiredSkills || []).map((name, i) => ({
+        id: `must-${Date.now()}-${i}`,
+        name,
+      }));
+      const niceToHaveRaw = (parsedLocal as { niceToHaveSkills?: string[] }).niceToHaveSkills ?? [];
+      const niceSkills = niceToHaveRaw.map((name: string, i: number) => ({
+        id: `nice-${Date.now()}-${i}`,
+        name,
+      }));
+
+      // 2. Server-side text sync & criteria generation
+      try {
+        const res = await saveVacancyJdText(targetId, jdText.trim());
+        setDocument(res.document);
+        setCriteria(res.criteria);
+        setTextFeedback(`Updated criteria from text (${res.criteria.mustHaveSkills.length} must-have skills, ${res.criteria.niceToHaveSkills.length} nice-to-have skills extracted).`);
+      } catch {
+        // Fallback to local parsed criteria if backend text endpoint is unavailable
+        if (criteria) {
+          const mergedCriteria: JdCriteriaDefinition = {
+            ...criteria,
+            minExperienceYears: parsedLocal.minExperienceYears ?? criteria.minExperienceYears,
+            mustHaveSkills: mustSkills.length > 0 ? mustSkills : criteria.mustHaveSkills,
+            niceToHaveSkills: niceSkills.length > 0 ? niceSkills : criteria.niceToHaveSkills,
+          };
+          setCriteria(mergedCriteria);
+          setTextFeedback(`Analyzed text (${mustSkills.length} must-have skills, ${niceSkills.length} nice-to-have skills extracted).`);
+        }
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to analyze job description text.');
+    } finally {
+      setAnalyzingText(false);
     }
   };
 
@@ -166,6 +222,13 @@ export function JdReviewDrawer({
     setSaving(true);
     setError(null);
     try {
+      if (jdText.trim() && (!document || document.extractionText !== jdText.trim())) {
+        try {
+          await saveVacancyJdText(targetId, jdText.trim());
+        } catch {
+          // non-blocking text sync
+        }
+      }
       const payload: Partial<JdCriteriaDefinition> = {
         ...criteria,
         isLocked: lock || criteria.isLocked,
@@ -236,67 +299,143 @@ export function JdReviewDrawer({
 
           {/* Section 1: Attachment & Extraction */}
           <div className="rounded-2xl border border-[var(--rf2-divider)] bg-[var(--rf2-card)] p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
                 <FileText className="text-[var(--rf2-action)]" size={18} />
-                <h3 className="text-sm font-bold text-[var(--rf2-ink)] m-0">JD Document Attachment</h3>
+                <h3 className="text-sm font-bold text-[var(--rf2-ink)] m-0">JD Document &amp; Requirements</h3>
               </div>
-              {document ? (
-                <StatusChip tone="success" label={`Extracted (${document.parserStatus})`} />
-              ) : (
-                <StatusChip tone="neutral" label="No file uploaded" />
-              )}
+              <div className="flex items-center rounded-lg bg-[var(--rf2-well)] p-0.5 text-xs font-semibold" role="tablist" aria-label="JD input mode">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'upload'}
+                  onClick={() => setMode('upload')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition ${mode === 'upload' ? 'bg-[var(--rf2-card)] text-[var(--rf2-ink)] shadow-sm' : 'text-[var(--rf2-muted)] hover:text-[var(--rf2-ink)]'}`}
+                >
+                  <Upload size={13} />
+                  <span>Upload JD file</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'write'}
+                  onClick={() => setMode('write')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition ${mode === 'write' ? 'bg-[var(--rf2-card)] text-[var(--rf2-ink)] shadow-sm' : 'text-[var(--rf2-muted)] hover:text-[var(--rf2-ink)]'}`}
+                >
+                  <Edit3 size={13} />
+                  <span>Write / Edit JD text</span>
+                </button>
+              </div>
             </div>
 
-            {document ? (
-              <div className="flex items-center justify-between rounded-xl bg-[var(--rf2-well)] p-3 text-xs mb-3">
-                <div className="min-w-0">
-                  <span className="block font-semibold truncate text-[var(--rf2-ink)]">{document.fileName}</span>
-                  <span className="block text-[11px] text-[var(--rf2-muted)]">
-                    {(document.fileSize / 1024).toFixed(1)} KB · Uploaded {new Date(document.createdAt).toLocaleDateString()}
-                  </span>
+            {mode === 'upload' ? (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-[var(--rf2-muted)]">Upload a PDF, DOCX, or text file to extract qualifications and competencies.</span>
+                  {document ? (
+                    <StatusChip tone="success" label={`Extracted (${document.parserStatus})`} />
+                  ) : (
+                    <StatusChip tone="neutral" label="No file uploaded" />
+                  )}
                 </div>
-                <ButtonV2
-                  kind="secondary"
-                  size="sm"
-                  icon={<Upload size={13} />}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                >
-                  Replace File
-                </ButtonV2>
-              </div>
-            ) : null}
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.docx,.txt"
-              className="hidden"
-              onChange={handleFileUpload}
-              aria-label="Upload Job Description document"
-            />
+                {document ? (
+                  <div className="flex items-center justify-between rounded-xl bg-[var(--rf2-well)] p-3 text-xs mb-3">
+                    <div className="min-w-0">
+                      <span className="block font-semibold truncate text-[var(--rf2-ink)]">{document.fileName}</span>
+                      <span className="block text-[11px] text-[var(--rf2-muted)]">
+                        {(document.fileSize / 1024).toFixed(1)} KB · Uploaded {new Date(document.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <ButtonV2
+                      kind="secondary"
+                      size="sm"
+                      icon={<Upload size={13} />}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      Replace File
+                    </ButtonV2>
+                  </div>
+                ) : null}
 
-            {!document ? (
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    fileInputRef.current?.click();
-                  }
-                }}
-                aria-label="Upload Job Description (PDF, DOCX, TXT)"
-                className="grid place-items-center rounded-xl border border-dashed border-[var(--rf2-divider)] p-6 text-center cursor-pointer hover:bg-[var(--rf2-well)] transition"
-              >
-                <Upload className="mx-auto text-[var(--rf2-muted)] mb-2" size={24} />
-                <p className="text-xs font-bold text-[var(--rf2-ink)] m-0">Upload Job Description (PDF, DOCX, TXT)</p>
-                <p className="text-[11px] text-[var(--rf2-muted)] mt-1 mb-0">Automatic parsing extracts skills, experience, and knockout rules</p>
-                {uploading ? <p className="text-xs text-[var(--rf2-action)] font-semibold mt-2">Extracting requirements...</p> : null}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.txt"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  aria-label="Upload Job Description document"
+                />
+
+                {!document ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    aria-label="Upload Job Description (PDF, DOCX, TXT)"
+                    className="grid place-items-center rounded-xl border border-dashed border-[var(--rf2-divider)] p-6 text-center cursor-pointer hover:bg-[var(--rf2-well)] transition"
+                  >
+                    <Upload className="mx-auto text-[var(--rf2-muted)] mb-2" size={24} />
+                    <p className="text-xs font-bold text-[var(--rf2-ink)] m-0">Upload Job Description (PDF, DOCX, TXT)</p>
+                    <p className="text-[11px] text-[var(--rf2-muted)] mt-1 mb-0">Automatic parsing extracts skills, experience, and knockout rules</p>
+                    {uploading ? <p className="text-xs text-[var(--rf2-action)] font-semibold mt-2">Extracting requirements...</p> : null}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="jd-raw-text" className="text-xs font-bold text-[var(--rf2-ink)]">
+                    Job Description Text (Summary, Duties &amp; Requirements)
+                  </label>
+                  {jdText.trim() ? (
+                    <span className="text-[11px] text-[var(--rf2-muted)]">
+                      {jdText.trim().split(/\s+/).length} words
+                    </span>
+                  ) : null}
+                </div>
+                <textarea
+                  id="jd-raw-text"
+                  rows={8}
+                  value={jdText}
+                  onChange={(e) => {
+                    setJdText(e.target.value);
+                    setTextFeedback(null);
+                  }}
+                  placeholder="Type or paste the job description here... (Include overview, clinical/technical duties, must-have skills, required qualifications, and min experience years)"
+                  className="w-full rounded-xl border border-[var(--rf2-divider)] bg-[var(--rf2-card)] p-3 text-xs leading-relaxed text-[var(--rf2-ink)] placeholder-[var(--rf2-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--rf2-action)] font-sans resize-y"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <ButtonV2
+                    type="button"
+                    kind="secondary"
+                    size="sm"
+                    icon={<Sparkles size={14} className="text-[var(--rf2-action)]" />}
+                    loading={analyzingText}
+                    disabled={!jdText.trim()}
+                    onClick={() => void handleExtractFromText()}
+                  >
+                    Extract &amp; Update Requirements
+                  </ButtonV2>
+                  {textFeedback ? (
+                    <span className="text-xs font-semibold text-[var(--rf2-success)] flex items-center gap-1">
+                      <CircleCheck size={13} /> {textFeedback}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-[var(--rf2-muted)]">
+                      Extracts must-have skills, nice-to-have skills, and experience criteria from this text.
+                    </span>
+                  )}
+                </div>
               </div>
-            ) : null}
+            )}
           </div>
 
           {/* Section 2: Must-Have Skills */}

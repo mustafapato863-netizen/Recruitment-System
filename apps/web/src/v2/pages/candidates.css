@@ -61,20 +61,20 @@
 [data-ui='v2'] .rf2-cand__intake-banner {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.25fr);
-  gap: 18px;
-  padding: 18px 20px;
+  gap: 14px;
+  padding: 14px 16px;
   border: 1px solid var(--rf2-divider);
-  border-radius: 14px;
+  border-radius: var(--rf2-radius-card);
   background: var(--rf2-card);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  box-shadow: var(--rf2-card-shadow);
 }
 
 [data-ui='v2'] .rf2-cand__intake-left {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 12px;
-  padding-right: 18px;
+  gap: 8px;
+  padding-right: 14px;
   border-right: 1px solid var(--rf2-divider);
 }
 
@@ -274,11 +274,26 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-height: 30px;
   padding: 5px 10px;
+  border: 0;
   border-radius: 6px;
+  background: transparent;
+  font: inherit;
   font-size: 12px;
   font-weight: 600;
   color: var(--rf2-muted);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+[data-ui='v2'] .rf2-cand__view-opt:hover {
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cand__view-opt:focus-visible {
+  outline: 2px solid var(--rf2-focus);
+  outline-offset: 2px;
 }
 
 [data-ui='v2'] .rf2-cand__view-opt svg {
@@ -289,6 +304,179 @@
 [data-ui='v2'] .rf2-cand__view-opt--active {
   background: var(--rf2-info-tint);
   color: var(--rf2-action);
+}
+
+/* Interactive Cards Grid View */
+[data-ui='v2'] .rf2-cand__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+[data-ui='v2'] .rf2-cand__card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-card);
+  box-shadow: var(--rf2-card-shadow);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+[data-ui='v2'] .rf2-cand__card:hover {
+  border-color: color-mix(in srgb, var(--rf2-action) 36%, var(--rf2-divider));
+  box-shadow: var(--rf2-card-shadow-hover);
+}
+
+[data-ui='v2'] .rf2-cand__card[data-selected='true'] {
+  border-color: var(--rf2-action);
+  background: var(--rf2-info-tint);
+}
+
+[data-ui='v2'] .rf2-cand__card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+[data-ui='v2'] .rf2-cand__card-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-cand__card-who {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-cand__card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: var(--rf2-text-caption);
+  color: var(--rf2-ink-2);
+}
+
+[data-ui='v2'] .rf2-cand__card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rf2-divider);
+}
+
+/* 15-Row Pagination Bar */
+[data-ui='v2'] .rf2-cand__pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--rf2-divider);
+  background: var(--rf2-neutral-tint);
+}
+
+[data-ui='v2'] .rf2-cand__pager-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--rf2-text-caption);
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cand__pager-meta strong {
+  color: var(--rf2-ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='v2'] .rf2-cand__pager-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--rf2-radius-pill);
+  border: 1px solid var(--rf2-divider);
+  background: var(--rf2-card);
+  color: var(--rf2-ink-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+[data-ui='v2'] .rf2-cand__pager-cache {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-success-tint);
+  color: var(--rf2-success);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+[data-ui='v2'] .rf2-cand__pager-nav {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-ui='v2'] .rf2-cand__page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--rf2-border);
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-card);
+  color: var(--rf2-ink);
+  font: inherit;
+  font-size: var(--rf2-text-caption);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+[data-ui='v2'] .rf2-cand__page-btn:hover:not(:disabled) {
+  border-color: var(--rf2-action);
+  background: var(--rf2-info-tint);
+  color: var(--rf2-action);
+}
+
+[data-ui='v2'] .rf2-cand__page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+[data-ui='v2'] .rf2-cand__page-btn[data-active='true'] {
+  border-color: var(--rf2-action);
+  background: var(--rf2-action);
+  color: var(--rf2-on-action);
+}
+
+[data-ui='v2'] .rf2-cand__page-btn svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+[data-ui='v2'] .rf2-cand__page-ellipsis {
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--rf2-muted);
 }
 
 /* Table Styling */
@@ -463,6 +651,9 @@
   [data-ui='v2'] .rf2-cand .rf2-jtable__sub {
     white-space: normal; overflow-wrap: break-word; word-break: normal;
   }
+  [data-ui='v2'] .rf2-cand__grid { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  [data-ui='v2'] .rf2-cand__view-opt,
+  [data-ui='v2'] .rf2-cand__page-btn { min-height: 44px; min-width: 44px; }
   [data-ui='v2'] .rf2-cand .rf2-chip { white-space: normal; max-width: 100%; }
   [data-ui='v2'] .rf2-cand__label {
     display: block; margin: 0; color: var(--rf2-muted);

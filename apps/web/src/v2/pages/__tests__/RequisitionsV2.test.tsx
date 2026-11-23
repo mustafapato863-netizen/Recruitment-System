@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Briefcase, Code2, FlaskConical, HeartPulse, Pill, ScanLine, Users } from 'lucide-react';
 import { ApiError } from '../../../api/client';
 import { axeViolations } from '../../../components/v2/__tests__/axe';
+import * as jdParser from '../../../utils/jdParser';
 import * as fx from '../../api/__fixtures__/requisitions';
 
 const api = vi.hoisted(() => ({ getApi: vi.fn(), postApi: vi.fn(), patchApi: vi.fn() }));
@@ -921,5 +922,86 @@ describe('Jobs and requisitions desk', () => {
     expect(screen.queryByRole('link', { name: 'Ward Nurse' })).toBeNull();
     expect(screen.queryByText('Someone else')).toBeNull();
     expect(screen.queryByText('Staff Nurse NICU')).toBeNull();
+  });
+
+  it('extracts requirements from JD file, auto-matches title/site, allows adding/removing skills, and syncs on save', async () => {
+    const u = userEvent.setup();
+    vi.spyOn(jdParser, 'parseJobDescriptionFile').mockResolvedValueOnce({
+      title: 'HRIS Developer',
+      department: 'Information Technology',
+      location: 'SGH Riyadh',
+      minExperienceYears: 4,
+      requiredSkills: ['SQL Database Development', 'Power Platform', 'Full-Stack Web Development'],
+      qualifications: "Bachelor's degree in Computer Science or IT",
+      responsibilities: 'Build HR workflows and reports',
+      jobSummary: 'Develop and maintain HR systems and digital solutions.',
+      languages: ['English', 'Arabic'],
+      rawText: 'Mock raw text',
+    });
+
+    api.postApi.mockImplementation(async (p: string) => {
+      if (p === '/vacancy-requests') {
+        return { ...fx.requisitions[3], id: 'r-extracted', positionId: 'p-hris', branchId: 'b-riyadh' };
+      }
+      if (p === '/master-data/catalog/skills/batch') {
+        return { count: 3 };
+      }
+      return {};
+    });
+
+    const { baseElement } = renderAt('/vacancy-requests');
+    await u.click(await screen.findByRole('button', { name: 'New requisition' }));
+
+    const drawer = await screen.findByRole('dialog', { name: 'New requisition' });
+    expect(within(drawer).getByText('Extract requirements from JD')).toBeInTheDocument();
+    expect(within(drawer).getByText('Word (.docx) · PDF (.pdf) · Text')).toBeInTheDocument();
+
+    const fileInput = drawer.querySelector('#req-jd-file-input') as HTMLInputElement;
+    expect(fileInput).toBeInTheDocument();
+
+    const file = new File(['dummy content'], 'HRIS_Job_Description.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    await u.upload(fileInput, file);
+
+    expect(await within(drawer).findByText(/Extracted from: HRIS_Job_Description.docx/)).toBeInTheDocument();
+    expect(within(drawer).getByText(/Matched Master Data title:/)).toBeInTheDocument();
+
+    // Check Title & Site auto-selected
+    expect(within(drawer).getByLabelText(/^Title/)).toHaveValue('p-hris');
+    expect(within(drawer).getByLabelText(/^Site/)).toHaveValue('b-riyadh');
+
+    // Check skills chips rendered
+    expect(within(drawer).getByText('SQL Database Development')).toBeInTheDocument();
+    expect(within(drawer).getByText('Power Platform')).toBeInTheDocument();
+    expect(within(drawer).getByText('Full-Stack Web Development')).toBeInTheDocument();
+
+    // Remove a skill chip
+    await u.click(within(drawer).getByRole('button', { name: 'Remove skill Power Platform' }));
+    expect(within(drawer).queryByText('Power Platform')).toBeNull();
+
+    // Add a custom skill
+    const skillInput = within(drawer).getByLabelText('Add competency or skill');
+    await u.type(skillInput, 'Oracle HR');
+    await u.click(within(drawer).getByRole('button', { name: 'Add' }));
+    expect(within(drawer).getByText('Oracle HR')).toBeInTheDocument();
+
+    // Fill required Due date
+    await u.type(within(drawer).getByLabelText(/^Due date/), '2026-12-15');
+
+    // Save draft
+    await u.click(within(drawer).getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => {
+      expect(api.postApi).toHaveBeenCalledWith(
+        '/vacancy-requests',
+        expect.objectContaining({
+          positionId: 'p-hris',
+          branchId: 'b-riyadh',
+          dueDate: '2026-12-15',
+        }),
+      );
+    });
+
+    expect(await axeViolations(baseElement)).toEqual([]);
   });
 });

@@ -478,5 +478,103 @@ describe('CV Bank truthful records', () => {
     expect(screen.getByRole('link', { name: 'Candidate 26' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Candidate 01' })).not.toBeInTheDocument();
   });
+
+  it('shows ATS extracted keywords, duplicate verification, and best-fit open positions with keyword reasons after upload', async () => {
+    const user = userEvent.setup();
+    const seededDoc = doc({
+      id: 'doc-1',
+      candidateId: 'cand-1',
+      candidateName: 'Mariam Essam',
+      fileName: 'mariam-cv.pdf',
+      scanStatus: 'Clean',
+    });
+    const seededPerson = person({
+      id: 'cand-1',
+      firstName: 'Mariam',
+      lastName: 'Essam',
+      currentTitle: 'Senior ICU Nurse',
+      skills: ['ICU', 'ACLS'],
+      email: 'mariam@sgh.test',
+      phone: '+971500000001',
+    });
+    api.getApi.mockImplementation(async (path: string) => {
+      if (path.startsWith('/candidates/cand-1/job-recommendations')) {
+        return [
+          {
+            vacancyId: 'vac-icu-1',
+            vacancyCode: 'VAC-ICU-01',
+            title: 'Senior ICU Nurse',
+            department: 'Critical Care',
+            branchName: 'Cairo Hospital',
+            atsScore: 92,
+            mustHaveMatched: true,
+            matchedSkillsCount: 2,
+            totalRequiredSkillsCount: 2,
+            alreadyApplied: false,
+            matchedKeywords: ['ICU', 'ACLS'],
+            missingKeywords: [],
+            fitReasons: ['Matched main keywords: ICU, ACLS'],
+          },
+        ];
+      }
+      if (path.startsWith('/documents/cv-bank/backup-status')) {
+        return { storedFiles: 1, totalDocuments: 1, quarantinedFiles: 0, pendingFiles: 0, lastBackupAt: '2026-10-31T10:00:00.000Z', retentionPolicyDays: 365 };
+      }
+      if (path.startsWith('/documents/cv-bank')) {
+        return { data: [seededDoc], total: 1, page: 1, pageSize: 100 };
+      }
+      if (path.startsWith('/candidates')) {
+        return { data: [seededPerson], total: 1, page: 1, pageSize: 100 };
+      }
+      throw new Error(`Unexpected GET ${path}`);
+    });
+    api.postFormDataApi.mockImplementation(async (path: string) => {
+      if (path === '/resume/parse') {
+        return {
+          firstName: 'Mariam',
+          lastName: 'Essam',
+          email: 'mariam@sgh.test',
+          phone: '+971500000001',
+          title: 'Senior ICU Nurse',
+          clinicalDomain: 'Critical Care',
+          experienceYears: 6,
+          skills: ['ICU', 'ACLS'],
+          parsingQuality: 'high',
+          parserSource: 'affinda',
+          rawText: 'Mariam Essam Senior ICU Nurse ICU ACLS',
+        };
+      }
+      if (path === '/documents/upload') {
+        return seededDoc;
+      }
+      throw new Error(`Unexpected multipart POST ${path}`);
+    });
+    api.postApi.mockImplementation(async (path: string) => {
+      if (path === '/candidates/duplicate-check') {
+        return {
+          normalized: { email: 'mariam@sgh.test', phone: '+971500000001' },
+          isDuplicate: true,
+          matches: [{ candidateId: 'cand-1', candidateCode: 'CAN-001', name: 'Mariam Essam', status: 'Active', matchedBy: ['email'] }],
+        };
+      }
+      if (path === '/candidates/cand-1/fill-from-cv') {
+        return { filled: ['skills'], conflicts: [], compared: true };
+      }
+      throw new Error(`Unexpected POST ${path}`);
+    });
+
+    renderCvBank();
+    expect(await screen.findByText('Mariam Essam')).toBeInTheDocument();
+
+    const fileInput = screen.getByLabelText('Upload CV files') as HTMLInputElement;
+    await user.upload(fileInput, new File(['%PDF-1.4 cv'], 'mariam-cv.pdf', { type: 'application/pdf' }));
+
+    const report = await screen.findByRole('region', { name: 'ATS CV extraction and job fit results' });
+    expect(within(report).getByText(/Duplicate verified/i)).toBeInTheDocument();
+    expect(within(report).getByText(/CAN-001/)).toBeInTheDocument();
+    expect(within(report).getByText('Senior ICU Nurse')).toBeInTheDocument();
+    expect(within(report).getByText('92% Match')).toBeInTheDocument();
+    expect(within(report).getByText('Matched main keywords: ICU, ACLS')).toBeInTheDocument();
+  });
 });
 

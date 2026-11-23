@@ -26,7 +26,9 @@ yarn-debug.log*
 database/generated/
 uploads/
 tmp/
+storage/
 apps/api/storage/
+.playwright-mcp/
 
 # Keep the planning/reference pack, but never commit local database dumps.
 *.dump

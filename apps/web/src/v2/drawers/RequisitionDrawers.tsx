@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Briefcase, CircleCheck, Clock, Info, Play, Save, Target } from 'lucide-react';
+import { Briefcase, CircleCheck, Clock, FileText, Info, Play, Plus, Save, Sparkles, Target, Upload, X } from 'lucide-react';
 import { ButtonV2, DangerConfirmButton, DrawerV2, InputV2, SelectV2, StatusChip, TextareaV2 } from '../../components/v2';
+import { getApi, postApi } from '../../api/client';
+import { parseJobDescriptionFile } from '../../utils/jdParser';
 import { jobReasons, OTHER_REASON } from '../api/jobs';
 import {
   activateRequisition, approveRequisition, canActivateDraft, cancelRequisition, createRequisition, declineRequisition, deptOf, draftActivateRefused, dueOf, fetchCancelImpact, formatDue, isEditable, reqError, requestRequisitionChanges, STATUS_LABEL, STATUS_TONE, submitRequisition,
-  TARGET_UPDATE_LIVE, titleOf, updateRequisition, updateTarget, type CancellationImpact, type Grade, type Person, type ReqContext, type ReqFields, type Requisition,
+  TARGET_UPDATE_LIVE, titleOf, updateRequisition, updateTarget, uploadRequisitionJd, type CancellationImpact, type Grade, type Person, type ReqContext, type ReqFields, type Requisition,
 } from '../api/requisitions';
 
 type Errs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId' | 'form', string>>;
@@ -39,6 +41,7 @@ export interface ReqDrawerProps {
   meId?: string;
   onClose: () => void;
   onDone: (message: string) => void;
+  initialExtract?: boolean;
 }
 
 function PersonSelect({ people, value, onChange, error, disabled, label = 'Primary recruiter', hint }: { people: Person[] | null; value: string; onChange: (v: string) => void; error?: string; disabled?: boolean; label?: string; hint?: string }) {
@@ -52,7 +55,7 @@ function PersonSelect({ people, value, onChange, error, disabled, label = 'Prima
 }
 
 /** Requisition: draft activation, resubmit after changes, approval decision, and cancellation once commitments are resolved. */
-export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDecide = false, meId, onClose, onDone }: ReqDrawerProps) {
+export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDecide = false, meId, onClose, onDone, initialExtract = false }: ReqDrawerProps) {
   const editable = !req || isEditable(req.status);
   const [f, setF] = useState({
     positionId: req?.positionId ?? '', branchId: req?.branchId ?? '', seats: String(req?.requestedHeadcount ?? 1),
@@ -67,6 +70,30 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
   const [impact, setImpact] = useState<CancellationImpact | 'unavailable' | null>(null);
   // B2F-6: cancelling uses the close-reasons list ("Other" + note), like closing a job.
   const [closeReasons, setCloseReasons] = useState<string[] | null>(null);
+
+  // JD Extraction state
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [uploadedJdFile, setUploadedJdFile] = useState<File | null>(null);
+  const [extractedSkills, setExtractedSkills] = useState<string[]>([]);
+  const [extractedMeta, setExtractedMeta] = useState<{
+    title?: string;
+    department?: string;
+    location?: string;
+    minExp?: number;
+    languages?: string[];
+  } | null>(null);
+  const [newSkillText, setNewSkillText] = useState('');
+  const [syncSkillsToMasterData, setSyncSkillsToMasterData] = useState(true);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialExtract && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  }, [initialExtract]);
+
   useEffect(() => { let live = true; jobReasons('close').then((r) => live && setCloseReasons(r.length ? r : null)).catch(() => live && setCloseReasons(null)); return () => { live = false; }; }, []);
   useEffect(() => {
     if (!req || req.status !== 'Converted to Vacancy') { setImpact(null); return; }
@@ -81,6 +108,123 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
   const title = req ? titleOf(req, ctx) : ctx?.positions.find((p) => p.id === f.positionId)?.title ?? 'New requisition';
   const departments = ctx?.departments;
   const seats = Number(f.seats);
+
+  const processJdFile = async (file: File) => {
+    setUploadedJdFile(file);
+    setExtracting(true);
+    setExtractError(null);
+    try {
+      const parsed = await parseJobDescriptionFile(file);
+      const skills = parsed.requiredSkills ?? [];
+      setExtractedSkills(skills);
+      setExtractedMeta({
+        title: parsed.title,
+        department: parsed.department,
+        location: parsed.location,
+        minExp: parsed.minExperienceYears,
+        languages: parsed.languages?.length ? parsed.languages : ['English', 'Arabic'],
+      });
+
+      // 1. Position Title matching
+      if (ctx?.positions) {
+        const normTitle = parsed.title.trim().toLowerCase();
+        const matched = ctx.positions.find((p) => {
+          const t = p.title.toLowerCase();
+          return t === normTitle || t.includes(normTitle) || normTitle.includes(t);
+        });
+        if (matched) {
+          set('positionId')(matched.id);
+        }
+      }
+
+      // 2. Branch / Site matching
+      if (ctx?.branches) {
+        const normLoc = parsed.location.trim().toLowerCase();
+        const matchedBranch = ctx.branches.find((b) => {
+          const name = b.name.toLowerCase();
+          return normLoc.includes(name) || name.includes(normLoc);
+        });
+        if (matchedBranch) {
+          set('branchId')(matchedBranch.id);
+        }
+      }
+
+      // 3. Department matching
+      if (departments) {
+        const normDept = parsed.department.trim().toLowerCase();
+        const matchedDept = departments.find((d) => {
+          const name = d.name.toLowerCase();
+          return normDept.includes(name) || name.includes(normDept);
+        });
+        if (matchedDept) {
+          set('departmentId')(matchedDept.id);
+        }
+      }
+
+      // 4. Notes / Justification
+      const noteSections: string[] = [];
+      if (parsed.jobSummary?.trim()) {
+        noteSections.push(`Summary: ${parsed.jobSummary.trim()}`);
+      }
+      if (parsed.responsibilities?.trim()) {
+        noteSections.push(`Responsibilities:\n${parsed.responsibilities.trim()}`);
+      }
+      if (parsed.qualifications?.trim()) {
+        noteSections.push(`Qualifications:\n${parsed.qualifications.trim()}`);
+      }
+      if (skills.length > 0) {
+        noteSections.push(`Key Skills: ${skills.join(', ')}`);
+      }
+      if (noteSections.length > 0) {
+        set('notes')(noteSections.join('\n\n').slice(0, 4800));
+      }
+    } catch (err: unknown) {
+      setExtractError(err instanceof Error ? err.message : 'Could not parse JD file. Please check file format.');
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const removeSkill = (skillToRemove: string) => {
+    setExtractedSkills((prev) => prev.filter((s) => s !== skillToRemove));
+  };
+  const addSkill = () => {
+    const s = newSkillText.trim();
+    if (!s) return;
+    if (!extractedSkills.some((existing) => existing.toLowerCase() === s.toLowerCase())) {
+      setExtractedSkills((prev) => [...prev, s]);
+    }
+    setNewSkillText('');
+  };
+
+  const syncSkillsIfRequested = async () => {
+    if (syncSkillsToMasterData && extractedSkills.length > 0) {
+      try {
+        const existingRes = await getApi<Array<{ name: string }>>('/master-data/catalog/skills');
+        const existingNames = new Set(
+          Array.isArray(existingRes) ? existingRes.map((i) => i.name.toLowerCase()) : [],
+        );
+        const newSkills = extractedSkills.filter((s) => !existingNames.has(s.toLowerCase()));
+        if (newSkills.length > 0) {
+          await postApi('/master-data/catalog/skills/batch', {
+            rows: newSkills.map((name) => ({ name, status: 'Active' })),
+          });
+        }
+      } catch {
+        // Non-blocking sync to master data catalog
+      }
+    }
+  };
+
+  const uploadJdIfAttached = async (targetId: string) => {
+    if (uploadedJdFile && targetId) {
+      try {
+        await uploadRequisitionJd(targetId, uploadedJdFile);
+      } catch {
+        // Non-blocking JD document upload
+      }
+    }
+  };
 
   const fields = (): ReqFields | null => {
     const e: Errs = {};
@@ -98,7 +242,10 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
     const body = fields(); if (!body) return;
     setBusy('save');
     try {
-      if (req) await updateRequisition(req.id, body); else await createRequisition(body);
+      await syncSkillsIfRequested();
+      const saved = req ? await updateRequisition(req.id, body) : await createRequisition(body);
+      const targetId = saved?.id ?? req?.id;
+      if (targetId) await uploadJdIfAttached(targetId);
       onDone(`${title} saved as a draft.`);
     } catch (e) { fail(e); } finally { setBusy(null); }
   };
@@ -109,8 +256,10 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
       setBusy('activate');
       let id = req?.id;
       try {
+        await syncSkillsIfRequested();
         const saved = req ? await updateRequisition(req.id, body) : await createRequisition(body);
         id = saved?.id ?? id;
+        if (id) await uploadJdIfAttached(id);
         await activateRequisition(id!, f.assignee);
         const who = people?.find((p) => p.id === f.assignee)?.name ?? 'the owner';
         onDone(`Job active — ${title} is now in ${who}’s Open jobs.`);
@@ -124,6 +273,8 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
     if (!f.assignee) { setErrs({ assignee: 'Pick the primary recruiter who will own the job.' }); return; }
     setBusy('activate');
     try {
+      await syncSkillsIfRequested();
+      if (req.id) await uploadJdIfAttached(req.id);
       await activateRequisition(req.id, f.assignee);
       const who = people?.find((p) => p.id === f.assignee)?.name ?? 'the owner';
       onDone(`Job active — ${title} is now in ${who}’s Open jobs.`);
@@ -183,6 +334,14 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
       ? 'Cancelling closes the live job and rejects its open files ("Requisition cancelled"). Joined hires and history stay.'
       : 'Status becomes Cancelled. Nothing is deleted.';
   const cancelHint = `${closeReasons ? 'From the Close reasons list. ' : ''}${cancelDetail}`;
+  const checklist = [
+    Boolean(f.positionId),
+    Boolean(f.branchId),
+    Boolean(Number.isInteger(seats) && seats >= 1),
+    Boolean(f.dueDate),
+    Boolean(f.assignee),
+  ];
+  const doneCount = checklist.filter(Boolean).length;
   // A Draft with a due date activates directly. Changes Requested must be resubmitted first.
   const draftActivate = editable && canActivateDraft(req, meId, f.dueDate || null);
   const primary = pending && canDecide
@@ -208,8 +367,11 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
         {req ? <p className="rf2-jtable__sub"><Link className="rf2-link" to={`/vacancy-requests?req=${encodeURIComponent(req.id)}&drawer=detail`}>Open full requisition details</Link></p> : null}
         {!req ? (
           <section className="rf2-req__progress" aria-label="Requisition progress">
-            <h3 className="rf2-field__label">Requisition progress & policy checklist</h3>
-            <p className="rf2-jtable__sub">Draft → Pending approval → Approved / Changes requested / Declined → Job active (or direct activation when policy allows)</p>
+            <div className="rf2-req__progress-head">
+              <h3 className="rf2-field__label">Requisition progress & policy checklist</h3>
+              <StatusChip tone={doneCount === 5 ? 'success' : 'neutral'} label={`${doneCount} of 5 requirements ready`} />
+            </div>
+            <p className="rf2-req__workflow-line">Draft → Pending approval → Approved / Changes requested / Declined → Job active (or direct activation when policy allows)</p>
             <ul>
               <li data-state={f.positionId ? 'done' : 'needed'}>{f.positionId ? 'Done' : 'Needed'} — Title selected</li>
               <li data-state={f.branchId ? 'done' : 'needed'}>{f.branchId ? 'Done' : 'Needed'} — Site selected</li>
@@ -217,7 +379,160 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
               <li data-state={f.dueDate ? 'done' : 'needed'}>{f.dueDate ? 'Done' : 'Needed'} — Due date set</li>
               <li data-state={f.assignee ? 'done' : 'needed'}>{f.assignee ? 'Done' : 'Needed'} — Primary recruiter selected</li>
             </ul>
-            {JSON.stringify(f) !== initial ? <ButtonV2 kind="tertiary" onClick={() => { setF(formFromJson(initial)); setErrs({}); }}>Reset form</ButtonV2> : null}
+            {JSON.stringify(f) !== initial ? <ButtonV2 kind="tertiary" size="sm" onClick={() => { setF(formFromJson(initial)); setErrs({}); }}>Reset form</ButtonV2> : null}
+          </section>
+        ) : null}
+        {editable ? (
+          <section className="rf2-req__extract" aria-label="Extract requirements from JD">
+            <div className="rf2-req__extract-head">
+              <div className="rf2-req__extract-title-group">
+                <span className="rf2-req__extract-icon-badge" aria-hidden="true">
+                  <Sparkles size={14} />
+                </span>
+                <h3 className="rf2-req__extract-title">Extract requirements from JD</h3>
+              </div>
+              <span className="rf2-req__extract-badge">Word (.docx) · PDF (.pdf) · Text</span>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".docx,.pdf,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+              className="rf2-sr-only"
+              id="req-jd-file-input"
+              aria-label="Upload Job Description document"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void processJdFile(file);
+              }}
+            />
+
+            {extracting ? (
+              <div className="rf2-req__extract-loading" role="status">
+                <span className="rf2-req__extract-loading-spinner" aria-hidden="true" />
+                <span>Extracting clinical &amp; technical competencies from document...</span>
+              </div>
+            ) : extractError ? (
+              <div className="rf2-req__extract-error" role="alert">
+                <span>{extractError}</span>
+                <ButtonV2 kind="secondary" size="sm" onClick={() => fileInputRef.current?.click()}>
+                  Try another file
+                </ButtonV2>
+              </div>
+            ) : extractedMeta && uploadedJdFile ? (
+              <div className="rf2-req__extract-results">
+                <div className="rf2-req__extract-source">
+                  <span className="rf2-req__extract-source-name">
+                    <CircleCheck size={14} aria-hidden="true" /> Extracted from: {uploadedJdFile.name}
+                  </span>
+                  <ButtonV2
+                    kind="secondary"
+                    size="sm"
+                    onClick={() => {
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    Change document
+                  </ButtonV2>
+                </div>
+
+                {extractedMeta.title && (
+                  <p className="rf2-req__extract-matched-note">
+                    {f.positionId ? (
+                      <>
+                        Matched Master Data title: <strong>{ctx?.positions.find((p) => p.id === f.positionId)?.title}</strong>
+                      </>
+                    ) : (
+                      <>
+                        Extracted title: <strong>{extractedMeta.title}</strong> (Choose the matching title in the dropdown below)
+                      </>
+                    )}
+                  </p>
+                )}
+
+                {extractedSkills.length > 0 && (
+                  <div className="rf2-req__extract-skills-block">
+                    <p className="rf2-req__extract-skills-label">
+                      Extracted competencies &amp; skills ({extractedSkills.length}):
+                    </p>
+                    <div className="rf2-req__extract-skills-list" aria-label="Extracted skills">
+                      {extractedSkills.map((skill) => (
+                        <span key={skill} className="rf2-req__extract-chip">
+                          {skill}
+                          <button
+                            type="button"
+                            className="rf2-req__extract-chip-del"
+                            onClick={() => removeSkill(skill)}
+                            aria-label={`Remove skill ${skill}`}
+                          >
+                            <X size={11} aria-hidden="true" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="rf2-req__extract-add-row">
+                      <input
+                        type="text"
+                        placeholder="Add competency / skill…"
+                        className="rf2-req__extract-add-input"
+                        aria-label="Add competency or skill"
+                        value={newSkillText}
+                        onChange={(e) => setNewSkillText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addSkill();
+                          }
+                        }}
+                      />
+                      <ButtonV2 kind="secondary" size="sm" icon={<Plus size={12} />} onClick={addSkill}>
+                        Add
+                      </ButtonV2>
+                    </div>
+                    <label className="rf2-req__extract-sync-label">
+                      <input
+                        type="checkbox"
+                        checked={syncSkillsToMasterData}
+                        onChange={(e) => setSyncSkillsToMasterData(e.target.checked)}
+                      />
+                      <span>Sync extracted skills to Master Data Skills catalog for reuse</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                className={`rf2-req__dropzone ${dragOver ? 'rf2-req__dropzone--active' : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) void processJdFile(file);
+                }}
+              >
+                <div className="rf2-req__dropzone-left">
+                  <Upload size={20} className="rf2-req__dropzone-icon" aria-hidden="true" />
+                  <p className="rf2-req__dropzone-copy">
+                    Drag &amp; drop Job Description Word (.docx) or PDF (.pdf) file here, or browse from computer.
+                  </p>
+                </div>
+                <ButtonV2
+                  type="button"
+                  kind="secondary"
+                  size="sm"
+                  icon={<FileText size={13} />}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Upload JD document
+                </ButtonV2>
+              </div>
+            )}
           </section>
         ) : null}
         {req?.targetChip ? (
@@ -229,6 +544,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
             </div>
           </div>
         ) : null}
+        <div className="rf2-req__section-title">Position &amp; Site Details</div>
         {ctx ? (
           <SelectV2 label="Title" required value={f.positionId} onChange={(e) => set('positionId')(e.target.value)} error={errs.positionId} disabled={ro} hint="From the Titles list in Master data.">
             <option value="">Choose a title</option>
@@ -253,6 +569,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
             {(grades ?? []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </SelectV2>
         </div>
+        <div className="rf2-req__section-title">Headcount &amp; Target Timeline</div>
         <div className="rf2-req__row">
           <InputV2 label="Seats" required type="number" min={1} value={f.seats} onChange={(e) => set('seats')(e.target.value)} error={errs.seats} disabled={ro} />
           <InputV2 label="Due date" required type="date" min={cairoToday()} value={f.dueDate} onChange={(e) => set('dueDate')(e.target.value)} error={errs.dueDate} disabled={ro}
@@ -261,6 +578,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
         <span id="req-due-why" className="rf2-sr-only">Save is disabled until a due date is set.</span>
         <PersonSelect people={people} value={f.assignee} onChange={set('assignee')} error={errs.assignee} disabled={!(editable || approved)}
           hint={approved ? 'Activate job makes this person the owner.' : undefined} />
+        <div className="rf2-req__section-title">Role Scope &amp; Justification</div>
         <TextareaV2 label="Notes" rows={3} value={f.notes} onChange={(e) => set('notes')(e.target.value)} disabled={ro} error={pending ? undefined : errs.notes} />
         <section className="rf2-req__status" aria-labelledby="req-status-h">
           <div className="rf2-row-between"><h3 id="req-status-h" className="rf2-field__label">Status</h3><StatusChip tone={STATUS_TONE[status]} label={STATUS_LABEL[status]} /></div>

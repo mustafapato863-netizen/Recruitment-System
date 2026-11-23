@@ -2,6 +2,7 @@ import '../i18n';
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
+import { clearViewCache, setViewCacheEnabled } from '../v2/api/viewCache';
 
 if (typeof window !== 'undefined' && !window.ResizeObserver) {
   class ResizeObserverMock {
@@ -13,4 +14,8 @@ if (typeof window !== 'undefined' && !window.ResizeObserver) {
   globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
 }
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  setViewCacheEnabled(false);
+  clearViewCache();
+});

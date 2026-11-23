@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Archive, ArrowUpDown, CheckCircle2, ChevronLeft, ChevronRight, Clock, Database,
-  Download, Eye, FileText, FolderUp, MoreVertical, RefreshCw, Search,
-  ShieldCheck, Upload, X,
+  AlertCircle, Archive, ArrowUpDown, Briefcase, CheckCircle2, ChevronLeft, ChevronRight, Clock, Database,
+  Download, Eye, FileText, FolderUp, Link2, MoreVertical, RefreshCw, Search,
+  ShieldCheck, Sparkles, Upload, X,
 } from 'lucide-react';
 import { withReturnTo } from '../returnTarget';
-import { importBankCv } from '../api/cvImport';
-import type { Candidate, CandidateDocument, CvBankBackupStatus, PaginatedResult } from '@recruitflow/contracts';
+import { importBankCv, type BankCvImportResult, type ValidatedCvIntakeResult } from '../api/cvImport';
+import { fetchCandidateJobRecommendations } from '../api/ats';
+import { CvIntakeEngineDrawer } from '../drawers/CvIntakeEngineDrawer';
+import { SuggestJobsDrawer } from '../drawers/SuggestJobsDrawer';
+import type { Candidate, CandidateDocument, CandidateJobRecommendation, CvBankBackupStatus, PaginatedResult } from '@recruitflow/contracts';
 import { downloadApi, getApi, patchApi, postApi } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { Alert } from '../../components/ui/Alert';
@@ -202,6 +205,16 @@ export function CVBankPage() {
   const [savingReview, setSavingReview] = useState(false);
   const [retryingExtraction, setRetryingExtraction] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const [applyingRecKey, setApplyingRecKey] = useState<string | null>(null);
+  const [appliedRecMap, setAppliedRecMap] = useState<Record<string, string>>({});
+  const [latestExtractions, setLatestExtractions] = useState<Array<BankCvImportResult & { recommendations: CandidateJobRecommendation[] }>>([]);
+  const [suggestCandidate, setSuggestCandidate] = useState<{ id: string; name: string } | null>(null);
+  const [reviewRecs, setReviewRecs] = useState<{ candidateId: string; loading: boolean; items: CandidateJobRecommendation[] }>({
+    candidateId: '',
+    loading: false,
+    items: [],
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const appliedSearch = params.get('search') ?? '';
@@ -211,6 +224,12 @@ export function CVBankPage() {
   const canEditDocuments = isAdministrator || Boolean(user?.permissions?.includes('CANDIDATE_EDIT'));
   const canCreateCandidates = isAdministrator || Boolean(user?.permissions?.includes('CANDIDATE_CREATE'));
   const canUploadCv = canEditDocuments && (Boolean(contextCandidateId) || canCreateCandidates);
+
+  useEffect(() => {
+    if (params.get('intake') === '1' && canUploadCv) {
+      setIntakeOpen(true);
+    }
+  }, [params, canUploadCv]);
   const rawPage = params.get('page') ?? '';
   const page = /^[1-9]\d{0,5}$/.test(rawPage) ? Number(rawPage) : 1;
   const returnTo = `/cv-bank${params.toString() ? `?${params.toString()}` : ''}`;
@@ -362,6 +381,26 @@ export function CVBankPage() {
     };
   }, [viewingRow?.documentId]);
 
+  useEffect(() => {
+    const candidateId = viewingRow?.candidateId;
+    if (!candidateId) {
+      setReviewRecs({ candidateId: '', loading: false, items: [] });
+      return undefined;
+    }
+    let alive = true;
+    setReviewRecs({ candidateId, loading: true, items: [] });
+    void fetchCandidateJobRecommendations(candidateId)
+      .then((items) => {
+        if (alive) setReviewRecs({ candidateId, loading: false, items: Array.isArray(items) ? items : [] });
+      })
+      .catch(() => {
+        if (alive) setReviewRecs({ candidateId, loading: false, items: [] });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [viewingRow?.candidateId]);
+
   const downloadFile = async (record: CandidateDocument) => {
     if (
       record.scanStatus !== 'Clean' ||
@@ -390,8 +429,8 @@ export function CVBankPage() {
     const q = search.trim().toLowerCase();
     const now = Date.now();
     const list = allRows.filter((row) => {
-      const cand = row.candidateName.toLowerCase();
-      const file = row.fileName.toLowerCase();
+      const cand = (row.candidateName ?? '').toLowerCase();
+      const file = (row.fileName ?? '').toLowerCase();
       if (q && !cand.includes(q) && !file.includes(q)) return false;
       if (statusFilter && row.parseStatus !== statusFilter) return false;
       if (dateFilter) {
@@ -464,6 +503,7 @@ export function CVBankPage() {
     setError('');
     let importedCount = 0;
     let linkedCount = 0;
+    const importedResults: BankCvImportResult[] = [];
     const failures: string[] = [];
 
     for (const file of selectedFiles) {
@@ -474,6 +514,7 @@ export function CVBankPage() {
         });
         importedCount += 1;
         if (imported.linked) linkedCount += 1;
+        importedResults.push(imported);
       } catch (reason) {
         const msg = reason instanceof Error ? reason.message : 'Unable to upload CV.';
         failures.push(`${file.name}: ${msg}`);
@@ -482,6 +523,15 @@ export function CVBankPage() {
 
     try {
       if (importedCount > 0) {
+        const enriched = await Promise.all(
+          importedResults.map(async (item) => ({
+            ...item,
+            recommendations: await fetchCandidateJobRecommendations(item.candidateId)
+              .then((r) => (Array.isArray(r) ? r : []))
+              .catch(() => [] as CandidateJobRecommendation[]),
+          })),
+        );
+        setLatestExtractions(enriched);
         await loadData({ silent: true });
       }
       if (failures.length > 0) {
@@ -501,6 +551,45 @@ export function CVBankPage() {
       }
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleIntakeCompleted = async (result: ValidatedCvIntakeResult) => {
+    const recs = await fetchCandidateJobRecommendations(result.candidateId)
+      .then((r) => (Array.isArray(r) ? r : []))
+      .catch(() => [] as CandidateJobRecommendation[]);
+    setLatestExtractions((prev) => [
+      { ...result, recommendations: recs },
+      ...prev.filter((item) => item.candidateId !== result.candidateId || item.fileName !== result.fileName),
+    ]);
+    await loadData({ silent: true });
+  };
+
+  const applyFromRecommendationCard = async (candidateId: string, rec: CandidateJobRecommendation) => {
+    const key = `${candidateId}:${rec.vacancyId}`;
+    if (applyingRecKey) return;
+    setApplyingRecKey(key);
+    try {
+      const created = await postApi<{ id: string }>('/applications', {
+        vacancyId: rec.vacancyId,
+        candidateId,
+        source: 'CV Intake Recommendation',
+      });
+      setAppliedRecMap((prev) => ({ ...prev, [key]: created?.id || 'applied' }));
+      show({
+        tone: 'success',
+        title: 'Applied to recommended role',
+        message: `Candidate was added to ${rec.title}.`,
+      });
+      await loadData({ silent: true });
+    } catch (reason) {
+      show({
+        tone: 'error',
+        title: 'Could not apply candidate',
+        message: reason instanceof Error ? reason.message : 'Unable to apply candidate to this role.',
+      });
+    } finally {
+      setApplyingRecKey(null);
     }
   };
 
@@ -602,7 +691,7 @@ export function CVBankPage() {
             type="button"
             className="rf2-cvb__btn rf2-cvb__btn--primary"
             disabled={uploading}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setIntakeOpen(true)}
           >
             <Upload aria-hidden="true" />
             <span>{uploading ? 'Uploading…' : 'Upload CVs'}</span>
@@ -698,6 +787,201 @@ export function CVBankPage() {
             <X aria-hidden="true" />
           </button>
         </div>
+      ) : null}
+
+      {latestExtractions.length > 0 ? (
+        <section className="rf2-cvb__card p-5 mb-4 space-y-4" aria-label="ATS CV extraction and job fit results">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="rf2-cvb__card-title flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[var(--rf2-action)]" aria-hidden="true" />
+                <span>Latest ATS Extraction, Duplicate Check &amp; Best-Fit Positions</span>
+              </h2>
+              <p className="rf2-cvb__card-sub">
+                Extracted profile highlights, identity verification, and open positions ranked by matched main keywords.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="rf2-cvb__banner-close"
+              aria-label="Dismiss extraction report"
+              onClick={() => setLatestExtractions([])}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </div>
+
+          <ul className="space-y-3 list-none p-0 m-0">
+            {latestExtractions.map((item) => {
+              const dupMatch = item.duplicateCheck?.matches?.[0] ?? null;
+              const extractedName = [item.cv.firstName, item.cv.lastName].filter(Boolean).join(' ') || item.fileName;
+              const topRecs = item.recommendations.slice(0, 3);
+              const existingRow = allRows.find((r) => r.candidateId === item.candidateId) ?? null;
+
+              return (
+                <li
+                  key={`${item.candidateId}-${item.fileName}`}
+                  className="rounded-xl border border-[var(--rf2-divider)] bg-[var(--rf2-surface)] p-4 space-y-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong className="text-sm text-[var(--rf2-ink)]">{`${extractedName} · ${item.fileName}`}</strong>
+                        {item.cv.parsingQuality ? (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--rf2-well)] text-[var(--rf2-ink)] border border-[var(--rf2-divider)]">
+                            {item.cv.parsingQuality} quality{item.cv.parserSource ? ` · ${item.cv.parserSource === 'affinda' ? 'ATS engine' : 'Local extractor'}` : ''}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-[var(--rf2-muted)] m-0">
+                        {[
+                          item.cv.title || null,
+                          item.cv.clinicalDomain || null,
+                          typeof item.cv.experienceYears === 'number' ? `${item.cv.experienceYears} yrs experience` : null,
+                          item.cv.location || null,
+                        ].filter(Boolean).join(' · ') || 'Extracted from CV document'}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="rf2-cvb__btn"
+                        onClick={() => setSuggestCandidate({ id: item.candidateId, name: extractedName })}
+                      >
+                        <Briefcase className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
+                        Suggest roles ({item.recommendations.length})
+                      </button>
+                      {existingRow ? (
+                        <button type="button" className="rf2-cvb__btn" onClick={() => openReview(existingRow)}>
+                          Review details
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {/* Duplicate verification banner */}
+                  <div
+                    className={`rounded-lg px-3 py-2 text-xs flex flex-wrap items-center gap-2 border ${
+                      item.linked
+                        ? 'bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-950/30 dark:text-amber-200 dark:border-amber-800/60'
+                        : 'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-200 dark:border-emerald-800/60'
+                    }`}
+                  >
+                    {item.linked ? <Link2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> : <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />}
+                    <span>
+                      {item.linked ? (
+                        dupMatch ? (
+                          <>
+                            <strong>Duplicate verified</strong>
+                            {dupMatch.matchedBy?.length ? ` (${dupMatch.matchedBy.join(' & ')})` : ''}: Linked to existing candidate{' '}
+                            <strong>{dupMatch.name}</strong>
+                            {dupMatch.candidateCode ? ` (${dupMatch.candidateCode})` : ''}.
+                            {item.linkResult?.filled.length ? ` Enriched: ${item.linkResult.filled.join(', ')}.` : ''}
+                            {item.linkResult?.conflicts.length ? ` ${item.linkResult.conflicts.length} existing field(s) preserved.` : ''}
+                          </>
+                        ) : (
+                          <><strong>Linked to existing candidate profile</strong> without duplicating identity.</>
+                        )
+                      ) : item.cv.email || item.cv.phone ? (
+                        <><strong>Duplicate check passed:</strong> No existing candidate matched this email/phone — created new profile.</>
+                      ) : (
+                        <><strong>Added to bank:</strong> No email or phone found in CV to match against existing candidates.</>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Extracted Keywords */}
+                  {item.cv.skills && item.cv.skills.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-1.5" aria-label="Extracted main keywords">
+                      <span className="text-[11px] font-semibold text-[var(--rf2-muted)] mr-1">Extracted keywords:</span>
+                      {item.cv.skills.slice(0, 10).map((skill) => (
+                        <span
+                          key={skill}
+                          className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-[var(--rf2-well)] text-[var(--rf2-ink)] border border-[var(--rf2-divider)]"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                      {item.cv.skills.length > 10 ? (
+                        <span className="text-[11px] text-[var(--rf2-muted)]">+{item.cv.skills.length - 10} more</span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {/* Best-Fit Open Positions & Why from Main Keywords */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--rf2-muted)]">
+                      Best-fit open positions
+                    </div>
+                    {topRecs.length === 0 ? (
+                      <p className="text-xs text-[var(--rf2-muted)] m-0">
+                        No active open positions matched yet. You can review or add more skills below.
+                      </p>
+                    ) : (
+                      <div className="grid gap-2 md:grid-cols-3">
+                        {topRecs.map((rec) => (
+                          <div
+                            key={rec.vacancyId}
+                            className="rounded-lg border border-[var(--rf2-divider)] bg-[var(--rf2-well)]/50 p-2.5 space-y-1.5"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-[var(--rf2-ink)] truncate">{rec.title}</div>
+                                <div className="text-[11px] text-[var(--rf2-muted)] truncate">
+                                  {rec.vacancyCode} · {rec.branchName || rec.department || 'Open role'}
+                                </div>
+                              </div>
+                              <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-[var(--rf2-action-soft)] text-[var(--rf2-action)]">
+                                {rec.atsScore}% Match
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-[var(--rf2-muted)]">
+                              {rec.matchedSkillsCount}/{rec.totalRequiredSkillsCount} required keywords
+                            </div>
+                            {rec.matchedKeywords && rec.matchedKeywords.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {rec.matchedKeywords.slice(0, 4).map((kw) => (
+                                  <span key={kw} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60">
+                                    ✓ {kw}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                            {rec.fitReasons && rec.fitReasons.length > 0 ? (
+                              <p className="text-[11px] text-[var(--rf2-muted)] m-0">
+                                {rec.fitReasons[0]}
+                              </p>
+                            ) : null}
+                            <div className="pt-1">
+                              {rec.alreadyApplied || appliedRecMap[`${item.candidateId}:${rec.vacancyId}`] ? (
+                                <Link
+                                  to={`/applications/${encodeURIComponent(appliedRecMap[`${item.candidateId}:${rec.vacancyId}`] || rec.existingApplicationId || '')}`}
+                                  className="rf2-cvb__btn"
+                                >
+                                  Open application
+                                </Link>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="rf2-cvb__btn"
+                                  disabled={applyingRecKey === `${item.candidateId}:${rec.vacancyId}`}
+                                  onClick={() => void applyFromRecommendationCard(item.candidateId, rec)}
+                                >
+                                  {applyingRecKey === `${item.candidateId}:${rec.vacancyId}` ? 'Applying…' : 'Apply to job'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       ) : null}
 
       <section className="rf2-cvb__card" aria-labelledby="rf2-cvb-records-heading">
@@ -894,6 +1178,18 @@ export function CVBankPage() {
                                   type="button"
                                   role="menuitem"
                                   className="rf2-cvb__menu-item"
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    setSuggestCandidate({ id: row.candidateId, name: row.candidateName });
+                                  }}
+                                >
+                                  <Briefcase aria-hidden="true" />
+                                  <span>Find matching roles</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="rf2-cvb__menu-item"
                                   disabled={!isDownloadable || !canDownload || !row.doc}
                                   onClick={() => {
                                     setOpenMenuId(null);
@@ -1009,6 +1305,52 @@ export function CVBankPage() {
             {viewingRow.parseStatus === 'Pending' ? (
               <p className="rf2-cvb__review-note">Scanning or extraction is still in progress.</p>
             ) : null}
+
+            <section className="rf2-cvb__review-file space-y-2" aria-label="ATS job fit recommendations">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="m-0 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-[var(--rf2-action)]" aria-hidden="true" />
+                  <span>Best-fit open positions (ATS keywords)</span>
+                </h3>
+                <button
+                  type="button"
+                  className="rf2-cvb__btn"
+                  onClick={() => setSuggestCandidate({ id: viewingRow.candidateId, name: viewingRow.candidateName })}
+                >
+                  Suggest &amp; apply to roles
+                </button>
+              </div>
+              {reviewRecs.loading ? (
+                <p role="status" className="text-xs text-[var(--rf2-muted)] m-0">Checking open positions…</p>
+              ) : reviewRecs.items.length === 0 ? (
+                <p className="text-xs text-[var(--rf2-muted)] m-0">No active open positions currently match extracted skills.</p>
+              ) : (
+                <ul className="space-y-2 list-none p-0 m-0">
+                  {reviewRecs.items.slice(0, 4).map((rec) => (
+                    <li key={rec.vacancyId} className="rounded-lg border border-[var(--rf2-divider)] bg-[var(--rf2-well)]/40 p-2.5 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <strong className="text-xs text-[var(--rf2-ink)]">
+                          {rec.title} <span className="font-normal text-[var(--rf2-muted)]">({rec.vacancyCode})</span>
+                        </strong>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--rf2-action-soft)] text-[var(--rf2-action)]">
+                          {rec.atsScore}% Match
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-[var(--rf2-muted)]">
+                        {rec.matchedSkillsCount}/{rec.totalRequiredSkillsCount} required keywords
+                        {rec.matchedKeywords?.length ? ` · Matched: ${rec.matchedKeywords.join(', ')}` : ''}
+                      </div>
+                      {rec.missingKeywords?.length ? (
+                        <div className="text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" aria-hidden="true" />
+                          <span>Missing: {rec.missingKeywords.join(', ')}</span>
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
             <section className="rf2-cvb__review-file" aria-label="Document preview">
               <h3>Document preview</h3>
@@ -1127,6 +1469,33 @@ export function CVBankPage() {
         commentRequired
         isLoading={archiving}
       />
+      {suggestCandidate ? (
+        <SuggestJobsDrawer
+          isOpen
+          candidateId={suggestCandidate.id}
+          candidateName={suggestCandidate.name}
+          onClose={() => setSuggestCandidate(null)}
+          onApplied={() => void loadData({ silent: true })}
+        />
+      ) : null}
+      {intakeOpen && canUploadCv ? (
+        <CvIntakeEngineDrawer
+          open={intakeOpen}
+          initialVacancyId={contextJobId || null}
+          initialCandidateId={contextCandidateId || null}
+          onClose={() => {
+            setIntakeOpen(false);
+            if (params.get('intake')) {
+              const next = new URLSearchParams(params);
+              next.delete('intake');
+              setParams(next, { replace: true });
+            }
+          }}
+          onCompleted={(result) => {
+            void handleIntakeCompleted(result);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

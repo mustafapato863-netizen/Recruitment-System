@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CircleCheck, CircleMinus, Info, Plus, RotateCw, Undo2 } from 'lucide-react';
+import { CircleCheck, CircleMinus, Info, Plus, RotateCw, Search, Undo2 } from 'lucide-react';
 import { ButtonV2, DrawerV2, InputV2, SelectV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { toFormErrs } from './formErrors';
 import {
@@ -8,6 +8,7 @@ import {
 } from './configApi';
 import { useAuth } from '../../auth/AuthContext';
 import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
+import { useCachedResource } from '../api/useCachedResource';
 import '../pages/jobs.css';
 import './admin.css';
 
@@ -15,6 +16,12 @@ const fmt = (n: number | null | undefined) => (typeof n === 'number' ? n.toLocal
 
 /** A06 Master data (Admin seat): skills, departments, reason lists and grade bands. Entries are deactivated, never deleted. */
 export function MasterDataV2() {
+  const [filterText, setFilterText] = useState('');
+  const normalized = filterText.trim().toLowerCase();
+  const visibleCatalogs = normalized
+    ? CATALOGS.filter((c) => `${c.title} ${c.hint} ${c.category}`.toLowerCase().includes(normalized))
+    : CATALOGS;
+
   return (
     <div className="rf2-jobs rf2-admin">
       <AdminWorkspaceHeader
@@ -22,8 +29,24 @@ export function MasterDataV2() {
         title="Master data"
         subtitle="Configure active catalogs, reason lists and site grade bands."
       />
+      <div className="rf2-admin-filterbar">
+        <InputV2
+          label="Filter catalogs"
+          fieldClassName="rf2-sr-label rf2-jobs__search"
+          placeholder="Filter catalogs…"
+          leadingIcon={<Search />}
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+        />
+        <nav className="rf2-admin-catalog-jumps" aria-label="Catalog sections">
+          {CATALOGS.map((c) => (
+            <a key={c.category} href={`#md-${c.category}`} className="rf2-admin-catalog-jump">{c.title}</a>
+          ))}
+          <a href="#md-bands" className="rf2-admin-catalog-jump">Grade bands</a>
+        </nav>
+      </div>
       <div className="rf2-admin__grid">
-        {CATALOGS.map((c) => <CatalogCard key={c.category} def={c} />)}
+        {visibleCatalogs.map((c) => <CatalogCard key={c.category} def={c} />)}
       </div>
       <BandsCard />
     </div>
@@ -31,8 +54,6 @@ export function MasterDataV2() {
 }
 
 function CatalogCard({ def }: { def: CatalogDef }) {
-  const [rows, setRows] = useState<CatalogValue[] | null | undefined>(undefined);
-  const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
@@ -40,11 +61,13 @@ function CatalogCard({ def }: { def: CatalogDef }) {
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
-  useEffect(() => {
-    let live = true; setError(null);
-    fetchCatalog(def.category).then((r) => live && setRows(r)).catch((e: { message?: string }) => live && setError(e?.message || 'Could not load.'));
-    return () => { live = false; };
-  }, [def.category, attempt]);
+  const res = useCachedResource<CatalogValue[] | null>({
+    key: `admin:master-data:${def.category}`,
+    attempt,
+    fetcher: () => fetchCatalog(def.category),
+  });
+  const rows = res.kind === 'ready' ? res.data : undefined;
+  const error = res.kind === 'error' ? ((res.error as { message?: string })?.message || 'Could not load.') : null;
   const add = async () => {
     const n = name.trim();
     if (!n) return setMsg({ tone: 'error', text: 'Enter a name.' });
@@ -63,13 +86,20 @@ function CatalogCard({ def }: { def: CatalogDef }) {
     try { await setValueStatus(def.category, v, to); setMsg({ tone: 'success', text: `“${v.name}” ${to === 'Inactive' ? (deactivatedStatus(def.category) === 'Archived' ? 'deactivated (archived)' : 'deactivated') : 'reactivated'}.` }); setAttempt((x) => x + 1); }
     catch (e) { setMsg({ tone: 'error', text: (e as { message?: string })?.message || 'Could not save.' }); } finally { setBusy(null); }
   };
+  const activeCount = rows?.filter((r) => r.status === 'Active').length ?? 0;
   const inactive = rows?.filter((r) => r.status !== 'Active').length ?? 0;
   const shown = (rows ?? []).filter((r) => showAll || r.status === 'Active').sort((a, b) => Number(b.status === 'Active') - Number(a.status === 'Active') || a.name.localeCompare(b.name));
   const id = `md-${def.category}`;
   return (
     <section className="rf2-panel rf2-admin__card" aria-labelledby={id}>
       <div className="rf2-row-between rf2-admin__head">
-        <div><h2 id={id} className="rf2-jtable__name">{def.title}</h2><p className="rf2-jtable__sub">{def.hint}</p></div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <h2 id={id} className="rf2-jtable__name">{def.title}</h2>
+            {rows ? <span className="rf2-chip rf2-chip--neutral">{activeCount} active</span> : null}
+          </div>
+          <p className="rf2-jtable__sub">{def.hint}</p>
+        </div>
         {rows ? <ButtonV2 kind="secondary" size="sm" icon={<Plus />} onClick={() => { setAdding(true); setMsg(null); }} aria-label={`Add to ${def.title}`}>Add</ButtonV2> : null}
       </div>
       {rows === undefined && !error ? <SkeletonV2 lines={3} label={`Loading ${def.title}…`} /> : null}
@@ -104,16 +134,17 @@ function CatalogCard({ def }: { def: CatalogDef }) {
 function BandsCard() {
   const { user } = useAuth();
   const mayManage = canSeeBandAmounts(user?.permissions, (user?.roles ?? []).some((r) => r.code === 'ADMINISTRATOR'));
-  const [bands, setBands] = useState<Band[] | null | undefined>(undefined);
-  const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [edit, setEdit] = useState<Band | 'new' | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true; setError(null);
-    fetchBands().then((b) => live && setBands(b)).catch((e: { message?: string }) => live && setError(e?.message || 'Could not load.'));
-    return () => { live = false; };
-  }, [attempt]);
+  const bandsRes = useCachedResource<Band[] | null>({
+    key: 'admin:bands',
+    attempt,
+    userId: user?.id ?? null,
+    fetcher: fetchBands,
+  });
+  const bands = bandsRes.kind === 'ready' ? bandsRes.data : undefined;
+  const error = bandsRes.kind === 'error' ? ((bandsRes.error as { message?: string })?.message || 'Could not load.') : null;
   const hidden = !!bands?.length && bands.every((b) => b.minMonthlyBase == null);
   return (
     <section className="rf2-panel rf2-admin__card" aria-labelledby="md-bands">

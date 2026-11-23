@@ -31,7 +31,7 @@ const serve = (extra: Record<string, unknown> = {}) => {
 function Loc() { const l = useLocation(); return <div data-testid="loc">{l.pathname + l.search}</div>; }
 const renderAt = (path = '/team-work') => {
   document.documentElement.setAttribute('data-ui', 'v2');
-  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/team-work" element={<><TeamWorkV2 /><Loc /></>} /></Routes></MemoryRouter>);
+  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/team-work" element={<><TeamWorkV2 /><Loc /></>} /><Route path="/approvals" element={<><TeamWorkV2 /><Loc /></>} /></Routes></MemoryRouter>);
 };
 beforeEach(() => {
   vi.clearAllMocks();
@@ -743,7 +743,8 @@ describe('M02 waiting queue and M10 approval decision', () => {
     renderAt('/team-work?tab=waiting&approval=sample');
     const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
     expect(within(waiting).getAllByRole('heading')).toHaveLength(1);
-    expect(within(waiting).getByText('Pending approvals 0')).toBeInTheDocument();
+    expect(within(waiting).getByText('Offer approvals 1')).toBeInTheDocument();
+    expect(within(waiting).getByText('Requisition approvals 0')).toBeInTheDocument();
     expect(within(waiting).getByText('Changes requested 0')).toBeInTheDocument();
     expect(within(waiting).queryByRole('columnheader', { name: 'Site' })).toBeNull();
     expect(within(waiting).getByRole('button', { name: 'Preview approval decision screen' })).toBeInTheDocument();
@@ -766,7 +767,7 @@ describe('M02 waiting queue and M10 approval decision', () => {
     const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
     expect(await within(waiting).findByText('Ward Nurse (REQ-1) · SGH Jeddah')).toBeInTheDocument();
     expect(within(waiting).queryByText('Lab Tech (REQ-2) · SGH Jeddah')).toBeNull();
-    expect(within(waiting).getByText('Pending approvals 1')).toBeInTheDocument();
+    expect(within(waiting).getByText('Requisition approvals 1')).toBeInTheDocument();
     expect(within(waiting).getByText('Changes requested 1')).toBeInTheDocument();
     expect(within(waiting).queryByRole('columnheader', { name: 'Site' })).toBeNull();
     expect(within(waiting).getAllByRole('heading')).toHaveLength(1);
@@ -816,6 +817,27 @@ describe('M01 to M03 to M04', () => {
     expect(preview).toHaveTextContent('Mariam Farag → Youssef Ibrahim');
     expect(preview).toHaveTextContent('Job/requisition owner will not change.');
   });
+
+  it('supports activity period filtering, search, and KPI summaries on team activity tab', async () => {
+    const u = userEvent.setup();
+    const { container } = renderAt('/team-work?tab=activity');
+    expect(await screen.findByRole('radiogroup', { name: 'Activity tracking period' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /All activity/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Last 7 days/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Last 30 days/ })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Filter activity/)).toBeInTheDocument();
+    expect(screen.getByText('In selected period')).toBeInTheDocument();
+
+    await u.click(screen.getByRole('radio', { name: /Last 7 days/ }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('period=7d');
+
+    const searchInput = screen.getByLabelText(/Filter activity/);
+    await u.type(searchInput, 'NonExistentCandidateOrJob12345');
+    expect(screen.getByText('No activity for this period')).toBeInTheDocument();
+
+    await u.clear(searchInput);
+    expect(await axeViolations(container)).toEqual([]);
+  });
 });
 
 describe('M02 to M10', () => {
@@ -846,5 +868,15 @@ describe('M02 to M10', () => {
     await u.click(within(decision).getByRole('button', { name: 'Decline' }));
     expect(within(decision).getByText('Pending Approval → Rejected. The requisition closes. No job is opened.')).toBeInTheDocument();
     expect(api.postApi).not.toHaveBeenCalled();
+  });
+
+  it('renders dedicated Approvals header and 3-card Approvals summary on /approvals', async () => {
+    renderAt('/approvals');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Approvals' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Team work' })).toBeNull();
+    const summary = screen.getByRole('list', { name: 'Approvals summary' });
+    expect(within(summary).getByText('Offer approvals')).toBeInTheDocument();
+    expect(within(summary).getByText('Requisition approvals')).toBeInTheDocument();
+    expect(within(summary).getByText('Scorecards due')).toBeInTheDocument();
   });
 });
