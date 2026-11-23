@@ -386,7 +386,7 @@ describe('F4 follow-ups', () => {
     expect(screen.getAllByRole('button', { name: /Mariam Farag/ })).toHaveLength(1);
   });
 
-  it('shows role-derived workspace choices for administrators', async () => {
+  it('shows role-derived workspace choices for administrators in dev mode only', async () => {
     const u = userEvent.setup();
     renderShell('admin', user(ALL, ['ADMINISTRATOR']), '/users');
     await u.click(screen.getByRole('button', { name: /Mariam Farag/ }));
@@ -394,6 +394,22 @@ describe('F4 follow-ups', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Admin workspace · Current' })).toBeInTheDocument();
     expect(within(menu).getByRole('menuitem', { name: 'Manager workspace' })).toBeInTheDocument();
     expect(within(menu).getByRole('menuitem', { name: 'Employee workspace' })).toBeInTheDocument();
+  });
+
+  it('hides workspace switching and ignores stored workspace overrides outside dev mode', async () => {
+    vi.stubEnv('DEV', false);
+    try {
+      const u = userEvent.setup();
+      window.localStorage.setItem('recruitflow.ui.v2.activeWorkspace.u1', 'employee');
+      renderShell('admin', user(ALL, ['ADMINISTRATOR']), '/users');
+      expect(screen.getByRole('navigation', { name: SEAT_NAV.admin.heading })).toBeInTheDocument();
+      await u.click(screen.getByRole('button', { name: /Mariam Farag/ }));
+      const menu = screen.getByRole('menu', { name: 'Account' });
+      expect(within(menu).queryByRole('group', { name: 'Workspace switcher' })).not.toBeInTheDocument();
+      expect(within(menu).queryByRole('menuitem', { name: /workspace/i })).not.toBeInTheDocument();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

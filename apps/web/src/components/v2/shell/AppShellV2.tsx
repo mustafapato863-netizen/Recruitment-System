@@ -125,7 +125,7 @@ function UserMenu({ user, seat, availableSeats, onSignOut, onWorkspaceChange }: 
           <button type="button" role="menuitem" className="rf2-user-menu__item" onClick={() => { toggleTheme(); close(); }}>
             {theme === 'light' ? <Moon aria-hidden="true" /> : <Sun aria-hidden="true" />} Switch to {theme === 'light' ? 'dark' : 'light'} mode
           </button>
-          {availableSeats.length > 1 ? (
+          {import.meta.env.DEV && availableSeats.length > 1 ? (
             <div className="rf2-user-menu__workspaces" role="group" aria-label="Workspace switcher">
               <span className="rf2-user-menu__section">Switch workspace</span>
               {availableSeats.map((option) => (
@@ -392,16 +392,28 @@ function ShellFrame({ user, seat, onSignOut, children, availableSeats, approvalC
 
 /** v2 shell (F4). Wraps the existing pages unchanged. */
 export function AppShellV2(props: AppShellV2Props) {
-  const availableSeats = useMemo(() => availableWorkspaceSeats(props.user), [props.user]);
-  const [seat, setSeat] = useState(() => storedWorkspaceSeat(props.user.id, props.seat, availableSeats));
+  const workspaceSwitcherEnabled = import.meta.env.DEV;
+  const availableSeats = useMemo(
+    () => (workspaceSwitcherEnabled ? availableWorkspaceSeats(props.user) : [props.seat]),
+    [workspaceSwitcherEnabled, props.user, props.seat],
+  );
+  const [seat, setSeat] = useState(() => (
+    workspaceSwitcherEnabled
+      ? storedWorkspaceSeat(props.user.id, props.seat, availableSeats)
+      : props.seat
+  ));
   const [approvalCount, setApprovalCount] = useState<number | null>(null);
 
   useEffect(() => {
-    setSeat(storedWorkspaceSeat(props.user.id, props.seat, availableWorkspaceSeats(props.user)));
-  }, [props.user, props.seat, availableSeats]);
+    setSeat(
+      workspaceSwitcherEnabled
+        ? storedWorkspaceSeat(props.user.id, props.seat, availableSeats)
+        : props.seat,
+    );
+  }, [workspaceSwitcherEnabled, props.user.id, props.seat, availableSeats]);
 
   const switchWorkspace = (next: Seat) => {
-    if (!availableSeats.includes(next)) return;
+    if (!workspaceSwitcherEnabled || !availableSeats.includes(next)) return;
     try { window.localStorage.setItem(`${ACTIVE_WORKSPACE_STORAGE_KEY}.${props.user.id}`, next); } catch { /* preference is optional */ }
     setSeat(next);
   };
