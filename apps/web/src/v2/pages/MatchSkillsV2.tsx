@@ -349,7 +349,16 @@ export function TalentPoolPage() {
   const prefetchedServerPagesRef = useRef<Set<number>>(new Set([1]));
   const nextPageSliceCacheRef = useRef<{ source: ScoredBenchCandidate[]; page: number; rows: ScoredBenchCandidate[] } | null>(null);
   const listTopRef = useRef<HTMLDivElement | null>(null);
-  const isFirstFilterSyncRef = useRef(true);
+  const internalSearchWritesRef = useRef<Set<string>>(new Set());
+  const prevFilterStateRef = useRef<{
+    selectedVacancyId: string;
+    benchSearch: string;
+    locationFilter: string;
+    expFilter: string;
+    availFilter: string;
+    tierFilter: MatchTier;
+    sortBy: 'best' | 'exp' | 'name';
+  } | null>(null);
 
   // Filters & Pagination for Match Skills
   const [benchSearch, setBenchSearch] = useState(() => searchParams.get('q') ?? '');
@@ -472,10 +481,22 @@ export function TalentPoolPage() {
     if (selectedVacancyId && selectedVacancyId !== vacancyQuery) {
       suppressVacancyReload.current = selectedVacancyId;
     }
+    const serialized = next.toString();
+    internalSearchWritesRef.current.add(serialized);
+    if (internalSearchWritesRef.current.size > 12) {
+      const oldest = internalSearchWritesRef.current.values().next().value;
+      if (oldest !== undefined) internalSearchWritesRef.current.delete(oldest);
+    }
     setSearchParams(next, { replace: true });
   }, [selectedVacancyId, benchSearch, tierFilter, sortBy, currentPage, searchParams, setSearchParams, vacancyQuery]);
 
   useEffect(() => {
+    const raw = searchParams.toString();
+    // Ignore commits triggered by our own state->URL sync so rapid clicks never get clobbered by stale searchParams
+    if (internalSearchWritesRef.current.has(raw)) {
+      internalSearchWritesRef.current.delete(raw);
+      return;
+    }
     if (document.activeElement?.id === 'rf2-ms-candidate-search') return;
     const nextQuery = searchParams.get('q') ?? '';
     const nextTier = parseTier(searchParams.get('tier'));
@@ -487,12 +508,30 @@ export function TalentPoolPage() {
     setCurrentPage((current) => (current === nextPage ? current : nextPage));
   }, [searchParams]);
 
-  // Reset pagination to page 1 whenever filters, search, sort, tier, or target job change
+  // Reset pagination to page 1 whenever user-facing filters, search, sort, tier, or target job change
   useEffect(() => {
-    if (isFirstFilterSyncRef.current) {
-      isFirstFilterSyncRef.current = false;
-      return;
-    }
+    const prev = prevFilterStateRef.current;
+    prevFilterStateRef.current = {
+      selectedVacancyId,
+      benchSearch,
+      locationFilter,
+      expFilter,
+      availFilter,
+      tierFilter,
+      sortBy,
+    };
+    if (!prev) return;
+    // Skip resetting initial ?page= when initial vacancy auto-selects from '' -> id
+    const onlyInitialVacancyAutoSelected =
+      !prev.selectedVacancyId &&
+      Boolean(selectedVacancyId) &&
+      prev.benchSearch === benchSearch &&
+      prev.locationFilter === locationFilter &&
+      prev.expFilter === expFilter &&
+      prev.availFilter === availFilter &&
+      prev.tierFilter === tierFilter &&
+      prev.sortBy === sortBy;
+    if (onlyInitialVacancyAutoSelected) return;
     setCurrentPage(1);
     setExpandedCandidateId(null);
   }, [selectedVacancyId, benchSearch, locationFilter, expFilter, availFilter, tierFilter, sortBy]);
