@@ -189,6 +189,48 @@ describe('nav per seat', () => {
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
   });
 
+  it('shows one interviews entry for recruiter/manager interviewers, and keeps My interviews for interviewer-only users', () => {
+    const keys = (seat: Seat, permissions: string[], interviewer: boolean) =>
+      permittedNavItems(seat, permissions, false, false, interviewer).map((item) => item.key);
+    // Recruiter who also interviews: Interviews covers it (Mine scope + scorecard links).
+    expect(keys('employee', ['VACANCY_VIEW', 'APPLICATION_VIEW'], true)).toContain('interviews');
+    expect(keys('employee', ['VACANCY_VIEW', 'APPLICATION_VIEW'], true)).not.toContain('my-interviews');
+    expect(keys('manager', ['VACANCY_VIEW', 'APPLICATION_VIEW'], true)).toContain('interviews');
+    expect(keys('manager', ['VACANCY_VIEW', 'APPLICATION_VIEW'], true)).not.toContain('my-interviews');
+    // Interviewer-only: My interviews is the only usable entry — /team-interviews
+    // redirects them to /my-interviews, so Interviews must not take its place.
+    expect(keys('employee', ['VACANCY_VIEW'], true)).toContain('my-interviews');
+    expect(keys('employee', ['VACANCY_VIEW'], true)).not.toContain('interviews');
+    expect(keys('manager', ['VACANCY_VIEW'], true)).toContain('my-interviews');
+    expect(keys('manager', ['VACANCY_VIEW'], true)).not.toContain('interviews');
+    // Non-interviewer recruiter: Interviews only, no My interviews.
+    expect(keys('employee', ['VACANCY_VIEW', 'APPLICATION_VIEW'], false)).toContain('interviews');
+    expect(keys('employee', ['VACANCY_VIEW', 'APPLICATION_VIEW'], false)).not.toContain('my-interviews');
+  });
+
+  it('renders one interviews link in the sidebar for a recruiter-interviewer', () => {
+    const recruiterInterviewer = user(
+      ['VACANCY_VIEW', 'APPLICATION_VIEW', 'INTERVIEW_PARTICIPATE'],
+      ['RECRUITER', 'INTERVIEWER'],
+    );
+    renderShell('employee', recruiterInterviewer, '/my-work');
+    const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
+    expect(within(nav).getByRole('link', { name: 'Interviews' })).toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'My interviews' })).not.toBeInTheDocument();
+  });
+
+  it('a deep-linked /my-interviews degrades gracefully with no highlighted nav item', () => {
+    const recruiterInterviewer = user(
+      ['VACANCY_VIEW', 'APPLICATION_VIEW', 'INTERVIEW_PARTICIPATE'],
+      ['RECRUITER', 'INTERVIEWER'],
+    );
+    renderShell('employee', recruiterInterviewer, '/my-interviews');
+    expect(screen.getByText('page content')).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
+    expect(within(nav).queryAllByRole('link').filter((a) => a.getAttribute('aria-current') === 'page')).toEqual([]);
+    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByText('My interviews')).toBeInTheDocument();
+  });
+
   it('does not offer an admin tool when its route requires a stronger permission', () => {
     renderShell('admin', user(['APPLICATION_VIEW'], ['CUSTOM_ADMIN']), '/reports');
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.admin.heading });
