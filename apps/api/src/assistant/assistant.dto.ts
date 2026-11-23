@@ -25,7 +25,7 @@ export class AssistantHistoryTurnDto {
 export class AssistantAskDto {
   @IsString()
   @MinLength(2)
-  @MaxLength(1000)
+  @MaxLength(4000)
   question!: string;
 
   @IsOptional()
