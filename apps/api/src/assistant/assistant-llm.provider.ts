@@ -123,7 +123,7 @@ export class AssistantLlmProvider {
         contents,
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 900,
+          maxOutputTokens: 360,
         },
       }),
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),

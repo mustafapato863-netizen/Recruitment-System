@@ -84,6 +84,25 @@ function AssistantProse({ text }: { text: string }) {
   );
 }
 
+function AssistantResponse({ turn }: { turn: ChatTurn }) {
+  const detailsHeading = '\n\n**Related guide details:**\n\n';
+  const detailsStart = turn.text.indexOf(detailsHeading);
+
+  if (turn.mode !== 'grounded-fallback' || detailsStart < 0) {
+    return <AssistantProse text={turn.text} />;
+  }
+
+  return (
+    <>
+      <AssistantProse text={turn.text.slice(0, detailsStart)} />
+      <details className="rf2-assistant-citations">
+        <summary>View related guide details</summary>
+        <AssistantProse text={turn.text.slice(detailsStart + detailsHeading.length)} />
+      </details>
+    </>
+  );
+}
+
 export function AssistantDrawer({
   open,
   seat,
@@ -334,7 +353,7 @@ export function AssistantDrawer({
                   <span>{turn.text}</span>
                 ) : (
                   <>
-                    <AssistantProse text={turn.text} />
+                    <AssistantResponse turn={turn} />
 
                     {turn.warnings?.length ? (
                       <div className="rf2-assistant-warning" role="status">
