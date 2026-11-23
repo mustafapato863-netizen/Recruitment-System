@@ -229,6 +229,22 @@ function OrgCard({
   );
 }
 
+function measureOffsetRelativeTo(
+  el: HTMLElement,
+  ancestor: HTMLElement,
+): { left: number; top: number; width: number; height: number } | null {
+  let left = 0;
+  let top = 0;
+  let curr: HTMLElement | null = el;
+  while (curr && curr !== ancestor) {
+    left += curr.offsetLeft;
+    top += curr.offsetTop;
+    curr = curr.offsetParent as HTMLElement | null;
+  }
+  if (curr !== ancestor) return null;
+  return { left, top, width: el.offsetWidth, height: el.offsetHeight };
+}
+
 function ReportingChart({
   levels,
   usersById,
@@ -263,12 +279,22 @@ function ReportingChart({
   useEffect(() => {
     const onResize = () => setMeasureKey((key) => key + 1);
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const container = containerRef.current;
+    const ro =
+      typeof ResizeObserver !== 'undefined' && container
+        ? new ResizeObserver(() => setMeasureKey((key) => key + 1))
+        : null;
+    if (ro && container) ro.observe(container);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      ro?.disconnect();
+    };
   }, []);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    // Measure inside .rf2-org-canvas layout space (invariant to parent CSS scale/transform transitions).
     const bounds = container.getBoundingClientRect();
     const scale = zoom || 1;
     const next: ChartEdge[] = [];
@@ -279,12 +305,27 @@ function ReportingChart({
         const parentEl = cardRefs.current.get(managerId);
         const childEl = cardRefs.current.get(node.user.id);
         if (!parentEl || !childEl) continue;
-        const parent = parentEl.getBoundingClientRect();
-        const child = childEl.getBoundingClientRect();
-        const x1 = (parent.left + parent.width / 2 - bounds.left) / scale;
-        const y1 = (parent.bottom - bounds.top) / scale;
-        const x2 = (child.left + child.width / 2 - bounds.left) / scale;
-        const y2 = (child.top - bounds.top) / scale;
+
+        const parentOffset = measureOffsetRelativeTo(parentEl, container);
+        const childOffset = measureOffsetRelativeTo(childEl, container);
+        let x1: number;
+        let y1: number;
+        let x2: number;
+        let y2: number;
+
+        if (parentOffset && childOffset && (parentOffset.width > 0 || childOffset.width > 0)) {
+          x1 = parentOffset.left + parentOffset.width / 2;
+          y1 = parentOffset.top + parentOffset.height;
+          x2 = childOffset.left + childOffset.width / 2;
+          y2 = childOffset.top;
+        } else {
+          const parent = parentEl.getBoundingClientRect();
+          const child = childEl.getBoundingClientRect();
+          x1 = (parent.left + parent.width / 2 - bounds.left) / scale;
+          y1 = (parent.bottom - bounds.top) / scale;
+          x2 = (child.left + child.width / 2 - bounds.left) / scale;
+          y2 = (child.top - bounds.top) / scale;
+        }
         const midY = (y1 + y2) / 2;
         next.push({
           id: node.user.id,
@@ -303,6 +344,7 @@ function ReportingChart({
         className="rf2-org-canvas__svg"
         width={canvas.width || '100%'}
         height={canvas.height || '100%'}
+        viewBox={canvas.width > 0 && canvas.height > 0 ? `0 0 ${canvas.width} ${canvas.height}` : undefined}
         data-testid="reporting-tree-edges"
         aria-hidden="true"
       >

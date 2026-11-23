@@ -237,4 +237,58 @@ describe('ReportingTreeV2 (Visual Org Chart & Hierarchy Management)', () => {
     await user.click(centerBtn);
     expect(scaler).toHaveStyle('transform: translate3d(0px, 0px, 0) scale(0.6)');
   });
+
+  it('keeps SVG connector paths scale-invariant in layout coordinates when changing zoom presets mid-transition', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <ReportingTreeV2 />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Sarah Ahmed');
+    const canvas = screen.getByTestId('reporting-org-canvas');
+    const monaCard = screen.getByTitle('Mona TeamLeader').closest('.rf2-org-card-wrapper') as HTMLElement;
+    const ahmedCard = screen.getByTitle('Ahmed Mostafa').closest('.rf2-org-card-wrapper') as HTMLElement;
+    const sarahCard = screen.getByTitle('Sarah Ahmed').closest('.rf2-org-card-wrapper') as HTMLElement;
+
+    Object.defineProperty(canvas, 'scrollWidth', { configurable: true, value: 900 });
+    Object.defineProperty(canvas, 'scrollHeight', { configurable: true, value: 600 });
+
+    const defineBox = (el: HTMLElement, left: number, top: number, width: number, height: number) => {
+      Object.defineProperty(el, 'offsetParent', { configurable: true, value: canvas });
+      Object.defineProperty(el, 'offsetLeft', { configurable: true, value: left });
+      Object.defineProperty(el, 'offsetTop', { configurable: true, value: top });
+      Object.defineProperty(el, 'offsetWidth', { configurable: true, value: width });
+      Object.defineProperty(el, 'offsetHeight', { configurable: true, value: height });
+      // Simulate stale pre-transition 0.6x rects even when zoom switches to 100% or 40%.
+      vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+        left: left * 0.6,
+        top: top * 0.6,
+        right: (left + width) * 0.6,
+        bottom: (top + height) * 0.6,
+        width: width * 0.6,
+        height: height * 0.6,
+        x: left * 0.6,
+        y: top * 0.6,
+        toJSON: () => ({}),
+      });
+    };
+
+    defineBox(monaCard, 300, 20, 260, 120);
+    defineBox(ahmedCard, 120, 220, 260, 120);
+    defineBox(sarahCard, 480, 220, 260, 120);
+
+    await user.click(screen.getByRole('button', { name: '100%' }));
+    const svg = screen.getByTestId('reporting-tree-edges');
+    const pathsAt100 = Array.from(svg.querySelectorAll('path')).map((p) => p.getAttribute('d'));
+    expect(pathsAt100).toEqual([
+      'M 430 140 C 430 180, 250 180, 250 220',
+      'M 430 140 C 430 180, 610 180, 610 220',
+    ]);
+
+    await user.click(screen.getByRole('button', { name: '40%' }));
+    const pathsAt40 = Array.from(svg.querySelectorAll('path')).map((p) => p.getAttribute('d'));
+    expect(pathsAt40).toEqual(pathsAt100);
+  });
 });
