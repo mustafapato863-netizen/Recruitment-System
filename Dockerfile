@@ -14,10 +14,16 @@ RUN pnpm --dir apps/api build && pnpm --dir apps/worker build
 ENV VITE_API_BASE_URL=/api/v1
 RUN pnpm --dir apps/web build
 
+FROM build AS api-artifacts
+# Keep the workspace layout used by pnpm, with the CommonJS files emitted by Nest.
+RUN node deploy/prepare-api-workspaces.cjs
+
 FROM base AS runtime
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/apps/api/dist/apps ./apps/api/dist/apps
+COPY --from=api-artifacts /app/apps/api/dist/packages ./packages
+COPY --from=build /app/packages/validation/node_modules ./packages/validation/node_modules
 COPY --from=build /app/apps/worker/node_modules ./apps/worker/node_modules
 COPY --from=build /app/apps/worker/dist ./apps/worker/dist
 COPY --from=build /app/database/node_modules ./database/node_modules
@@ -32,6 +38,7 @@ ENV NODE_ENV=production PORT=3000
 ENV RECRUITFLOW_DOCUMENT_STORAGE_PATH=/data/documents
 ENV VACANCY_CORE_ADAPTER=prisma
 RUN mkdir -p /data/documents && chown node:node /data/documents \
+    && ln -s ../../../packages /app/apps/api/dist/packages \
     && chmod +x /app/deploy/start-api.sh
 USER node
 # This imports modules only; production secrets are supplied at container start,
