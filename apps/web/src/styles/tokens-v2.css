@@ -41,6 +41,14 @@
   --rf2-info-tint: var(--color-info-soft);
   --rf2-neutral-tint: var(--color-surface-muted);
   --rf2-on-action: var(--color-on-action);
+  --rf2-avatar-bg: var(--rf2-success);
+  --rf2-danger-badge-bg: var(--rf2-danger);
+  --rf2-warning-ink: #9a3412;
+  --rf2-btn-primary-hover: var(--color-action-strong);
+  --rf2-btn-primary-pressed: var(--color-action-strong);
+  --rf2-btn-danger-bg: var(--rf2-danger);
+  --rf2-btn-danger-hover: var(--rf2-danger-hover);
+  --rf2-btn-danger-pressed: var(--rf2-danger-pressed);
   --rf2-danger-hover: var(--color-danger-strong);
   --rf2-danger-pressed: var(--color-danger-strong);
   --rf2-danger-tint-strong: var(--color-danger-soft);
@@ -120,7 +128,15 @@ html[data-ui='v2'][data-theme='dark'],
 html.dark[data-ui='v2'] {
   --rf2-border: var(--color-border);
   --rf2-glass-line: var(--color-border);
-  --rf2-brand-action: var(--sgh-cyan-dark);
+  --rf2-brand-action: #0369a1;
+  --rf2-btn-primary-hover: #075985;
+  --rf2-btn-primary-pressed: #0c4a6e;
+  --rf2-avatar-bg: #047857;
+  --rf2-danger-badge-bg: #b91c1c;
+  --rf2-btn-danger-bg: #b91c1c;
+  --rf2-btn-danger-hover: #991b1b;
+  --rf2-btn-danger-pressed: #7f1d1d;
+  --rf2-warning-ink: #fdba74;
   --rf2-on-action: #ffffff;
   --rf2-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.24), 0 1px 2px rgba(0, 0, 0, 0.18);
   --rf2-card-shadow-hover: 0 10px 24px -6px rgba(0, 0, 0, 0.42), 0 3px 8px -2px rgba(0, 0, 0, 0.28);

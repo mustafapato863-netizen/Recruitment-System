@@ -432,7 +432,7 @@ export function AdminReportsV2() {
         </p>
       ) : null}
 
-      <section className="rf2-panel rf2-admin__card" aria-labelledby="oj-h">
+      <section className="rf2-panel rf2-admin__card" aria-labelledby="oj-h" tabIndex={0}>
         <div className="rf2-row-between rf2-admin__head">
           <h2 id="oj-h" className="rf2-jtable__name">
             Open jobs
@@ -560,7 +560,7 @@ export function AdminReportsV2() {
           </p>
         </section>
 
-        <section className="rf2-panel rf2-admin__card" aria-labelledby="ow-h">
+        <section className="rf2-panel rf2-admin__card" aria-labelledby="ow-h" tabIndex={0}>
           <div className="rf2-row-between rf2-admin__head">
             <h2 id="ow-h" className="rf2-jtable__name">
               Offers waiting
@@ -622,7 +622,7 @@ export function AdminReportsV2() {
         </section>
       </div>
 
-      <section className="rf2-panel rf2-admin__card" aria-labelledby="tr-h">
+      <section className="rf2-panel rf2-admin__card" aria-labelledby="tr-h" tabIndex={0}>
         <div className="rf2-row-between rf2-admin__head">
           <h2 id="tr-h" className="rf2-jtable__name">
             Hiring report by team

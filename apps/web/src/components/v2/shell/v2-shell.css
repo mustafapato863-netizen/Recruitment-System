@@ -22,7 +22,7 @@
 [data-ui='v2'] .rf2-shell__account-name { color: var(--rf2-on-nav); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); font-weight: 600; }
 [data-ui='v2'] .rf2-shell__account-seat { font-size: var(--rf2-text-caption); line-height: var(--rf2-leading-caption); }
 
-[data-ui='v2'] .rf2-avatar { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: var(--rf2-radius-pill); background: var(--rf2-success); color: var(--rf2-on-action); font-size: var(--rf2-text-caption); font-weight: 700; }
+[data-ui='v2'] .rf2-avatar { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: var(--rf2-radius-pill); background: var(--rf2-avatar-bg); color: var(--rf2-on-action); font-size: var(--rf2-text-caption); font-weight: 700; }
 [data-ui='v2'] .rf2-avatar--sm { width: 28px; height: 28px; }
 
 [data-ui='v2'] .rf2-shell__main { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; min-height: 100vh; }
@@ -40,7 +40,7 @@
 [data-ui='v2'] .rf2-icon-button:hover { border-color: var(--rf2-action); background: var(--rf2-info-tint); color: var(--rf2-action); }
 [data-ui='v2'] .rf2-icon-button[aria-label^='Help'] { background: var(--rf2-success-tint); }
 [data-ui='v2'] .rf2-bell .rf2-icon-button { background: var(--rf2-card); }
-[data-ui='v2'] .rf2-icon-button__badge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: var(--rf2-radius-pill); background: var(--rf2-danger); color: var(--rf2-on-action); font-size: 11px; line-height: 18px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
+[data-ui='v2'] .rf2-icon-button__badge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: var(--rf2-radius-pill); background: var(--rf2-danger-badge-bg); color: var(--rf2-on-action); font-size: 11px; line-height: 18px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
 [data-ui='v2'] .rf2-search-entry:focus-visible, [data-ui='v2'] .rf2-icon-button:focus-visible, [data-ui='v2'] .rf2-user-menu__trigger:focus-visible, [data-ui='v2'] .rf2-user-menu__item:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
 
 [data-ui='v2'] .rf2-user-menu { position: relative; }

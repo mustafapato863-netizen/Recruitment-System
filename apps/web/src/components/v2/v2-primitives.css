@@ -43,8 +43,8 @@
 @media (pointer: coarse) { [data-ui='v2'] .rf2-btn { min-height: 44px; } }
 
 [data-ui='v2'] .rf2-btn--primary { background: var(--rf2-brand-action); color: var(--rf2-on-action); box-shadow: var(--rf2-btn-primary-shadow); }
-[data-ui='v2'] .rf2-btn--primary:hover:not(:disabled):not([aria-disabled='true']) { background: var(--rf2-action-hover); box-shadow: var(--rf2-btn-primary-shadow-hover); }
-[data-ui='v2'] .rf2-btn--primary:active:not(:disabled), [data-ui='v2'] .rf2-btn--primary[aria-pressed='true'] { background: var(--rf2-action-pressed); }
+[data-ui='v2'] .rf2-btn--primary:hover:not(:disabled):not([aria-disabled='true']) { background: var(--rf2-btn-primary-hover); box-shadow: var(--rf2-btn-primary-shadow-hover); }
+[data-ui='v2'] .rf2-btn--primary:active:not(:disabled), [data-ui='v2'] .rf2-btn--primary[aria-pressed='true'] { background: var(--rf2-btn-primary-pressed); }
 
 [data-ui='v2'] .rf2-btn--secondary { background: var(--rf2-card); color: var(--rf2-ink); border-color: var(--rf2-border); box-shadow: var(--rf2-btn-shadow); }
 [data-ui='v2'] .rf2-btn--secondary:hover:not(:disabled):not([aria-disabled='true']) { background: var(--rf2-neutral-tint); border-color: var(--rf2-ink-2); box-shadow: var(--rf2-btn-shadow-hover); }
@@ -56,9 +56,9 @@
 [data-ui='v2'] .rf2-btn--tertiary:hover:not(:disabled):not([aria-disabled='true']) { background: var(--rf2-info-tint); color: var(--rf2-action-hover); box-shadow: var(--rf2-btn-shadow); }
 [data-ui='v2'] .rf2-btn--tertiary:active:not(:disabled), [data-ui='v2'] .rf2-btn--tertiary[aria-pressed='true'] { background: var(--rf2-divider); }
 
-[data-ui='v2'] .rf2-btn--danger { background: var(--rf2-danger); color: var(--rf2-on-action); box-shadow: 0 4px 12px -2px rgba(220, 38, 38, 0.26); }
-[data-ui='v2'] .rf2-btn--danger:hover:not(:disabled):not([aria-disabled='true']) { background: var(--rf2-danger-hover); }
-[data-ui='v2'] .rf2-btn--danger:active:not(:disabled) { background: var(--rf2-danger-pressed); }
+[data-ui='v2'] .rf2-btn--danger { background: var(--rf2-btn-danger-bg); color: var(--rf2-on-action); box-shadow: 0 4px 12px -2px rgba(220, 38, 38, 0.26); }
+[data-ui='v2'] .rf2-btn--danger:hover:not(:disabled):not([aria-disabled='true']) { background: var(--rf2-btn-danger-hover); }
+[data-ui='v2'] .rf2-btn--danger:active:not(:disabled) { background: var(--rf2-btn-danger-pressed); }
 
 [data-ui='v2'] .rf2-btn--danger-outline { background: var(--rf2-card); color: var(--rf2-danger); border-color: transparent; }
 [data-ui='v2'] .rf2-btn--danger-outline:hover:not(:disabled):not([aria-disabled='true']) { background: var(--rf2-danger-tint); }
