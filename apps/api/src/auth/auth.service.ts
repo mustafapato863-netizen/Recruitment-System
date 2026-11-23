@@ -62,13 +62,20 @@ export class AuthService {
     private emailOutbox: EmailOutboxService,
   ) {}
 
+  /**
+   * Org-aware login: the same email can exist in more than one organization
+   * (e.g. a demo account shadowing a real account), and the login form has
+   * no org selector. Try every account with this email, in creation order,
+   * and return the first whose password matches — each password reaches its
+   * own org's account. Returns null when no account matches.
+   */
   async validateUser(email: string, pass: string) {
-    const user = await this.prisma.user.findFirst({
+    const users = await this.prisma.user.findMany({
       where: { emailNormalized: email.trim().toLowerCase() },
+      orderBy: { createdAt: 'asc' },
     });
-    if (user && user.passwordHash) {
-      const isMatch = await bcrypt.compare(pass, user.passwordHash);
-      if (isMatch) {
+    for (const user of users) {
+      if (user.passwordHash && (await bcrypt.compare(pass, user.passwordHash))) {
         return user;
       }
     }
