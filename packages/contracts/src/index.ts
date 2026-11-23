@@ -2430,3 +2430,4 @@ export interface ResultsResponse {
 }
 
 export * from './ats-engine.ts';
+export * from './assistant.ts';

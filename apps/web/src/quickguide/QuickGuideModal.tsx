@@ -57,6 +57,18 @@ export const QuickGuideModal: React.FC = () => {
     closeGuide();
   };
 
+  const handleAskAssistant = () => {
+    markCurrentPageSeen();
+    closeGuide();
+    window.dispatchEvent(
+      new CustomEvent('rf2:open-assistant', {
+        detail: {
+          question: `How do I complete the main workflow and avoid rules blockers on ${currentGuide.title}?`,
+        },
+      }),
+    );
+  };
+
   const isCritical = currentGuide.hardPartCaution.severity === 'critical';
 
   return createPortal(
@@ -412,6 +424,14 @@ export const QuickGuideModal: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleAskAssistant}
+              className="flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl border border-rf-border bg-rf-surface hover:bg-rf-surface-muted text-rf-ink font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rf-action"
+            >
+              <span>Ask AI Guide</span>
+            </button>
+
             <button
               type="button"
               onClick={beginTour}

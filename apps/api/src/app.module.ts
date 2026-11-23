@@ -38,6 +38,7 @@ import { PositionLevelTargetsModule } from './position-level-targets/position-le
 import { ResumeModule } from './resume/resume.module';
 import { AdminOverrideModule } from './admin-override/admin-override.module';
 import { MatchingModule } from './matching/matching.module';
+import { AssistantModule } from './assistant/assistant.module';
 import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middleware';
 
 @Module({
@@ -82,6 +83,7 @@ import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middl
     PositionLevelTargetsModule,
     MatchingModule,
     AdminOverrideModule,
+    AssistantModule,
   ],
   controllers: [HealthController],
 })

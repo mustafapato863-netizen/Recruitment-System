@@ -7,10 +7,15 @@ import type { UserProfile } from '@recruitflow/contracts';
 import { axeViolations as runAxe, axeViolations } from '../../__tests__/axe';
 
 const getApi = vi.fn();
-vi.mock('../../../../api/client', () => ({ getApi: (p: string) => getApi(p) }));
+const postApi = vi.fn();
+vi.mock('../../../../api/client', () => ({
+  getApi: (p: string) => getApi(p),
+  postApi: (p: string, b?: unknown) => postApi(p, b),
+}));
 vi.mock('../../../../quickguide', () => ({
   QuickGuideProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   QuickGuideModal: () => null,
+  useQuickGuide: () => ({ openGuide: vi.fn() }),
 }));
 
 import { AppShellV2, TOPNAV_MENU_QUERY, useV2Shell } from '../AppShellV2';
@@ -284,6 +289,7 @@ describe('header', () => {
     getApi.mockRejectedValueOnce(new Error('x'));
     renderShell('employee');
     await waitFor(() => expect(getApi).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Open Guide Assistant' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument();
   });
 

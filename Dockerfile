@@ -26,6 +26,7 @@ COPY --from=build /app/database/package.json ./database/package.json
 COPY --from=build /app/database/prisma/schema.prisma ./database/prisma/schema.prisma
 COPY --from=build /app/database/prisma/migrations ./database/prisma/migrations
 COPY --from=build /app/database/scripts/prisma.cjs ./database/scripts/prisma.cjs
+COPY --from=build /app/docs/system-guide ./docs/system-guide
 COPY deploy/start-api.sh deploy/validate-runtime.cjs deploy/check-api-runtime.cjs ./deploy/
 ENV NODE_ENV=production PORT=3000
 ENV RECRUITFLOW_DOCUMENT_STORAGE_PATH=/data/documents

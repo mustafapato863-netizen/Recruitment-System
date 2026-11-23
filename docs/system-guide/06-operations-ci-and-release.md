@@ -17,20 +17,21 @@ Validated in [packages/config/src/index.ts](../../packages/config/src/index.ts) 
 | **Storage & Backups** | `OBJECT_STORAGE_*`, `RECRUITFLOW_DOCUMENT_STORAGE_PATH` (`./storage/documents`), `RECRUITFLOW_DOCUMENT_STORAGE_PROVIDER` | Private path only; backup manifest exports metadata, not binary snapshots |
 | **Worker & Email** | `REDIS_URL`, `MAIL_DELIVERY_ENABLED`, `MAIL_TRANSPORT` (`console` / `smtp`), `SMTP_*`, `MAIL_FROM`, `WORKER_BATCH_SIZE`, `WORKER_POLL_INTERVAL_MS`, `WORKER_READINESS_REQUIRED`, `DUE_REMINDER_ENABLED`, `DUE_REMINDER_HOUR_CAIRO`, `DUE_REMINDER_LEAD_DAYS` (`3,1`) | Production should enable `WORKER_READINESS_REQUIRED=true` |
 | **Domain Tuning & Rollout** | `INTERVIEW_ROOM_HOSTS`, `DEFAULT_PHONE_COUNTRY_CODE` (`966`), `CONTACT_KEYS_REPAIR_ON_BOOT` (`true`), `RF_V2_SEATS` (`employee`) | Controls room URL allowlist, phone normalization, and seat rollout flags |
+| **AI Guide Assistant (Optional)** | `AI_ASSISTANT_ENABLED` (`true`), `AI_ASSISTANT_PROVIDER`, `GEMINI_API_KEY`, `AI_ASSISTANT_API_KEY`, `AI_ASSISTANT_MODEL` (`gemini-2.5-flash`), `AI_ASSISTANT_BASE_URL` | Enables live Gemini / OpenAI-compatible synthesis over `docs/system-guide/`; runs in zero-key deterministic grounded-fallback mode when unset |
 
 ---
 
 ## 2. Deployment Topologies & Supply-Chain Policy
 
-- **Frontend (`vercel.json`):** Builds `apps/web` (`pnpm --dir apps/web build` → `apps/web/dist`), serves SPA fallback rewrites, `no-cache` on HTML routes, and immutable `1y` caching on `/assets/*`. Remember Vite strips `import.meta.env.DEV` quick-login helpers from production builds automatically (`apps/web/src/auth/LoginPage.tsx`).
-- **API & Worker (`Dockerfile`, `compose.production.yml`, `compose.hostinger.yml`, `deploy/`):** Containerized Node 24 + pnpm 11 builds running API + Worker + PostgreSQL + Redis, plus pre-flight validation helpers in `deploy/check-api-runtime.cjs` and `deploy/validate-runtime.cjs`.
+- **Frontend (`vercel.json`):** Builds `apps/web` (`pnpm --dir apps/web build` → `apps/web/dist`), serves SPA fallback rewrites, `no-cache` on HTML routes, and immutable `1y` caching on `/assets/*`. Remember Vite strips `import.meta.env.DEV` quick-login and workspace-switcher helpers from production builds automatically (`apps/web/src/auth/LoginPage.tsx`, `apps/web/src/components/v2/shell/AppShellV2.tsx`).
+- **API & Worker (`Dockerfile`, `compose.production.yml`, `compose.hostinger.yml`, `deploy/`):** Containerized Node 24 + pnpm 11 builds running API + Worker + PostgreSQL + Redis (copying `docs/system-guide/` for runtime guide indexing), plus pre-flight validation helpers in `deploy/check-api-runtime.cjs` and `deploy/validate-runtime.cjs`.
 - **pnpm Workspace Overrides (`pnpm-workspace.yaml`):** Keeps pinned transitive security patches across all 9 workspace projects (including `nodemailer >=10.1.4`, `multer >=2.5.0`, `body-parser >=2.4.0`, `qs >=6.16.1`, `cross-spawn >=7.0.5`, `effect ^3.22.1` keeping `3.22.5` compatible with `@prisma/config@6.19.3`).
 
 ---
 
 ## 3. Verification Gates & GitHub CI Workflows
 
-Defined in root [package.json](../../package.json), [.github/workflows/ci.yml](../../.github/workflows/ci.yml), and [.github/workflows/rules-pack.yml](../../.github/workflows/rules-pack.yml):
+Required local commands that must pass before merging a code change into `main` (defined in root [package.json](../../package.json), [.github/workflows/ci.yml](../../.github/workflows/ci.yml), and [.github/workflows/rules-pack.yml](../../.github/workflows/rules-pack.yml)):
 
 | Gate | Command | What It Verifies |
 |---|---|---|

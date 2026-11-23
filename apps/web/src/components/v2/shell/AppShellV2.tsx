@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, lazy, Suspense, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, BriefcaseBusiness, CalendarCheck, CalendarClock, CheckCircle2, ClipboardList, Columns3, Database, FileText, History,
+  BarChart3, Bot, BriefcaseBusiness, CalendarCheck, CalendarClock, CheckCircle2, ClipboardList, Columns3, Database, FileText, History,
   KeyRound, ListChecks, LogOut, Menu, Moon, Sun, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserCheck, UserRound, Users, X,
   Archive } from 'lucide-react';
 import type { UserProfile } from '@recruitflow/contracts';
@@ -24,6 +24,8 @@ import { NotificationsBell, NOTIFICATIONS_CHANGED } from '../../../v2/search/Not
 import '../../../v2/search/search.css';
 import { formatPersonName, getInitials } from '../../../v2/userIdentity';
 import { preloadRouteChunk, scheduleIdleRoutePreload } from '../../../v2/routePreload';
+
+const AssistantDrawer = lazy(() => import('../../../v2/assistant/AssistantDrawer'));
 
 const ICONS: Record<NavIconName, ReactNode> = {
   'my-work': <ListChecks />, interviews: <CalendarCheck />, 'my-interviews': <CalendarClock />, jobs: <BriefcaseBusiness />, candidates: <Users />,
@@ -203,10 +205,12 @@ function storedWorkspaceSeat(userId: string, fallback: Seat, availableSeats: rea
 type ShellFrameProps = AppShellV2Props & {
   availableSeats: Seat[];
   approvalCount: number | null;
+  assistantOpen: boolean;
+  onOpenAssistant: () => void;
   onWorkspaceChange: (seat: Seat) => void;
 };
 
-function ShellFrame({ user, seat, onSignOut, children, availableSeats, approvalCount, onWorkspaceChange }: ShellFrameProps) {
+function ShellFrame({ user, seat, onSignOut, children, availableSeats, approvalCount, assistantOpen, onOpenAssistant, onWorkspaceChange }: ShellFrameProps) {
   const location = useLocation();
   // B2-17/18: "/" goes to the seat's home; v1 pages the seat can't use redirect to their v2 equivalent.
   const redirectTo = v2Redirect(seat, `${location.pathname}${location.search}`, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user), permissions: user.permissions ?? [], isAdministrator: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') });
@@ -283,6 +287,16 @@ function ShellFrame({ user, seat, onSignOut, children, availableSeats, approvalC
     <>
       <HeaderSearch placeholder={config.searchPlaceholder} meId={user.id} />
       <div className="rf2-shell__actions">
+        <button
+          type="button"
+          className="rf2-icon-button"
+          aria-label="Open Guide Assistant"
+          aria-expanded={assistantOpen}
+          title="RecruitFlow Guide Assistant"
+          onClick={onOpenAssistant}
+        >
+          <Bot aria-hidden="true" />
+        </button>
         <button type="button" className="rf2-icon-button" aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={toggleTheme}>
           {theme === 'light' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
         </button>
@@ -403,6 +417,9 @@ export function AppShellV2(props: AppShellV2Props) {
       : props.seat
   ));
   const [approvalCount, setApprovalCount] = useState<number | null>(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantMounted, setAssistantMounted] = useState(false);
+  const [assistantSeedQuestion, setAssistantSeedQuestion] = useState<string | null>(null);
 
   useEffect(() => {
     setSeat(
@@ -411,6 +428,24 @@ export function AppShellV2(props: AppShellV2Props) {
         : props.seat,
     );
   }, [workspaceSwitcherEnabled, props.user.id, props.seat, availableSeats]);
+
+  useEffect(() => {
+    const onOpenAssistant = (event: Event) => {
+      const detail = (event as CustomEvent<{ question?: string }>).detail;
+      if (typeof detail?.question === 'string' && detail.question.trim()) {
+        setAssistantSeedQuestion(detail.question.trim());
+      }
+      setAssistantMounted(true);
+      setAssistantOpen(true);
+    };
+    window.addEventListener('rf2:open-assistant', onOpenAssistant);
+    return () => window.removeEventListener('rf2:open-assistant', onOpenAssistant);
+  }, []);
+
+  const openAssistantDrawer = () => {
+    setAssistantMounted(true);
+    setAssistantOpen(true);
+  };
 
   const switchWorkspace = (next: Seat) => {
     if (!workspaceSwitcherEnabled || !availableSeats.includes(next)) return;
@@ -422,10 +457,29 @@ export function AppShellV2(props: AppShellV2Props) {
     <QuickGuideProvider>
       <BreadcrumbProvider>
         <V2ShellContext.Provider value={{ seat, setApprovalsCount: setApprovalCount }}>
-          <ShellFrame {...props} seat={seat} availableSeats={availableSeats} approvalCount={approvalCount} onWorkspaceChange={switchWorkspace} />
+          <ShellFrame
+            {...props}
+            seat={seat}
+            availableSeats={availableSeats}
+            approvalCount={approvalCount}
+            assistantOpen={assistantOpen}
+            onOpenAssistant={openAssistantDrawer}
+            onWorkspaceChange={switchWorkspace}
+          />
         </V2ShellContext.Provider>
         <GlobalSelectEnhancer />
         <QuickGuideModal />
+        {assistantMounted ? (
+          <Suspense fallback={null}>
+            <AssistantDrawer
+              open={assistantOpen}
+              seat={seat}
+              initialQuestion={assistantSeedQuestion}
+              onInitialQuestionConsumed={() => setAssistantSeedQuestion(null)}
+              onClose={() => setAssistantOpen(false)}
+            />
+          </Suspense>
+        ) : null}
       </BreadcrumbProvider>
     </QuickGuideProvider>
   );

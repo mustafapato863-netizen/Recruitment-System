@@ -19,9 +19,9 @@ The backend API (`apps/api`) is a modular NestJS application mounted under the g
 
 ---
 
-## 2. Complete Controller & Module Directory (`49` Controllers across `37` Modules)
+## 2. Complete Controller & Module Directory (`50` Controllers across `38` Modules)
 
-Every module directory in `apps/api/src/`: `access-control`, `admin-override`, `applications`, `audit`, `auth`, `candidates`, `common`, `database`, `documents`, `email`, `email-templates`, `hiring`, `import`, `integrations`, `interviews`, `manager-decision`, `master-data`, `matching`, `my-work`, `notifications`, `offers`, `pipeline-settings`, `position-level-targets`, `public-jobs`, `recruiter-targets`, `reports`, `results`, `resume`, `roles`, `rules-pack`, `screening`, `search`, `talent-pool`, `tasks`, `users`, `vacancy-core`, `whatsapp-templates`.
+Every module directory in `apps/api/src/`: `access-control`, `admin-override`, `applications`, `assistant`, `audit`, `auth`, `candidates`, `common`, `database`, `documents`, `email`, `email-templates`, `hiring`, `import`, `integrations`, `interviews`, `manager-decision`, `master-data`, `matching`, `my-work`, `notifications`, `offers`, `pipeline-settings`, `position-level-targets`, `public-jobs`, `recruiter-targets`, `reports`, `results`, `resume`, `roles`, `rules-pack`, `screening`, `search`, `talent-pool`, `tasks`, `users`, `vacancy-core`, `whatsapp-templates`.
 
 ### Auth, Identity & Public Health
 - `HealthController` (`health.controller.ts`): `GET /api/v1/health` (`@Public`), `GET /api/v1/readiness` (`@Public`, verifies DB + worker heartbeat in prod)
@@ -37,6 +37,7 @@ Every module directory in `apps/api/src/`: `access-control`, `admin-override`, `
 - `TasksController` (`tasks/tasks.controller.ts`): `GET /tasks`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id/status`, `PATCH /tasks/:id/reschedule`
 - `NotificationsController` (`notifications/notifications.controller.ts`): `GET /notifications`, `GET /notifications/unread-count`, `PATCH /notifications/:id/read`, `POST /notifications/read-all`
 - `SearchController` (`search/search.controller.ts`): `GET /search`
+- `AssistantController` (`assistant/assistant.controller.ts`): `GET /assistant/suggestions`, `POST /assistant/ask` (grounded in `docs/system-guide/` with PII-free Gemini / OpenAI-compatible synthesis + deterministic fallback, seat/RBAC filtering, and per-user rate limit)
 
 ### Candidates, Documents, Resume Parsing & ATS Matching
 - `CandidatesController` (`candidates/candidates.controller.ts`): CRUD on `/candidates`, `export.xlsx`, `metrics`, `duplicates`, `activities` (`GET|POST|complete|reschedule`), `fill-from-cv`, `anonymize`

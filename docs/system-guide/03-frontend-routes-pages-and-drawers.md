@@ -33,9 +33,10 @@ The web application (`apps/web`) runs React + Vite (`vite.config.ts`) with route
   - **15 cards/page pagination**, O(1) next-page slice cache, per-vacancy `/suggestions` cache (`2 min` TTL), proactive background batch prefetch near end of loaded server batches (`pageSize=100`), and race-safe `internalSearchWritesRef` URL synchronization.
 - **Application File (`/applications/:id`, `ApplicationFileV2.tsx`):** Smart action bar highlighting the single **Next action**, 5 stage-gate enforcement banners, timeline/history (`FileHistory.tsx`), private screening drafts, documents/portal upload links, interview scheduling, offer revisions, and hiring-case transition.
 - **Notification Center (`/notifications`, `NotificationsV2.tsx`):** Semantic `<h1>Notifications</h1>`, category filter tabs (`All Notifications`, `Unread Only`, `System Alerts`, `Pending Approvals`), mark-read actions, and return-context links (`?returnTo=...`).
-- **Administration (`/users`, `/roles`, `/master-data`, `/audit-log`, `/pipeline-settings`, `/whatsapp-templates`, `/integrations`, `/reports`):**
+- **Administration (`/users`, `/roles`, `/master-data`, `/audit-log`, `/pipeline-settings`, `/whatsapp-templates`, `/integrations`, `/reports`, `/import/:dataset/:jobId`):**
   - `/users?view=tree` hosts `ReportingTreeV2` (interactive 4-level SVG org chart, zoom controls `40%/60%/100%`, subtree focus, unassigned-user review, manager reassignment).
   - `/reports` (`AdminReportsV2`) renders keyboard-focusable (`tabIndex={0}`) scrollable report cards alongside KPI summary and CSV export.
+  - **Bulk Master Data Import (`MASTER_IMPORT_DATASETS` in [destinations.ts](../../apps/web/src/v2/destinations.ts)):** Supports `branches`, `positions`, `departments`, `skills`, `candidate-sources`, and `interview-types` under `/import/:dataset/:jobId` gated by `MASTER_DATA_VIEW` / `MASTER_DATA_MANAGE` (alongside `candidates` and `vacancy-requests`).
 
 ---
 
@@ -63,4 +64,4 @@ The web application (`apps/web`) runs React + Vite (`vite.config.ts`) with route
 - **SWR View Caching & Route Preload:** [viewCache.ts](../../apps/web/src/v2/api/viewCache.ts) + [useCachedResource.ts](../../apps/web/src/v2/api/useCachedResource.ts) cache API lists across route switches; [routePreload.ts](../../apps/web/src/v2/routePreload.ts) warms sidebar chunks on hover/focus/idle (`AppShellV2.tsx`).
 - **Bundle Budgets (`scripts/check-bundle-budgets.mjs`):** Main JS `<= 500 KB` raw / `<= 150 KB` gzip (`262.96 KB` raw / `79.79 KB` gzip in `v0.2.0`); heavy `pdf` / `pdf.worker` parser chunks are code-split lazily.
 - **Design Tokens (`pnpm check:design-tokens`):** [tokens.css](../../apps/web/src/styles/tokens.css) + [tokens-v2.css](../../apps/web/src/styles/tokens-v2.css) enforce `84` strict CSS/TSX token-only files with WCAG AA `>= 4.5:1` dark-mode contrast (`--rf2-brand-action: #0369a1`, `--rf2-avatar-bg: #047857`, `--rf2-danger-badge-bg: #b91c1c`, `--rf2-warning-ink: #fdba74`).
-- **Global Ctrl+K Command Search:** Opens `HeaderSearch` across candidates, jobs, and workspace destinations.
+- **Global Ctrl+K Command Search & AI Guide Assistant (`AppShellV2.tsx` + `AssistantDrawer.tsx`):** `HeaderSearch` searches candidates, jobs, and workspace destinations; the lazy-loaded `AssistantDrawer` (`Open Guide Assistant` header button and `QuickGuideModal` handoff) answers role-scoped guide questions backed by `docs/system-guide/`.
