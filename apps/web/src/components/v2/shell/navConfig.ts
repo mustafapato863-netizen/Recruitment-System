@@ -174,7 +174,7 @@ export const permittedClassicItems: (permissions?: readonly string[], isAdminist
 
 export function permittedNavItems(seat: Seat, permissions: readonly string[] | undefined, isAdministrator = false, recruiterOnly = false, interviewer = false): SeatNavItem[] {
   const held = new Set(permissions ?? []);
-  return SEAT_NAV[seat].items.filter((item) => {
+  const items = SEAT_NAV[seat].items.filter((item) => {
     if (item.notForRecruiter && recruiterOnly) return false;
     if (item.interviewerOnly && !interviewer) return false;
     if (isAdministrator) return true; // PermissionGate lets ADMINISTRATOR through
@@ -182,6 +182,21 @@ export function permittedNavItems(seat: Seat, permissions: readonly string[] | u
     if (item.requiresAny && !item.requiresAny.some((p) => held.has(p))) return false;
     return true;
   });
+  // "Interviews" (TeamInterviewsV2) already carries a Mine/Team scope toggle and
+  // "Open my scorecard" links to /my-interviews, so listing "My interviews"
+  // beside it duplicates the entry for recruiter/manager interviewers. Keep
+  // exactly one: the duplicate is "My interviews" — except for interviewer-only
+  // users (interviewer, no APPLICATION_VIEW), for whom "Interviews" redirects to
+  // /my-interviews (destinations.isInterviewerOnly), so "My interviews" is their
+  // only usable entry and "Interviews" is the one to drop. The /my-interviews
+  // route, its screenRegistry entry and deep links are untouched; a deep-linked
+  // visit simply has no highlighted nav item (activeNavKey returns undefined and
+  // the shell falls back to the humanized path for the breadcrumb title).
+  if (items.some((item) => item.key === 'interviews') && items.some((item) => item.key === 'my-interviews')) {
+    const interviewerOnlyUser = interviewer && !held.has('APPLICATION_VIEW');
+    return items.filter((item) => item.key !== (interviewerOnlyUser ? 'interviews' : 'my-interviews'));
+  }
+  return items;
 }
 
 /** Active item for a location: the longest matching path (hash-aware for /users#roles). */
