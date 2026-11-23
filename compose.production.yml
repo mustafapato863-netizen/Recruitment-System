@@ -42,5 +42,14 @@ services:
         # worker once the API process exists so both services can become ready.
         condition: service_started
     restart: unless-stopped
+    # The database lives on dokploy-network. Dokploy only auto-attaches that
+    # network to the Traefik-routed api service, so pin it here explicitly —
+    # otherwise the worker loses DB access every time it is recreated.
+    networks:
+      - dokploy-network
+      - default
 volumes:
   documents:
+networks:
+  dokploy-network:
+    external: true

@@ -641,7 +641,11 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     'VAC-2026-008': recruiterSarah,
     'VAC-2026-009': recruiterSarah,
     'VAC-2026-010': recruiterSarah,
-    'VAC-2026-011': demoMulti,
+    // R5 (rules pack): a vacancy's primaryRecruiter must never hold
+    // ADMINISTRATOR, so VAC-2026-011 is primarily recruited by Karim
+    // (pure RECRUITER, Team B). demo.multi still requested the
+    // requisition (VR-2026-016) and owns its applications below.
+    'VAC-2026-011': karimRecruiter,
   };
 
   const vacMap = {};
@@ -800,7 +804,9 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     // Exit stages (were missing: all other 6 stages already had coverage)
     { id: fixtureId(523), code: 'APP-100206', email: 'farida.nabil@sample.com', vacId: nurseVacId, stage: 'Rejected', src: 'Upload' },
     { id: fixtureId(524), code: 'APP-100207', email: 'walid.gamal@sample.com', vacId: pharmVacId, stage: 'Withdrawn', src: 'Upload' },
-    // Demo Multi-Role Lead's owned vacancy (VAC-2026-011)
+    // Demo Multi-Role Lead's requisition (VAC-2026-011, requested via
+    // VR-2026-016); the vacancy's primary recruiter is Karim (R5), while
+    // demo.multi owns these two applications on it.
     { id: fixtureId(525), code: 'APP-100208', email: 'rania.kamel@sample.com', vacId: demoVacId, stage: 'Applied', src: 'Upload' },
     { id: fixtureId(526), code: 'APP-100209', email: 'tariq.mansour@sample.com', vacId: demoVacId, stage: 'Screening', src: 'Upload' },
   ];
