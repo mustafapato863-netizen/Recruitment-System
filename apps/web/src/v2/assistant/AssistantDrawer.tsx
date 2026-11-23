@@ -184,7 +184,7 @@ export function AssistantDrawer({
       };
       const history: AssistantHistoryTurn[] = turns
         .slice(-6)
-        .map((t) => ({ role: t.role, content: t.text }));
+        .map((t) => ({ role: t.role, content: t.text.slice(0, 1200) }));
 
       setTurns((prev) => [...prev, userTurn]);
       setQuestion('');
@@ -442,7 +442,7 @@ export function AssistantDrawer({
               className="rf2-assistant-input"
               aria-label="Ask a question about RecruitFlow"
               placeholder="Ask how a workflow step, permission, or gate error works…"
-              maxLength={1000}
+              maxLength={4000}
               rows={2}
               value={question}
               disabled={sending}
@@ -459,9 +459,8 @@ export function AssistantDrawer({
               <span>Ask</span>
             </button>
           </form>
-          <div className="rf2-assistant-footer-meta">
-            <span>No candidate PII or offer pay leaves your session scope.</span>
-            {turns.length > 0 ? (
+          {turns.length > 0 ? (
+            <div className="rf2-assistant-footer-meta">
               <button
                 type="button"
                 className="rf2-btn rf2-btn--tertiary rf2-btn--sm"
@@ -472,10 +471,8 @@ export function AssistantDrawer({
               >
                 New topic
               </button>
-            ) : (
-              <span>{question.length}/1000</span>
-            )}
-          </div>
+            </div>
+          ) : null}
         </footer>
       </section>
     </div>,
