@@ -19,6 +19,7 @@ export const SCREEN_ROUTE_GROUPS: readonly ScreenRouteGroup[] = [
     '/login',
     '/forgot-password',
     '/reset-password',
+    '/change-password',
     '/accept-invitation',
     '/verify-email',
     '/schedule/:token',

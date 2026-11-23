@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { SCREEN_ROUTES } from '../screenRegistry';
+import { SCREEN_ROUTE_GROUPS, SCREEN_ROUTES } from '../screenRegistry';
 import { v2Redirect } from '../destinations';
 import { ADMIN_GROUP_ROUTES, SEAT_NAV, permittedNavItems } from '../../components/v2/shell/navConfig';
 
@@ -18,6 +18,20 @@ function registered(path: string): boolean {
 }
 
 describe('all public and signed-in screen paths are inventoried', () => {
+  it('inventories 65 routes after /change-password (public 13, core 17, recruiter 11, manager 4, admin 7, legacy 13)', () => {
+    // Recounted from the registry 2026-11-23: core is 17, not 16, so the
+    // pre-change total was 64 — never assert 63 or 65-before-change.
+    expect(SCREEN_ROUTES).toHaveLength(65);
+    const byArea = new Map(SCREEN_ROUTE_GROUPS.map((group) => [group.area, group.paths.length]));
+    expect(byArea.get('Public, authentication and candidate entry')).toBe(13);
+    expect(byArea.get('Core recruitment workflows')).toBe(17);
+    expect(byArea.get('Recruiter desk')).toBe(11);
+    expect(byArea.get('Manager desk')).toBe(4);
+    expect(byArea.get('Administration')).toBe(7);
+    expect(byArea.get('Legacy aliases and catch-all')).toBe(13);
+    expect(SCREEN_ROUTES.find((screen) => screen.path === '/change-password')?.surface).toBe('public');
+  });
+
   it('covers the entire App.tsx route tree without duplicate or ghost routes', () => {
     expect(new Set(declared).size).toBe(declared.length);
     const catalog = SCREEN_ROUTES.map((screen) => screen.path);

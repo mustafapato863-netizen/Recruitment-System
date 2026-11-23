@@ -43,6 +43,24 @@ const TEST_PERSONAS: Array<{
         role: 'Hiring Manager',
         email: 'hassan.ali@recruitflow.local',
       },
+      {
+        name: 'Demo Multi-Seat',
+        initials: 'DM',
+        role: 'Multi-seat · 3 roles',
+        email: 'demo.multi@recruitflow.local',
+      },
+      {
+        name: 'Dr. Karim',
+        initials: 'DK',
+        role: 'Interviewer',
+        email: 'dr.karim.interviewer@recruitflow.local',
+      },
+      {
+        name: 'New Employee',
+        initials: 'NE',
+        role: 'First sign-in · Must change password',
+        email: 'new.employee@recruitflow.local',
+      },
     ]
   : [];
 

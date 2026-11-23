@@ -78,9 +78,14 @@ export class ChangePasswordDto implements ChangePasswordInput {
   @IsNotEmpty()
   declare currentPassword: string;
 
+  /**
+   * No @MinLength here on purpose: strength is enforced by AuthService via
+   * evaluateStrongPassword so weak passwords fail with WEAK_PASSWORD. A DTO
+   * @MinLength would be rejected earlier by the global ValidationPipe as a
+   * generic VALIDATION_ERROR instead.
+   */
   @IsString()
   @IsNotEmpty()
-  @MinLength(8)
   @MaxLength(128)
   declare newPassword: string;
 }
@@ -97,9 +102,9 @@ export class CompletePasswordResetDto implements CompletePasswordResetInput {
   @MaxLength(200)
   declare token: string;
 
+  /** Strength enforced by AuthService (WEAK_PASSWORD); see ChangePasswordDto. */
   @IsString()
   @IsNotEmpty()
-  @MinLength(8)
   @MaxLength(128)
   declare newPassword: string;
 }
@@ -123,9 +128,9 @@ export class AcceptInvitationDto implements AcceptInvitationInput {
   @MaxLength(200)
   declare token: string;
 
+  /** Strength enforced by AuthService (WEAK_PASSWORD); see ChangePasswordDto. */
   @IsString()
   @IsNotEmpty()
-  @MinLength(8)
   @MaxLength(128)
   declare password: string;
 

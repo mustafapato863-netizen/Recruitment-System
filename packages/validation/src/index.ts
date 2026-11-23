@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { evaluateStrongPassword, STRONG_PASSWORD_MAX_LENGTH, STRONG_PASSWORD_MIN_LENGTH } from './password-policy.ts';
 
 export const idSchema = z.uuid();
 
@@ -84,18 +85,74 @@ export const vacancyRequestActionSchema = z.object({
 
 // ─── Auth ────────────────────────────────────────────────────
 
+/**
+ * Strong password (min 10, max 128, at least one uppercase / lowercase /
+ * digit / special character). The email-local-part rule needs the user's
+ * email, so object schemas add it with a superRefine (see createUserSchema).
+ * Login deliberately does NOT use this schema: existing (pre-policy)
+ * passwords must still be able to sign in.
+ */
+export const strongPasswordSchema = z
+  .string()
+  .min(STRONG_PASSWORD_MIN_LENGTH, 'Password must be at least 10 characters long.')
+  .max(STRONG_PASSWORD_MAX_LENGTH, 'Password must be at most 128 characters long.')
+  .superRefine((password, ctx) => {
+    // refine() takes a static message/params object, so superRefine is used
+    // to surface the per-rule errors from evaluateStrongPassword.
+    const result = evaluateStrongPassword(password);
+    if (!result.valid) {
+      for (const message of result.errors) {
+        ctx.addIssue({ code: 'custom', message });
+      }
+    }
+  });
+
 export const loginSchema = z.object({
   email: z.string().trim().email().max(320),
   password: z.string().min(1).max(128),
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: strongPasswordSchema,
+});
+
+export const completePasswordResetSchema = z.object({
+  token: z.string().min(1).max(200),
+  newPassword: strongPasswordSchema,
+});
+
+export const acceptInvitationSchema = z.object({
+  token: z.string().min(1).max(200),
+  password: strongPasswordSchema,
+  displayName: z.string().trim().min(1).max(200).optional(),
+});
+
 // ─── Users ───────────────────────────────────────────────────
 
-export const createUserSchema = z.object({
-  email: z.string().trim().email().max(320),
-  displayName: z.string().trim().min(1).max(200),
-  password: z.string().min(8).max(128),
-});
+export const createUserSchema = z
+  .object({
+    email: z.string().trim().email().max(320),
+    displayName: z.string().trim().min(1).max(200),
+    password: strongPasswordSchema,
+    jobTitle: z.string().trim().max(120).nullable().optional(),
+    /** Role CODES (e.g. 'ADMINISTRATOR'). */
+    roles: z.array(z.string().trim().min(1)).optional(),
+    /** Role UUIDs; backend accepts `roles` (codes) and/or `roleIds` (UUIDs). */
+    roleIds: z.array(idSchema).optional(),
+    managerId: idSchema.nullable().optional(),
+    branchId: idSchema.nullable().optional(),
+    mustChangePassword: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!evaluateStrongPassword(data.password, data.email).checks.noEmailLocalPart) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['password'],
+        message: 'Password must not contain your email address.',
+      });
+    }
+  });
 
 export const updateUserSchema = z.object({
   displayName: z.string().trim().min(1).max(200).optional(),
@@ -352,6 +409,7 @@ export const updateIntegrationConfigSchema = z.object({
 
 // ─── Candidate Position Fit Matching ────────────────────────
 export * from './matching.ts';
+export * from './password-policy.ts';
 export * from './skill-taxonomy.ts';
 export * from './evidence-ranker.ts';
 export * from './hard-gates.ts';

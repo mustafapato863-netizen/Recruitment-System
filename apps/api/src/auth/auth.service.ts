@@ -16,6 +16,7 @@ import { EmailOutboxService } from '../email/email-outbox.service';
 import type { Prisma } from '@recruitflow/database';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { evaluateStrongPassword } from '@recruitflow/validation';
 import type {
   AuthActionResponse,
   AuthDeliveryStatus,
@@ -42,6 +43,8 @@ interface AuthTokenRow {
   userId: string;
   organizationId: string;
   expiresAt: Date;
+  /** Selected only by the flows that set a new password (strength check). */
+  email?: string;
 }
 
 const RECOVERY_TTL_HOURS = 1;
@@ -233,6 +236,7 @@ export class AuthService {
       roles,
       permissions,
       lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+      mustChangePassword: user.mustChangePassword ?? false,
       ...(await this.rollout(user.organizationId, user.id, roles.map((r) => r.code))),
     };
   }
@@ -336,19 +340,53 @@ export class AuthService {
     return this.getOwnPreferences(userId, organizationId);
   }
 
-  async changeOwnPassword(userId: string, organizationId: string, data: ChangePasswordDto): Promise<void> {
+  /**
+   * Own password change. Enforces the strong policy, rejects reusing the
+   * current password, clears the forced-change flag, and invalidates all
+   * other sessions (tokenVersion++). Returns the refreshed profile plus the
+   * new tokenVersion so the caller can reissue the caller's own cookies.
+   */
+  async changeOwnPassword(
+    userId: string,
+    organizationId: string,
+    data: ChangePasswordDto,
+  ): Promise<{ user: UserProfile; tokenVersion: number }> {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, organizationId, status: 'Active' },
-      select: { passwordHash: true },
+      select: { id: true, email: true, passwordHash: true, tokenVersion: true },
     });
     if (!user?.passwordHash || !(await bcrypt.compare(data.currentPassword, user.passwordHash))) {
       throw new ForbiddenException('Current password is incorrect');
     }
+    if (data.newPassword === data.currentPassword) {
+      throw new BadRequestException({
+        code: 'WEAK_PASSWORD',
+        message: 'New password must be different from the current password.',
+        fields: { newPassword: ['New password must be different from the current password.'] },
+      });
+    }
+    const passwordCheck = evaluateStrongPassword(data.newPassword, user.email);
+    if (!passwordCheck.valid) {
+      throw new BadRequestException({
+        code: 'WEAK_PASSWORD',
+        message: 'Password does not meet the strength requirements.',
+        fields: { newPassword: passwordCheck.errors },
+      });
+    }
     const passwordHash = await bcrypt.hash(data.newPassword, 10);
     await this.prisma.user.updateMany({
       where: { id: userId, organizationId },
-      data: { passwordHash, tokenVersion: { increment: 1 } },
+      data: {
+        passwordHash,
+        tokenVersion: { increment: 1 },
+        mustChangePassword: false,
+        passwordChangedAt: new Date(),
+      },
     });
+    return {
+      user: await this.getUserProfile(userId),
+      tokenVersion: user.tokenVersion + 1,
+    };
   }
 
   /**
@@ -416,7 +454,7 @@ export class AuthService {
 
     await this.prisma.$transaction(async (tx) => {
       const token = await tx.$queryRaw<AuthTokenRow[]>`
-        SELECT t."id", t."userId", t."organizationId", t."expiresAt"
+        SELECT t."id", t."userId", t."organizationId", t."expiresAt", u."email"
         FROM "auth_tokens" t
         INNER JOIN "users" u ON u."id" = t."userId" AND u."organizationId" = t."organizationId"
         WHERE t."tokenHash" = ${tokenHash}
@@ -435,10 +473,21 @@ export class AuthService {
         });
       }
 
+      const passwordCheck = evaluateStrongPassword(data.newPassword, current.email);
+      if (!passwordCheck.valid) {
+        throw new BadRequestException({
+          code: 'WEAK_PASSWORD',
+          message: 'Password does not meet the strength requirements.',
+          fields: { newPassword: passwordCheck.errors },
+        });
+      }
+
       const updatedUsers = await tx.$executeRaw`
         UPDATE "users"
         SET "passwordHash" = ${passwordHash},
             "tokenVersion" = "tokenVersion" + 1,
+            "mustChangePassword" = false,
+            "passwordChangedAt" = CURRENT_TIMESTAMP,
             "updatedAt" = CURRENT_TIMESTAMP
         WHERE "id" = CAST(${current.userId} AS uuid)
           AND "organizationId" = CAST(${current.organizationId} AS uuid)
@@ -678,7 +727,7 @@ export class AuthService {
 
     await this.prisma.$transaction(async (tx) => {
       const token = await tx.$queryRaw<(AuthTokenRow & { displayName: string })[]>`
-        SELECT t."id", t."userId", t."organizationId", t."expiresAt", u."displayName"
+        SELECT t."id", t."userId", t."organizationId", t."expiresAt", u."displayName", u."email"
         FROM "auth_tokens" t
         INNER JOIN "users" u ON u."id" = t."userId" AND u."organizationId" = t."organizationId"
         WHERE t."tokenHash" = ${tokenHash}
@@ -697,6 +746,15 @@ export class AuthService {
         });
       }
 
+      const passwordCheck = evaluateStrongPassword(data.password, current.email);
+      if (!passwordCheck.valid) {
+        throw new BadRequestException({
+          code: 'WEAK_PASSWORD',
+          message: 'Password does not meet the strength requirements.',
+          fields: { password: passwordCheck.errors },
+        });
+      }
+
       const updatedUsers = await tx.$executeRaw`
         UPDATE "users"
         SET "passwordHash" = ${passwordHash},
@@ -704,6 +762,8 @@ export class AuthService {
             "status" = ${'Active'},
             "emailVerifiedAt" = CURRENT_TIMESTAMP,
             "invitationAcceptedAt" = CURRENT_TIMESTAMP,
+            "mustChangePassword" = false,
+            "passwordChangedAt" = CURRENT_TIMESTAMP,
             "tokenVersion" = "tokenVersion" + 1,
             "updatedAt" = CURRENT_TIMESTAMP
         WHERE "id" = CAST(${current.userId} AS uuid)

@@ -25,7 +25,7 @@ function authCookieSameSite(): AuthCookieSameSite {
   return 'lax';
 }
 
-function authCookieOptions(path: string): {
+export function authCookieOptions(path: string): {
   httpOnly: true;
   secure: boolean;
   sameSite: AuthCookieSameSite;

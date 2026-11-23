@@ -27,7 +27,7 @@ Every module directory in `apps/api/src/`: `access-control`, `admin-override`, `
 - `HealthController` (`health.controller.ts`): `GET /api/v1/health` (`@Public`), `GET /api/v1/readiness` (`@Public`, verifies DB + worker heartbeat in prod)
 - `AuthController` (`auth/auth.controller.ts`): `POST /auth/login` (`@Public`), `POST /auth/logout`, `POST /auth/refresh` (`@Public`), `GET /auth/me`, `POST /auth/password-reset/request|complete` (`@Public`), `POST /auth/email-verification/request|complete` (`@Public`), `POST /auth/invitations/accept` (`@Public`)
 - `MeController` (`auth/me.controller.ts`): `GET|PATCH /me/profile`, `GET|PATCH /me/preferences`, `POST /me/password`
-- `UsersController` (`users/users.controller.ts`): `GET /users/interviewers`, `GET /users`, `GET /users/assignable`, `GET /users/:id`, `POST /users`, `POST /users/invitations`, `PATCH /users/:id`, `POST|DELETE /users/:id/roles/:roleId`, `DELETE /users/:id`
+- `UsersController` (`users/users.controller.ts`): `GET /users/interviewers`, `GET /users`, `GET /users/assignable`, `GET /users/:id`, `POST /users`, `POST /users/invitations`, `PATCH /users/:id`, `POST /users/:id/password`, `POST|DELETE /users/:id/roles/:roleId`, `DELETE /users/:id`
 - `RolesController` (`roles/roles.controller.ts`): CRUD on `/roles`, `/roles/permissions`, and `/roles/:id/permissions/:permissionId`
 
 ### Requisitions, Vacancies & Daily Work
@@ -73,6 +73,12 @@ Every module directory in `apps/api/src/`: `access-control`, `admin-override`, `
 - `EmailTemplatesController`, `WhatsAppTemplatesController`, `IntegrationsController` (`email-templates/`, `whatsapp-templates/`, `integrations/`): communication templates & integrations (`/integrations/:id/test`)
 
 *(Supporting internal service modules without controllers: `common/`, `database/`, `email/`, `rules-pack/` DB verification spec.)*
+
+### Password Policy & Forced Change (User Management)
+- **Policy (`packages/validation/src/password-policy.ts`, `evaluateStrongPassword`, `STRONG_PASSWORD_MIN_LENGTH = 10`):** New passwords must be 10–128 characters with at least one uppercase letter, one lowercase letter, one digit, and one special (non-alphanumeric) character, and must not contain the user's email local part (when it is at least 3 characters). Enforced in `UsersService` and `AuthService` so every weak password fails with `WEAK_PASSWORD` (`HTTP 400`); the DTOs deliberately carry no `@MinLength` so the failure is never a generic `VALIDATION_ERROR`.
+- **Create User (`POST /users`, admin seat + `USERS_MANAGE`, audited `USER_CREATE`):** `CreateUserDto` takes `email`, `displayName`, `jobTitle`, `password`, `roles` (role codes) and/or `roleIds` (UUIDs), `managerId`, and `branchId`. `mustChangePassword` defaults to `true` (`passwordChangedAt: null`) — every new account must set its own password at first login.
+- **Admin reset (`POST /users/:id/password`, admin seat + `USERS_MANAGE`, tenant-scoped, audited `USER_PASSWORD_CHANGE`):** `AdminChangeUserPasswordDto` (`password`, optional `requireChangeOnNextLogin`, default `true`) sets the password, stamps `passwordChangedAt`, and — unless explicitly opted out — forces a change at next login.
+- **Self-service & forced flow:** `POST /me/password` (`MeController`, `currentPassword` + `newPassword`) and the password-reset completion both clear `mustChangePassword` and stamp `passwordChangedAt`. `POST /auth/login` and `GET /auth/me` expose `mustChangePassword`; while it is `true` the JWT guard restricts the user to the password-change path and the web app routes them to `/change-password`.
 
 ---
 

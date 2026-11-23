@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSeat } from '../seat';
+import { distinctSeatCount, resolveSeat } from '../seat';
 
 const me = (codes: string[], permissions: string[] = [], extra: Record<string, unknown> = {}) => ({
   roles: codes.map((code, i) => ({ id: `r${i}`, code, name: code })), permissions, ...extra,
@@ -55,5 +55,32 @@ describe('resolveSeat (provisional role → seat)', () => {
   it('handles null and empty users', () => {
     expect(resolveSeat(null)).toBe('employee');
     expect(resolveSeat({ roles: [], permissions: [] } as never)).toBe('employee');
+  });
+});
+
+describe('distinctSeatCount (workspace switcher gate)', () => {
+  it('counts one seat for a single-role admin', () => {
+    expect(distinctSeatCount(me(['ADMINISTRATOR']))).toBe(1);
+  });
+
+  it('counts one seat when several roles map to the same seat', () => {
+    expect(distinctSeatCount(me(['RECRUITER', 'INTERVIEWER']))).toBe(1);
+    expect(distinctSeatCount(me(['RECRUITER', 'RECRUITER']))).toBe(1);
+  });
+
+  it('counts each distinct seat a multi-role user holds', () => {
+    expect(distinctSeatCount(me(['RECRUITER', 'HIRING_MANAGER']))).toBe(2);
+    expect(distinctSeatCount(me(['RECRUITER', 'HIRING_MANAGER', 'ADMINISTRATOR']))).toBe(3);
+  });
+
+  it('counts backend-sent seats (me.seat / v2Seats) as well as role codes', () => {
+    expect(distinctSeatCount(me(['RECRUITER'], [], { seat: 'manager' }))).toBe(2);
+    expect(distinctSeatCount(me([], [], { v2Seats: ['employee', 'admin'] }))).toBe(2);
+    expect(distinctSeatCount(me(['RECRUITER'], [], { seat: 'employee' }))).toBe(1);
+  });
+
+  it('is zero for null and empty users', () => {
+    expect(distinctSeatCount(null)).toBe(0);
+    expect(distinctSeatCount({ roles: [], permissions: [] } as never)).toBe(0);
   });
 });
