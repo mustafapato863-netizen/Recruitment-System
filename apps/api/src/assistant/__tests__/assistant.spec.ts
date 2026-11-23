@@ -150,7 +150,7 @@ describe('AssistantService RBAC, Privacy & Hybrid Synthesis', () => {
     expect(bodyText).not.toContain('123e4567-e89b-12d3-a456-426614174000');
 
     expect(res.mode).toBe('llm');
-    expect(res.provider).toBe('gemini:gemini-2.5-flash');
+    expect(res.provider).toBe('gemini:gemini-3.5-flash-lite');
     expect(res.answer).not.toContain('Password123!');
     expect(res.answer).toContain('Next action');
     expect(res.answer).not.toMatch(/\brecommended action\b/i);
