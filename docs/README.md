@@ -4,6 +4,8 @@ Entry point for RecruitFlow architecture, technical specifications, design syste
 
 ## Documentation Hub
 
+- [**Full System Guide (`v0.2.0`)**](system-guide/README.md) - Source-verified guide covering workspaces, RBAC, all 8 workflow stages & hard gates, 64 frontend routes, 49 API controllers, 60 Prisma models, worker jobs & CI/ops.
+- [**AI Assistant Guide & RAG Knowledge Pack**](system-guide/ai-assistant/SYSTEM_PROMPT.md) - Canonical system prompt, role playbooks, structured JSONL knowledge chunks, and evaluation cases.
 - [Architecture](architecture/README.md) - Service boundaries, tenant isolation, and dependency direction.
 - [Development Setup](development/setup.md) - Local commands, environment variables, and quality verification gates.
 - [Design System](design-system/README.md) - UI design tokens, component standards, and visual rules.
