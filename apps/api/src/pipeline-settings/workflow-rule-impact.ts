@@ -1,5 +1,5 @@
 /** Jobs whose stage, seat count, or accepted-case checklist must not move when a rule is previewed. */
-export const PROTECTED_VACANCY_CODES = ['VAC-2026-009', 'VAC-2026-010', 'VAC-2026-011'] as const;
+export const PROTECTED_VACANCY_CODES = ['VAC-DEMO-2026-009', 'VAC-DEMO-2026-010', 'VAC-DEMO-2026-011'] as const;
 
 export type WorkflowProfile = 'technical' | 'clinical';
 
