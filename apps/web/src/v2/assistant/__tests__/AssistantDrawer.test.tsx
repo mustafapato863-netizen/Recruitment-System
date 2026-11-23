@@ -65,7 +65,7 @@ describe('AssistantDrawer', () => {
       answer: '**Where to go:** `/applications/:id`\n\n**Next action:** Submit a scorecard on `/my-interviews` before advancing.',
       mode: 'llm',
       seat: 'employee',
-      provider: 'gemini:gemini-2.5-flash',
+      provider: 'gemini:gemini-3.5-flash-lite',
       citations: [
         {
           chunkId: 'wf-stage-gates',

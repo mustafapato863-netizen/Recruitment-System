@@ -24,7 +24,7 @@ interface ResolvedProviderConfig {
   baseUrl?: string | undefined;
 }
 
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const DEFAULT_TIMEOUT_MS = 15_000;
 

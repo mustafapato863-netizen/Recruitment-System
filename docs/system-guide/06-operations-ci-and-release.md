@@ -17,7 +17,7 @@ Validated in [packages/config/src/index.ts](../../packages/config/src/index.ts) 
 | **Storage & Backups** | `OBJECT_STORAGE_*`, `RECRUITFLOW_DOCUMENT_STORAGE_PATH` (`./storage/documents`), `RECRUITFLOW_DOCUMENT_STORAGE_PROVIDER` | Private path only; backup manifest exports metadata, not binary snapshots |
 | **Worker & Email** | `REDIS_URL`, `MAIL_DELIVERY_ENABLED`, `MAIL_TRANSPORT` (`console` / `smtp`), `SMTP_*`, `MAIL_FROM`, `WORKER_BATCH_SIZE`, `WORKER_POLL_INTERVAL_MS`, `WORKER_READINESS_REQUIRED`, `DUE_REMINDER_ENABLED`, `DUE_REMINDER_HOUR_CAIRO`, `DUE_REMINDER_LEAD_DAYS` (`3,1`) | Production should enable `WORKER_READINESS_REQUIRED=true` |
 | **Domain Tuning & Rollout** | `INTERVIEW_ROOM_HOSTS`, `DEFAULT_PHONE_COUNTRY_CODE` (`966`), `CONTACT_KEYS_REPAIR_ON_BOOT` (`true`), `RF_V2_SEATS` (`employee`) | Controls room URL allowlist, phone normalization, and seat rollout flags |
-| **AI Guide Assistant (Optional)** | `AI_ASSISTANT_ENABLED` (`true`), `AI_ASSISTANT_PROVIDER`, `GEMINI_API_KEY`, `AI_ASSISTANT_API_KEY`, `AI_ASSISTANT_MODEL` (`gemini-2.5-flash`), `AI_ASSISTANT_BASE_URL` | Enables live Gemini / OpenAI-compatible synthesis over `docs/system-guide/`; runs in zero-key deterministic grounded-fallback mode when unset |
+| **AI Guide Assistant (Optional)** | `AI_ASSISTANT_ENABLED` (`true`), `AI_ASSISTANT_PROVIDER`, `GEMINI_API_KEY`, `AI_ASSISTANT_API_KEY`, `AI_ASSISTANT_MODEL` (`gemini-3.5-flash-lite`), `AI_ASSISTANT_BASE_URL` | Enables live Gemini / OpenAI-compatible synthesis over `docs/system-guide/`; runs in zero-key deterministic grounded-fallback mode when unset |
 
 ---
 
