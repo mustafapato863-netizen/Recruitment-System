@@ -609,6 +609,7 @@ function CompareCandidatesStudio() {
   const [movedIds, setMovedIds] = useState<Record<string, boolean>>({});
   const [shortlistTargetId, setShortlistTargetId] = useState<string>(DEFAULT_STUDIO_CANDIDATES[0].id);
   const [shortlistedBanner, setShortlistedBanner] = useState<string | null>(null);
+  const [shortlistError, setShortlistError] = useState<string | null>(null);
 
   useEffect(() => {
     const next = new URLSearchParams(window.location.search);
@@ -763,17 +764,32 @@ function CompareCandidatesStudio() {
   };
 
   const handleMoveToPipeline = async (cand: StudioCandidateProfile) => {
+    // addToJob(vacancyId, candidateId): the job goes first. The moved state and
+    // the banner are set only after the API confirms the application exists.
+    try {
+      await addToJob(selectedJob.id, cand.id);
+    } catch {
+      setShortlistedBanner(null);
+      setShortlistError(`Could not move ${cand.name} to pipeline for ${selectedJob.title}. Please try again.`);
+      return;
+    }
+    setShortlistError(null);
     setMovedIds((prev) => ({ ...prev, [cand.id]: true }));
     setShortlistedBanner(`${cand.name} moved to pipeline for ${selectedJob.title} (${selectedJob.code}).`);
-    try {
-      await addToJob(cand.id, selectedJob.id);
-    } catch {
-      // Preserve optimistic visual state in studio
-    }
   };
 
-  const handleShortlistSelected = () => {
+  const handleShortlistSelected = async () => {
     if (!shortlistCandidate) return;
+    // There is no separate shortlist endpoint: shortlisting is adding the
+    // candidate to the job, the same addToJob call the pipeline button uses.
+    try {
+      await addToJob(selectedJob.id, shortlistCandidate.id);
+    } catch {
+      setShortlistedBanner(null);
+      setShortlistError(`Could not shortlist ${shortlistCandidate.name} for ${selectedJob.title}. Please try again.`);
+      return;
+    }
+    setShortlistError(null);
     setMovedIds((prev) => ({ ...prev, [shortlistCandidate.id]: true }));
     setShortlistedBanner(
       `${shortlistCandidate.name} shortlisted for ${selectedJob.title} (${selectedJob.code}).`,
@@ -809,6 +825,13 @@ function CompareCandidatesStudio() {
         <div className="rf2-inline-note" role="status" aria-live="polite">
           <CircleCheck aria-hidden="true" />
           <span>{shortlistedBanner}</span>
+        </div>
+      ) : null}
+
+      {shortlistError ? (
+        <div className="rf2-inline-note" data-tone="danger" role="alert">
+          <AlertTriangle aria-hidden="true" />
+          <span>{shortlistError}</span>
         </div>
       ) : null}
 
@@ -1477,26 +1500,13 @@ function CompareCandidatesStudio() {
               <span>Recommendation summary</span>
             </h2>
             <div className="rf2-cstudio__rec-actions">
-              <label className="rf2-cstudio__shortlist-check">
-                <input
-                  type="checkbox"
-                  checked={Boolean(shortlistCandidate)}
-                  onChange={() => {
-                    if (activeCandidates.length > 1) {
-                      const idx = activeCandidates.findIndex((c) => c.id === shortlistCandidate.id);
-                      const next = activeCandidates[(idx + 1) % activeCandidates.length];
-                      if (next) setShortlistTargetId(next.id);
-                    }
-                  }}
-                />
-                <span>
-                  Select <strong>{shortlistCandidate.name}</strong> for shortlist
-                </span>
-              </label>
+              <p className="rf2-cstudio__rec-selected">
+                Selected: <strong>{shortlistCandidate.name}</strong>
+              </p>
               <button
                 type="button"
                 className="rf2-cstudio__shortlist-btn"
-                onClick={handleShortlistSelected}
+                onClick={() => void handleShortlistSelected()}
               >
                 <span>Shortlist selected candidate</span>
                 <ChevronRight aria-hidden="true" />
@@ -1508,8 +1518,18 @@ function CompareCandidatesStudio() {
             {activeCandidates.map((cand) => (
               <div
                 key={cand.id}
-                className={`rf2-cstudio__rec-item rf2-cstudio__rec-item--${cand.recTone}`}
+                role="button"
+                tabIndex={0}
+                aria-pressed={cand.id === shortlistCandidate.id}
+                aria-label={`Select ${cand.name} for shortlist`}
+                className={`rf2-cstudio__rec-item rf2-cstudio__rec-item--${cand.recTone}${cand.id === shortlistCandidate.id ? ' rf2-cstudio__rec-item--selected' : ''}`}
                 onClick={() => setShortlistTargetId(cand.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setShortlistTargetId(cand.id);
+                  }
+                }}
               >
                 <span className="rf2-cstudio__rec-icon" aria-hidden="true">
                   {cand.recTone === 'green' ? <Crown /> : <UserCheck />}
@@ -1517,6 +1537,9 @@ function CompareCandidatesStudio() {
                 <div className="rf2-cstudio__rec-body">
                   <div className="rf2-cstudio__rec-name-row">
                     <span className="rf2-cstudio__rec-name">{cand.name}</span>
+                    {cand.id === shortlistCandidate.id ? (
+                      <span className="rf2-cstudio__pill rf2-cstudio__pill--info">Selected</span>
+                    ) : null}
                     <span
                       className={`rf2-cstudio__pill ${
                         cand.recTone === 'green'

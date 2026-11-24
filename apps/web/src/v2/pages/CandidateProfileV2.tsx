@@ -122,6 +122,11 @@ export function CandidateDetailPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isSuggestJobsOpen, setIsSuggestJobsOpen] = useState(false);
 
+  // Skills list: capped by default so a 60+ skill profile cannot turn the
+  // overview into a tag cloud; the toggle below reveals the rest.
+  const SKILLS_VISIBLE = 12;
+  const [skillsExpanded, setSkillsExpanded] = useState(false);
+
   // ─── Data Loading ────────────────────────────────────────────
 
   const loadAllData = async () => {
@@ -225,6 +230,11 @@ export function CandidateDetailPage() {
     void loadAllData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, canViewApplications, canViewInterviews, canAssign]);
+
+  // A new candidate starts with the skills list collapsed.
+  useEffect(() => {
+    setSkillsExpanded(false);
+  }, [id]);
 
   // ─── Individual Tab Retry Handlers ────────────────────────────
 
@@ -346,6 +356,8 @@ export function CandidateDetailPage() {
       setCandidate(updated);
       setNewTag('');
       setIsTagModalOpen(false);
+      // The new skill is appended at the end of the list — expand so it is visible.
+      setSkillsExpanded(true);
     } catch (err: unknown) {
       setTagError((err as Error).message || 'Failed to add candidate tag.');
     } finally {
@@ -573,6 +585,9 @@ export function CandidateDetailPage() {
 
   const avatarInitials = [candidate.firstName?.[0], candidate.lastName?.[0]].filter(Boolean).join('').toUpperCase() || 'C';
 
+  const skills = candidate.skills ?? [];
+  const visibleSkills = skillsExpanded ? skills : skills.slice(0, SKILLS_VISIBLE);
+
   return (
     <PageFrame
       showBack
@@ -662,14 +677,28 @@ export function CandidateDetailPage() {
                       </Button>
                     )}
                   </div>
-                  {(candidate.skills ?? []).length === 0 ? (
+                  {skills.length === 0 ? (
                     <p className="text-xs text-rf-ink-muted m-0">No skills recorded yet.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {(candidate.skills ?? []).map((skill) => (
-                        <Badge key={skill} variant="neutral" className="text-xs font-medium px-2.5 py-0.5">{skill}</Badge>
-                      ))}
-                    </div>
+                    <>
+                      <div className="flex flex-wrap gap-1.5">
+                        {visibleSkills.map((skill) => (
+                          <Badge key={skill} variant="neutral" className="text-xs font-medium px-2.5 py-0.5">{skill}</Badge>
+                        ))}
+                      </div>
+                      {skills.length > SKILLS_VISIBLE && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          aria-expanded={skillsExpanded}
+                          onClick={() => setSkillsExpanded((current) => !current)}
+                          className="self-start px-1 text-xs font-semibold"
+                        >
+                          {skillsExpanded ? 'Show fewer skills' : `Show all ${skills.length} skills`}
+                        </Button>
+                      )}
+                    </>
                   )}
                 </section>
                 <section className="rf-cand-cv-card flex flex-col gap-3 rounded-2xl border border-rf-border-subtle bg-white p-4 shadow-xs flex-1" aria-label="Documents">

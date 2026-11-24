@@ -54,6 +54,10 @@ export function CandidateActivityPanel({ candidateId, refreshKey = 0, initialKin
   const [followUpSummary, setFollowUpSummary] = useState('');
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [rescheduleDueAt, setRescheduleDueAt] = useState('');
+  // The timeline is capped so the rail does not dominate the page; the toggle
+  // reveals the rest of the loaded page.
+  const ACTIVITY_VISIBLE = 5;
+  const [activityExpanded, setActivityExpanded] = useState(false);
   const requestVersion = useRef(0);
   const idempotencyRef = useRef<{ draft: string; key: string } | null>(null);
   const timeZone = browserTimeZone();
@@ -61,6 +65,10 @@ export function CandidateActivityPanel({ candidateId, refreshKey = 0, initialKin
     if (initialKind) setKind(initialKind);
     if (initialScheduled !== undefined) setScheduled(initialScheduled);
   }, [initialKind, initialScheduled]);
+  // A new candidate (and a new page of activities) starts collapsed.
+  useEffect(() => {
+    setActivityExpanded(false);
+  }, [candidateId]);
   const load = useCallback(async () => {
     if (!canView) return;
     const version = ++requestVersion.current;
@@ -147,11 +155,11 @@ export function CandidateActivityPanel({ candidateId, refreshKey = 0, initialKin
       {notice && <p role="status" className="text-sm text-rf-ink">{notice}</p>}
       {loading && <p role="status" className="text-xs text-rf-ink-muted">Loading activities…</p>}
       {data && !loading && <>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <div className="grid grid-cols-2 gap-2 text-xs">
           {([['Completed', data.completed], ['By me', data.completedByMe], ['Follow-ups', data.pending], ['Overdue', data.overdue]] as const).map(([label, value]) => (
-            <span key={label} className="flex items-center justify-between gap-1.5 rounded-lg border border-rf-border bg-rf-surface-subtle px-2.5 py-1.5">
-              <span className="text-rf-ink-muted font-medium">{label}</span>
-              <span className="font-bold tabular-nums">{value}</span>
+            <span key={label} className="flex min-w-0 items-center justify-between gap-1.5 rounded-lg border border-rf-border bg-rf-surface-subtle px-2.5 py-1.5">
+              <span className="whitespace-nowrap break-normal text-rf-ink-muted font-medium">{label}</span>
+              <span className="shrink-0 font-bold tabular-nums">{value}</span>
             </span>
           ))}
         </div>
@@ -161,7 +169,7 @@ export function CandidateActivityPanel({ candidateId, refreshKey = 0, initialKin
       </>}
       {data && !loading && <>
         <h3 className="text-xs font-bold uppercase tracking-wider text-rf-ink-muted">Latest activity ({data.totalEntries})</h3>
-        {data.entries.length === 0 ? <p className="text-sm text-rf-ink-muted">No activities recorded yet.</p> : <ol className="rf-cand-timeline space-y-2">{data.entries.map((entry) => <li key={entry.id} className="rf-cand-timeline__item rounded-lg border border-rf-border-subtle bg-rf-surface-subtle/50 p-2.5 text-xs space-y-1">
+        {data.entries.length === 0 ? <p className="text-sm text-rf-ink-muted">No activities recorded yet.</p> : <ol className="rf-cand-timeline space-y-2">{(activityExpanded ? data.entries : data.entries.slice(0, ACTIVITY_VISIBLE)).map((entry) => <li key={entry.id} className="rf-cand-timeline__item rounded-lg border border-rf-border-subtle bg-rf-surface-subtle/50 p-2.5 text-xs space-y-1">
           <div className="flex flex-wrap justify-between gap-2"><strong>{entry.kind} · {entry.status}</strong><time className="text-rf-ink-muted" dateTime={entry.at}>{dateLabel(entry.at)}</time></div>
           <p className="break-words whitespace-pre-wrap font-medium">{entry.title}</p>
           {entry.detail ? <p className="break-words whitespace-pre-wrap text-rf-ink-muted">{entry.detail}</p> : null}
@@ -175,7 +183,10 @@ export function CandidateActivityPanel({ candidateId, refreshKey = 0, initialKin
             </> : <Button size="sm" variant="ghost" onClick={() => setRescheduleId(entry.id)} disabled={busy}>Reschedule</Button>}
           </div>}
         </li>)}</ol>}
-        {data.totalEntries > data.pageSize && <div className="flex gap-3 items-center text-xs"><Button variant="secondary" size="sm" disabled={page === 1 || busy} onClick={() => setPage(page - 1)}>Previous activities</Button><span>Page {page} of {Math.ceil(data.totalEntries / data.pageSize)}</span><Button variant="secondary" size="sm" disabled={page * data.pageSize >= data.totalEntries || busy} onClick={() => setPage(page + 1)}>Next activities</Button></div>}
+        {data.entries.length > ACTIVITY_VISIBLE && <Button variant="ghost" size="sm" aria-expanded={activityExpanded} onClick={() => setActivityExpanded((current) => !current)}>
+          {activityExpanded ? 'Show less' : `Show ${data.entries.length - ACTIVITY_VISIBLE} more`}
+        </Button>}
+        {data.totalEntries > data.pageSize && <div className="flex gap-3 items-center text-xs"><Button variant="secondary" size="sm" disabled={page === 1 || busy} onClick={() => { setActivityExpanded(false); setPage(page - 1); }}>Previous activities</Button><span>Page {page} of {Math.ceil(data.totalEntries / data.pageSize)}</span><Button variant="secondary" size="sm" disabled={page * data.pageSize >= data.totalEntries || busy} onClick={() => { setActivityExpanded(false); setPage(page + 1); }}>Next activities</Button></div>}
       </>}
       {canEdit && <form onSubmit={save} className="space-y-2.5 border-t border-rf-border-subtle pt-3">
         <div className="grid grid-cols-2 gap-2">

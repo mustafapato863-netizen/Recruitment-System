@@ -969,19 +969,15 @@
   gap: 12px;
 }
 
-[data-ui='v2'] .rf2-cstudio__shortlist-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+[data-ui='v2'] .rf2-cstudio__rec-selected {
+  margin: 0;
   font-size: 13px;
   color: var(--rf2-ink);
-  cursor: pointer;
 }
 
-[data-ui='v2'] .rf2-cstudio__shortlist-check input {
-  width: 16px;
-  height: 16px;
-  accent-color: #2563eb;
+[data-ui='v2'] .rf2-inline-note[data-tone='danger'] {
+  background: var(--rf2-danger-tint);
+  color: var(--rf2-danger);
 }
 
 [data-ui='v2'] .rf2-cstudio__shortlist-btn {
@@ -1040,6 +1036,17 @@
 [data-ui='v2'] .rf2-cstudio__rec-item--amber {
   border-color: rgba(245, 158, 11, 0.32);
   background: rgba(245, 158, 11, 0.06);
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-item--selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-item:focus-visible {
+  outline: 2px solid var(--rf2-focus-color, #2563eb);
+  outline-offset: 2px;
 }
 
 [data-ui='v2'] .rf2-cstudio__rec-icon {
