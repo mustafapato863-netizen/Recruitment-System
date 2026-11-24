@@ -95,4 +95,75 @@ describe('Candidate activity interaction', () => {
     expect(screen.getByText(/Completed by Mariam Farag/)).toBeInTheDocument();
     expect(screen.getByText(/\[Rescheduled 2026-10-02T08:00:00.000Z -> 2026-10-03T08:00:00.000Z\]/)).toBeInTheDocument();
   });
+
+  it('shows only the first 5 activities with a Show more control, and expands/collapses', async () => {
+    const entries = Array.from({ length: 7 }, (_, i) => ({
+      id: `e${i + 1}`,
+      kind: 'Call',
+      title: `Activity ${i + 1}`,
+      actorId: 'me',
+      actorName: 'Mariam Farag',
+      at: '2026-10-01T08:00:00.000Z',
+      dueAt: null,
+      status: 'Completed',
+      applicationId: null,
+      canComplete: false,
+      detail: null,
+    }));
+    vi.mocked(getApi).mockResolvedValue({ ...empty, completed: 7, entries, totalEntries: 7 });
+    render(<CandidateActivityPanel candidateId="candidate" />);
+
+    await screen.findByText('Activity 1');
+    expect(screen.getByText('Activity 5')).toBeInTheDocument();
+    expect(screen.queryByText('Activity 6')).not.toBeInTheDocument();
+    expect(screen.queryByText('Activity 7')).not.toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: 'Show 2 more' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
+    expect(screen.getByText('Activity 7')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(screen.queryByText('Activity 6')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show 2 more' })).toBeInTheDocument();
+  });
+
+  it('does not show a Show more control when there are 5 or fewer activities', async () => {
+    const entries = Array.from({ length: 3 }, (_, i) => ({
+      id: `e${i + 1}`,
+      kind: 'Call',
+      title: `Activity ${i + 1}`,
+      actorId: 'me',
+      actorName: 'Mariam Farag',
+      at: '2026-10-01T08:00:00.000Z',
+      dueAt: null,
+      status: 'Completed',
+      applicationId: null,
+      canComplete: false,
+      detail: null,
+    }));
+    vi.mocked(getApi).mockResolvedValue({ ...empty, completed: 3, entries, totalEntries: 3 });
+    render(<CandidateActivityPanel candidateId="candidate" />);
+
+    await screen.findByText('Activity 1');
+    expect(screen.getByText('Activity 3')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Show \d+ more/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show less' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the four activity stats in a 2-column grid so labels never squeeze mid-word', async () => {
+    vi.mocked(getApi).mockResolvedValue({ ...empty, completed: 2, completedByMe: 1, pending: 1, overdue: 0 });
+    render(<CandidateActivityPanel candidateId="candidate" />);
+
+    await screen.findByText('Completed');
+    expect(screen.getByText('By me')).toBeInTheDocument();
+    expect(screen.getByText('Follow-ups')).toBeInTheDocument();
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+    // Regression pin: the rail is ~360px wide, so the old sm:grid-cols-4 layout
+    // squeezed each stat chip until labels broke mid-word ("Complet ed").
+    const statsGrid = screen.getByText('Completed').parentElement?.parentElement;
+    expect(statsGrid).toHaveClass('grid-cols-2');
+    expect(statsGrid).not.toHaveClass('sm:grid-cols-4');
+  });
 });
