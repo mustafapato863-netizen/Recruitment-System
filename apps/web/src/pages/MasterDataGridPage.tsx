@@ -65,6 +65,9 @@ const METADATA_FIELDS: Record<CatalogKey, MetadataField[]> = {
   ],
   'candidate-sources': [{ key: 'type', label: 'Source type' }],
   'interview-types': [{ key: 'defaultDuration', label: 'Default duration (min)' }],
+  // Meeting notes 2026-11-25: no extra metadata fields for these catalogs.
+  nationalities: [],
+  'opening-reasons': [],
 };
 
 const TABS: Array<{ key: CatalogKey; label: string }> = [
@@ -74,9 +77,14 @@ const TABS: Array<{ key: CatalogKey; label: string }> = [
   { key: 'skills', label: 'Skills' },
   { key: 'candidate-sources', label: 'Candidate Sources' },
   { key: 'interview-types', label: 'Interview Types' },
+  // Meeting notes 2026-11-25: new catalogs (seeded by the migration).
+  { key: 'nationalities', label: 'Nationalities' },
+  { key: 'opening-reasons', label: 'Opening Reasons' },
 ];
 
-const IMPORT_DATASET_BY_CATEGORY: Record<CatalogKey, BulkImportDataset> = {
+// Meeting notes 2026-11-25: nationalities / opening-reasons have no bulk-import
+// dataset yet, so the Excel template section is hidden for those categories.
+const IMPORT_DATASET_BY_CATEGORY: Partial<Record<CatalogKey, BulkImportDataset>> = {
   branches: 'branches',
   departments: 'departments',
   'job-titles': 'positions',
@@ -304,10 +312,11 @@ export function MasterDataGridPage() {
   };
 
   const downloadTemplate = async () => {
+    const dataset = IMPORT_DATASET_BY_CATEGORY[category];
+    if (!dataset) return;
     setIsDownloadingTemplate(true);
     setError('');
     try {
-      const dataset = IMPORT_DATASET_BY_CATEGORY[category];
       const workbook = await downloadApi(`/imports/master-data/${dataset}/template`);
       saveBlob(workbook, `recruitflow-${category}-template.xlsx`);
     } catch (err) {
@@ -329,6 +338,7 @@ export function MasterDataGridPage() {
       const body = new FormData();
       body.append('file', file);
       const dataset = IMPORT_DATASET_BY_CATEGORY[category];
+      if (!dataset) return;
       const inspected = await postFormDataApi<BulkImportInspectResult>(`/imports/master-data/${dataset}/inspect`, body);
       setUploadInspect(inspected);
       setUploadSheetName(inspected.sheets[0]?.name ?? '');
@@ -350,12 +360,13 @@ export function MasterDataGridPage() {
 
   const stageWorkbook = async () => {
     if (!uploadFile || !uploadInspect) return;
+    const dataset = IMPORT_DATASET_BY_CATEGORY[category];
+    if (!dataset) return;
     setIsStagingWorkbook(true);
     setError('');
     try {
       const body = new FormData();
       body.append('file', uploadFile);
-      const dataset = IMPORT_DATASET_BY_CATEGORY[category];
       const query = uploadSheetName ? `?sheetName=${encodeURIComponent(uploadSheetName)}` : '';
       const result = await postFormDataApi<{ jobId: string }>(`/imports/master-data/${dataset}/upload${query}`, body);
       navigate(`/import/${dataset}/${result.jobId}`);
@@ -459,6 +470,7 @@ export function MasterDataGridPage() {
   };
 
   const metadataFields = METADATA_FIELDS[category];
+  const importDataset = IMPORT_DATASET_BY_CATEGORY[category];
 
   return (
     <PageFrame
@@ -469,6 +481,7 @@ export function MasterDataGridPage() {
       {error && <Alert tone="danger" title={errorKind === 'load' ? 'Unable to load Master Data' : 'Master Data could not be saved'}>{error}</Alert>}
       {notice && <Alert tone={noticeKind} title={noticeKind === 'warning' ? (uploadInspect ? 'Workbook needs attention' : 'Some options are unavailable') : uploadInspect ? 'Workbook ready' : 'Changes staged'}>{notice}</Alert>}
       <Tabs ariaLabel="Master Data categories" activeKey={category} items={TABS} onChange={(key) => setCategory(key as CatalogKey)} />
+      {importDataset ? (
       <section className="mt-4 flex flex-col gap-4 rounded-2xl border border-rf-border-subtle bg-rf-surface p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="m-0 text-sm font-extrabold text-rf-ink">Excel template · {CATEGORY_LABELS[category]}</h2>
@@ -497,6 +510,7 @@ export function MasterDataGridPage() {
           </>}
         </div>
       </section>
+      ) : null}
       {uploadFile && uploadInspect && (
         <section className="mt-3 grid gap-3 rounded-2xl border border-rf-action/25 bg-rf-action-soft/20 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(180px,280px)_auto] sm:items-end">
           <div>

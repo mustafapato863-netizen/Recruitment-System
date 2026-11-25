@@ -1140,7 +1140,7 @@ function DashboardContent({
                     <td>{entity.timeToFillDays === null ? '—' : `${entity.timeToFillDays} days`}</td>
                     <td>{entity.openVacancies}</td>
                     <td>{entity.approvedHeadcount} / {entity.joinedHeadcount}</td>
-                    <td>{entity.funnel.map((stage) => `${stage.label}: ${stage.count}`).join(' · ') || '—'}</td>
+                    <td>{entity.funnel.map((stage) => `${stage.name}: ${stage.count}`).join(' · ') || '—'}</td>
                   </tr>
                 ))}
               </tbody>
