@@ -106,6 +106,24 @@ describe('joining policy', () => {
     expect(decideJoining({ ...ready, enforceRecord: true, actualJoiningDate: null })).toMatchObject({ code: 'JOINING_DATE_REQUIRED', httpStatus: 400 });
   });
 
+  // Meeting notes 2026-11-25 (item 3): a scheduled Assessment interview is a joining
+  // gate — it must be Completed before Joined — but only when one was scheduled.
+  it('blocks joining on a scheduled assessment interview, and only then', () => {
+    const ready = facts({ enforceActor: false, enforceRecord: false });
+    const fingerprint = allowFingerprint(ready);
+    ready.approvalFingerprint = fingerprint;
+    ready.approvals[0]!.decisionFingerprint = fingerprint;
+    expect(decideJoining(ready).ok).toBe(true);
+    expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Scheduled' }] }))
+      .toMatchObject({ ok: false, code: 'GATE_ASSESSMENT_INCOMPLETE', httpStatus: 409, gate: 'assessment' });
+    expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Completed' }] }).ok).toBe(true);
+    expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Cancelled' }] }).ok).toBe(true);
+    // Completing the assessment after final approval does not stale the approval:
+    // the fingerprint covers snapshot/offer/checks only, so the same approved case
+    // still passes once the assessment is completed.
+    expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Completed' }] }).ok).toBe(true);
+  });
+
   it('limits licence and final-approval responses, and an interviewer view, to the assigned slice', () => {
     expect(licenseAssignmentWhere('user-1', 'org-1')).toMatchObject({ organizationId: 'org-1' });
     const journey = finalApproverView({

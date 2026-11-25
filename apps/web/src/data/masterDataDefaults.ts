@@ -20,6 +20,8 @@ export const INTERVIEW_TYPE_FALLBACK: Array<{ code: InterviewType; name: string;
   { code: 'Behavioral', name: 'Behavioral', defaultDuration: 45 },
   { code: 'Managerial', name: 'Managerial', defaultDuration: 45 },
   { code: 'Executive', name: 'Executive', defaultDuration: 45 },
+  // Meeting notes 2026-11-25 (item 3): pre-hire assessment interviews.
+  { code: 'Assessment', name: 'Assessment', defaultDuration: 60 },
 ];
 
 export const INTERVIEW_TYPE_CODES = new Set<InterviewType>(INTERVIEW_TYPE_FALLBACK.map((item) => item.code));

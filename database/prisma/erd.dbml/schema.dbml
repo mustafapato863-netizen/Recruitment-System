@@ -113,6 +113,7 @@ Table users {
   userRoles user_roles [not null]
   vacancyRequests vacancy_requests [not null]
   assignedVacancyRequests vacancy_requests [not null]
+  replacedInRequests vacancy_requests [not null]
   vacancyStatusChanges vacancy_status_histories [not null]
   approvals vacancy_request_approvals [not null]
   assignments vacancy_assignments [not null]
@@ -253,6 +254,10 @@ Table vacancy_requests {
   status String [not null, default: 'Draft']
   requestedHeadcount Int [not null]
   employmentType String
+  openingType String [not null, default: 'New position', note: 'Meeting notes 2026-11-25: structured opening kind. \'New position\' | \'Replacement\'.']
+  replacedEmployeeId String [note: 'Meeting notes 2026-11-25: the employee being replaced (only when openingType is \'Replacement\').']
+  replacedEmployee users
+  nationalityPreference String[] [not null, note: 'Meeting notes 2026-11-25: preferred nationalities for the role (soft signal, not a hard filter).']
   reason String
   budgetStatus String
   budgetMin Int
@@ -326,6 +331,7 @@ Table vacancies {
   openedAt DateTime
   targetStartDate DateTime
   requiredSkills String[] [not null]
+  nationalityPreference String[] [not null, note: 'Meeting notes 2026-11-25: copied from the requisition at activation (soft preference, not a hard filter).']
   minExperienceYears Int
   location String
   department String
@@ -422,6 +428,7 @@ Table candidates {
   skillLinks candidate_skills [not null]
   experienceYears Int
   location String
+  nationality String [note: 'Meeting notes 2026-11-25: candidate nationality (matched against the job\'s preference as a soft signal).']
   certifications String[] [not null]
   languages String[] [not null]
   availability String
@@ -806,6 +813,7 @@ Table hiring_cases {
   status String [not null, default: 'Pending Compliance']
   plannedJoiningDate DateTime
   actualJoiningDate DateTime
+  reportingCycle String [note: 'Meeting notes 2026-11-25: reporting cycle recorded when the case reaches Joined (\'weekly\' | \'monthly\', default \'monthly\').']
   requirementSnapshot Json [note: 'Checks required for this accepted case. Null means the historical universal rule. Not rewritten when the job profile changes.']
   approvalFingerprint String [note: 'Fingerprint of the case facts the current approval authorized. Null when no approval can authorize joining.']
   ownerUserId String
@@ -1282,6 +1290,8 @@ Ref: vacancy_requests.branchId > branches.id [delete: Restrict]
 Ref: vacancy_requests.positionId > positions.id [delete: Restrict]
 
 Ref: vacancy_requests.requesterId > users.id [delete: Restrict]
+
+Ref: vacancy_requests.replacedEmployeeId > users.id [delete: Restrict]
 
 Ref: vacancy_requests.gradeId > master_data_values.id [delete: Restrict]
 

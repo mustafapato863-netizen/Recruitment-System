@@ -15,8 +15,11 @@ import type {
 import type { VacancyCoreRepository } from './vacancy-core.repository';
 
 type RequestWithApprovals = Prisma.VacancyRequestGetPayload<{
-  include: { approvals: true };
+  include: { approvals: true; replacedEmployee: { select: { id: true; displayName: true } } };
 }>;
+
+// Meeting notes 2026-11-25 (item 1): replaced-employee display for request mappers.
+const replacedEmployeeInclude = { replacedEmployee: { select: { id: true, displayName: true } } } as const;
 
 // B4: requisition fields needed for the target chip.
 const chipRequestSelect = { select: { requestedHeadcount: true, targetFillDate: true } } as const;
@@ -101,7 +104,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   async listRequests(organizationId: string): Promise<VacancyRequest[]> {
     const requests = await this.prisma.vacancyRequest.findMany({
       where: { organizationId },
-      include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
+      include: { approvals: true, ...replacedEmployeeInclude, vacancy: { select: { joinedHeadcount: true } } },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -111,7 +114,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   async getRequest(organizationId: string, id: string): Promise<VacancyRequest | null> {
     const request = await this.prisma.vacancyRequest.findUnique({
       where: { id },
-      include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
+      include: { approvals: true, ...replacedEmployeeInclude, vacancy: { select: { joinedHeadcount: true } } },
     });
 
     return request && request.organizationId === organizationId ? this.toVacancyRequest(request) : null;
@@ -136,7 +139,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   }
 
   async createRequest(input: CreateVacancyRequestInput): Promise<VacancyRequest> {
-    const [branch, position, requester] = await Promise.all([
+    const [branch, position, requester, replacedEmployee] = await Promise.all([
       this.prisma.branch.findFirst({
         where: { id: input.branchId, organizationId: input.organizationId },
         select: { id: true },
@@ -149,9 +152,16 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         where: { id: input.requesterId, organizationId: input.organizationId, status: 'Active' },
         select: { id: true },
       }),
+      // Meeting notes 2026-11-25 (item 1): replaced employee must belong to the org.
+      input.replacedEmployeeId
+        ? this.prisma.user.findFirst({
+            where: { id: input.replacedEmployeeId, organizationId: input.organizationId, status: 'Active' },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
     ]);
 
-    if (!branch || !position || !requester) {
+    if (!branch || !position || !requester || (input.replacedEmployeeId && !replacedEmployee)) {
       throw new BadRequestException('Vacancy request references data outside the current organization.');
     }
 
@@ -167,6 +177,9 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         status: 'Draft',
         requestedHeadcount: input.requestedHeadcount,
         employmentType: input.employmentType ?? null,
+        openingType: input.openingType ?? 'New position',
+        replacedEmployeeId: input.replacedEmployeeId ?? null,
+        nationalityPreference: input.nationalityPreference ?? [],
         reason: input.reason ?? null,
         budgetStatus: input.budgetStatus ?? null,
         budgetMin: input.budgetMin ?? null,
@@ -189,7 +202,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         submittedAt: null,
         approvalRevision: 1,
       },
-      include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
+      include: { approvals: true, ...replacedEmployeeInclude, vacancy: { select: { joinedHeadcount: true } } },
     });
 
     return this.toVacancyRequest(request);
@@ -242,7 +255,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   }
 
   private async assertRequestReferences(request: VacancyRequest): Promise<void> {
-    const [branch, position, requester] = await Promise.all([
+    const [branch, position, requester, replacedEmployee] = await Promise.all([
       this.prisma.branch.findFirst({
         where: { id: request.branchId, organizationId: request.organizationId },
         select: { id: true },
@@ -255,9 +268,15 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         where: { id: request.requesterId, organizationId: request.organizationId },
         select: { id: true },
       }),
+      request.replacedEmployeeId
+        ? this.prisma.user.findFirst({
+            where: { id: request.replacedEmployeeId, organizationId: request.organizationId },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
     ]);
 
-    if (!branch || !position || !requester) {
+    if (!branch || !position || !requester || (request.replacedEmployeeId && !replacedEmployee)) {
       throw new BadRequestException('Vacancy request references data outside the current organization.');
     }
   }
@@ -283,7 +302,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
               },
             }),
       },
-      include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
+      include: { approvals: true, ...replacedEmployeeInclude, vacancy: { select: { joinedHeadcount: true } } },
     });
     // Filter to ensure the *current* step matches
     return requests
@@ -304,7 +323,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       include: {
         assignments: { include: assignmentInclude },
         vacancyRequest: {
-          include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
+          include: { approvals: true, ...replacedEmployeeInclude, vacancy: { select: { joinedHeadcount: true } } },
         },
         organization: true,
         branch: true,
@@ -347,6 +366,9 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         status: request.status,
         requestedHeadcount: request.requestedHeadcount,
         employmentType: request.employmentType,
+        openingType: request.openingType ?? 'New position',
+        replacedEmployeeId: request.replacedEmployeeId ?? null,
+        nationalityPreference: request.nationalityPreference ?? [],
         reason: request.reason,
         budgetStatus: request.budgetStatus,
         budgetMin: request.budgetMin,
@@ -401,7 +423,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
 
     const saved = await transaction.vacancyRequest.findUnique({
       where: { id: request.id },
-      include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
+      include: { approvals: true, ...replacedEmployeeInclude, vacancy: { select: { joinedHeadcount: true } } },
     });
 
     if (!saved) {
@@ -430,6 +452,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         openedAt: toDateTime(vacancy.openedAt),
         targetStartDate: toDate(vacancy.targetStartDate),
         requiredSkills: vacancy.requiredSkills ?? [],
+        nationalityPreference: vacancy.nationalityPreference ?? [],
         department: vacancy.department ?? null,
         jobSummary: vacancy.jobSummary ?? null,
         description: vacancy.description ?? null,
@@ -451,6 +474,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         openedAt: toDateTime(vacancy.openedAt),
         targetStartDate: toDate(vacancy.targetStartDate),
         requiredSkills: vacancy.requiredSkills ?? [],
+        nationalityPreference: vacancy.nationalityPreference ?? [],
         department: vacancy.department ?? null,
         jobSummary: vacancy.jobSummary ?? null,
         description: vacancy.description ?? null,
@@ -503,6 +527,10 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       }),
       requestedHeadcount: request.requestedHeadcount,
       employmentType: request.employmentType,
+      openingType: request.openingType ?? 'New position',
+      replacedEmployeeId: request.replacedEmployeeId ?? null,
+      replacedEmployee: request.replacedEmployee ? { id: request.replacedEmployee.id, name: request.replacedEmployee.displayName } : null,
+      nationalityPreference: request.nationalityPreference ?? [],
       reason: request.reason,
       budgetStatus: request.budgetStatus,
       budgetMin: request.budgetMin,
@@ -588,6 +616,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       openedAt: toIsoString(vacancy.openedAt),
       targetStartDate: toDateOnlyString(vacancy.targetStartDate),
       requiredSkills: vacancy.requiredSkills ?? [],
+      nationalityPreference: vacancy.nationalityPreference ?? [],
       minExperienceYears: vacancy.minExperienceYears ?? null,
       assignments: vacancy.assignments
         .filter((assignment) => assignment.isActive)

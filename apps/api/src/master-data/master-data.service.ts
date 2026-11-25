@@ -18,7 +18,7 @@ import type { MasterDataCategory, MasterDataValueRecord } from '@recruitflow/con
 import { REASON_CATEGORIES } from './reason-lists';
 import { catalogKey, normalizeBranchCity, normalizeCatalogText, uniqueCatalogNames } from './catalog-normalization';
 
-const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types', ...(['grades', ...REASON_CATEGORIES] as unknown as MasterDataCategory[])]);
+const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types', 'nationalities', ...(['grades', ...REASON_CATEGORIES] as unknown as MasterDataCategory[])]);
 /** C3: every reason list (hold, close, rejection, reassign) is deactivate-only (history rows quote them). */
 const DEACTIVATE_ONLY = new Set<string>(REASON_CATEGORIES);
 const SUPPORTED_CATALOGS = new Set(['branches', 'job-titles', ...CATALOG_CATEGORIES]);

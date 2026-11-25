@@ -39,25 +39,35 @@ export class ReportsController {
 
   @Get('kpis')
   @RequirePermissions('APPLICATION_VIEW')
-  async getKpis(@CurrentUser() user: AuthUser) {
-    return this.reportsService.getKpis(user.organizationId, user);
+  async getKpis(@CurrentUser() user: AuthUser, @Query() query: ReportOverviewQueryDto) {
+    return this.reportsService.getKpis(user.organizationId, user, query);
   }
 
   @Get('funnel')
   @RequirePermissions('APPLICATION_VIEW')
-  async getFunnel(@CurrentUser() user: AuthUser) {
-    return this.reportsService.getFunnel(user.organizationId, user);
+  async getFunnel(@CurrentUser() user: AuthUser, @Query() query: ReportOverviewQueryDto) {
+    return this.reportsService.getFunnel(user.organizationId, user, query);
   }
 
   @Get('hiring-by-department')
   @RequirePermissions('APPLICATION_VIEW')
-  async getHiringByDepartment(@CurrentUser() user: AuthUser) {
-    return this.reportsService.getHiringByDepartment(user.organizationId, user);
+  async getHiringByDepartment(@CurrentUser() user: AuthUser, @Query() query: ReportOverviewQueryDto) {
+    return this.reportsService.getHiringByDepartment(user.organizationId, user, query);
   }
 
   @Get('recruiter-workload')
   @RequirePermissions('APPLICATION_VIEW')
-  async getRecruiterWorkload(@CurrentUser() user: AuthUser) {
-    return this.reportsService.getRecruiterWorkload(user.organizationId, user);
+  async getRecruiterWorkload(@CurrentUser() user: AuthUser, @Query() query: ReportOverviewQueryDto) {
+    return this.reportsService.getRecruiterWorkload(user.organizationId, user, query);
+  }
+
+  /** Meeting notes 2026-11-25 (item 5): per-entity (per-branch) report. */
+  @Get('by-entity')
+  @RequirePermissions('APPLICATION_VIEW')
+  async getByEntity(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ReportOverviewQueryDto,
+  ) {
+    return this.reportsService.getByEntity(user.organizationId, query, user);
   }
 }

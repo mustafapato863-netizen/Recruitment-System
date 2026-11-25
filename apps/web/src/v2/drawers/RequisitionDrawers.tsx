@@ -6,18 +6,22 @@ import { getApi, postApi } from '../../api/client';
 import { parseJobDescriptionFile } from '../../utils/jdParser';
 import { jobReasons, OTHER_REASON } from '../api/jobs';
 import {
-  activateRequisition, approveRequisition, canActivateDraft, cancelRequisition, createRequisition, declineRequisition, deptOf, draftActivateRefused, dueOf, fetchCancelImpact, formatDue, isEditable, reqError, requestRequisitionChanges, STATUS_LABEL, STATUS_TONE, submitRequisition,
-  TARGET_UPDATE_LIVE, titleOf, updateRequisition, updateTarget, uploadRequisitionJd, type CancellationImpact, type Grade, type Person, type ReqContext, type ReqFields, type Requisition,
+  activateRequisition, approveRequisition, canActivateDraft, cancelRequisition, createRequisition, declineRequisition, deptOf, draftActivateRefused, dueOf, fetchCancelImpact, fetchNationalities, fetchOpeningReasons, formatDue, isEditable, reqError, requestRequisitionChanges, STATUS_LABEL, STATUS_TONE, submitRequisition,
+  TARGET_UPDATE_LIVE, titleOf, updateRequisition, updateTarget, uploadRequisitionJd, EMPLOYMENT_TYPES, OPENING_TYPES, type CancellationImpact, type Grade, type Person, type ReqContext, type ReqFields, type Requisition,
 } from '../api/requisitions';
 
-type Errs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId' | 'form', string>>;
+type Errs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId' | 'form' | 'openingType' | 'replacedEmployeeId' | 'employmentType' | 'openingReason' | 'reasonNote', string>>;
 /** reqError → drawer errors: inline field messages (#23) plus whatever the banner keeps. */
-type ReqForm = { positionId: string; branchId: string; seats: string; dueDate: string; departmentId: string; gradeId: string; assignee: string; notes: string };
+type ReqForm = { positionId: string; branchId: string; seats: string; dueDate: string; departmentId: string; gradeId: string; assignee: string; notes: string; openingType: string; replacedEmployeeId: string; employmentType: string; reason: string; reasonNote: string; nationalityPreference: string[] };
 const formFromJson = (raw: string): ReqForm => {
   const value: unknown = JSON.parse(raw);
   const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const text = (key: keyof ReqForm) => typeof record[key] === 'string' ? record[key] : '';
-  return { positionId: text('positionId'), branchId: text('branchId'), seats: text('seats'), dueDate: text('dueDate'), departmentId: text('departmentId'), gradeId: text('gradeId'), assignee: text('assignee'), notes: text('notes') };
+  return {
+    positionId: text('positionId'), branchId: text('branchId'), seats: text('seats'), dueDate: text('dueDate'), departmentId: text('departmentId'), gradeId: text('gradeId'), assignee: text('assignee'), notes: text('notes'),
+    openingType: text('openingType') || 'New position', replacedEmployeeId: text('replacedEmployeeId'), employmentType: text('employmentType'), reason: text('reason'), reasonNote: text('reasonNote'),
+    nationalityPreference: Array.isArray(record.nationalityPreference) ? (record.nationalityPreference as unknown[]).filter((v): v is string => typeof v === 'string') : [],
+  };
 };
 const toErrs = (r: ReturnType<typeof reqError>, only?: ReadonlyArray<keyof Errs>): Errs => {
   if (r.inline) {
@@ -60,6 +64,9 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
   const [f, setF] = useState({
     positionId: req?.positionId ?? '', branchId: req?.branchId ?? '', seats: String(req?.requestedHeadcount ?? 1),
     dueDate: req ? dueOf(req) ?? '' : '', departmentId: req?.departmentId ?? '', gradeId: req?.gradeId ?? '', assignee: req?.assignedEmployeeId ?? req?.primaryRecruiter?.id ?? '', notes: req?.justification ?? '',
+    // Meeting notes 2026-11-25 (items 1–2): opening kind, replaced employee, hiring type, reason, nationality preference.
+    openingType: req?.openingType ?? 'New position', replacedEmployeeId: req?.replacedEmployeeId ?? '', employmentType: req?.employmentType ?? '',
+    reason: req?.reason ?? '', reasonNote: '', nationalityPreference: req?.nationalityPreference ?? [],
   });
   const initial = useMemo(() => JSON.stringify(f), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState<null | 'save' | 'submit' | 'activate' | 'cancel' | 'approve' | 'changes' | 'decline'>(null);
@@ -70,6 +77,9 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
   const [impact, setImpact] = useState<CancellationImpact | 'unavailable' | null>(null);
   // B2F-6: cancelling uses the close-reasons list ("Other" + note), like closing a job.
   const [closeReasons, setCloseReasons] = useState<string[] | null>(null);
+  // Meeting notes 2026-11-25 (items 1–2): opening-reason + nationality catalogs.
+  const [openingReasons, setOpeningReasons] = useState<string[] | null>(null);
+  const [nationalities, setNationalities] = useState<string[] | null>(null);
 
   // JD Extraction state
   const [extracting, setExtracting] = useState(false);
@@ -96,6 +106,12 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
 
   useEffect(() => { let live = true; jobReasons('close').then((r) => live && setCloseReasons(r.length ? r : null)).catch(() => live && setCloseReasons(null)); return () => { live = false; }; }, []);
   useEffect(() => {
+    let live = true;
+    fetchOpeningReasons().then((r) => live && setOpeningReasons(r?.length ? r : null)).catch(() => live && setOpeningReasons(null));
+    fetchNationalities().then((r) => live && setNationalities(r?.length ? r : null)).catch(() => live && setNationalities(null));
+    return () => { live = false; };
+  }, []);
+  useEffect(() => {
     if (!req || req.status !== 'Converted to Vacancy') { setImpact(null); return; }
     let live = true;
     fetchCancelImpact(req.id)
@@ -104,7 +120,12 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
     return () => { live = false; };
   }, [req]);
   const cancelOther = !!closeReasons && reason === OTHER_REASON;
-  const set = (k: keyof typeof f) => (v: string) => { setF((x) => ({ ...x, [k]: v })); setErrs((e) => ({ ...e, [k === 'seats' ? 'seats' : k === 'assignee' ? 'assignee' : k === 'gradeId' ? 'grade' : k]: undefined, form: undefined })); };
+  const openingOther = !!openingReasons && f.reason === OTHER_REASON;
+  const set = (k: keyof typeof f) => (v: string) => { setF((x) => ({ ...x, [k]: v })); setErrs((e) => ({ ...e, [k === 'seats' ? 'seats' : k === 'assignee' ? 'assignee' : k === 'gradeId' ? 'grade' : k === 'reason' ? 'openingReason' : k]: undefined, form: undefined })); };
+  /** Meeting notes 2026-11-25 (item 2): toggle one preferred nationality. */
+  const toggleNationality = (name: string) => {
+    setF((x) => ({ ...x, nationalityPreference: x.nationalityPreference.includes(name) ? x.nationalityPreference.filter((n) => n !== name) : [...x.nationalityPreference, name] }));
+  };
   const title = req ? titleOf(req, ctx) : ctx?.positions.find((p) => p.id === f.positionId)?.title ?? 'New requisition';
   const departments = ctx?.departments;
   const seats = Number(f.seats);
@@ -233,9 +254,16 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
     if (!Number.isInteger(seats) || seats < 1) e.seats = 'At least 1 seat.';
     if (!f.dueDate) e.dueDate = 'Required — a requisition needs a due date.';
     else if (f.dueDate < cairoToday()) e.dueDate = 'Pick today or a later day.';
+    // Meeting notes 2026-11-25 (item 1): a replacement needs the employee being replaced; "Other" needs a note.
+    if (f.openingType === 'Replacement' && !f.replacedEmployeeId) e.replacedEmployeeId = 'Pick the employee being replaced.';
+    if (f.reason === OTHER_REASON && f.reasonNote.trim().length < 3) e.reasonNote = '"Other" needs a short note (at least 3 characters).';
     setErrs(e);
     if (Object.keys(e).length) return null;
-    return { ...(departments ? { departmentId: f.departmentId || null } : {}), positionId: f.positionId, branchId: f.branchId, requestedHeadcount: seats, dueDate: f.dueDate, gradeId: f.gradeId || null, assignedEmployeeId: f.assignee || null, justification: f.notes.trim() || null };
+    return {
+      ...(departments ? { departmentId: f.departmentId || null } : {}), positionId: f.positionId, branchId: f.branchId, requestedHeadcount: seats, dueDate: f.dueDate, gradeId: f.gradeId || null, assignedEmployeeId: f.assignee || null, justification: f.notes.trim() || null,
+      employmentType: f.employmentType || null, openingType: f.openingType, replacedEmployeeId: f.openingType === 'Replacement' ? (f.replacedEmployeeId || null) : null,
+      nationalityPreference: f.nationalityPreference, reason: f.reason || null, reasonNote: f.reason === OTHER_REASON ? f.reasonNote.trim() || null : null,
+    };
   };
   const fail = (e: unknown) => setErrs(toErrs(reqError(e)));
   const save = async () => {
@@ -576,6 +604,47 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
             hint={!f.dueDate && !ro ? 'Required — Save draft stays disabled while it is empty.' : undefined} id="req-due" />
         </div>
         <span id="req-due-why" className="rf2-sr-only">Save is disabled until a due date is set.</span>
+        {/* Meeting notes 2026-11-25 (items 1–2): opening kind, replaced employee, hiring type, reason, nationality preference (soft signal). */}
+        <div className="rf2-req__section-title">Opening type &amp; hiring details</div>
+        <div className="rf2-req__row">
+          <SelectV2 label="Opening type" value={f.openingType} onChange={(e) => set('openingType')(e.target.value)} error={errs.openingType} disabled={ro}
+            hint="A replacement follows the same approval path and does not increase headcount.">
+            {OPENING_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </SelectV2>
+          <SelectV2 label="Employment type" value={f.employmentType} onChange={(e) => set('employmentType')(e.target.value)} error={errs.employmentType} disabled={ro}>
+            <option value="">Choose a type</option>
+            {EMPLOYMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </SelectV2>
+        </div>
+        {f.openingType === 'Replacement' ? (
+          <PersonSelect people={people} label="Employee being replaced" value={f.replacedEmployeeId} onChange={set('replacedEmployeeId')} error={errs.replacedEmployeeId} disabled={ro} />
+        ) : null}
+        <div className="rf2-req__row">
+          {openingReasons ? (
+            <SelectV2 label="Opening reason" value={f.reason} onChange={(e) => set('reason')(e.target.value)} error={errs.openingReason} disabled={ro}>
+              <option value="">Choose a reason</option>
+              {openingReasons.map((r) => <option key={r} value={r}>{r}</option>)}
+            </SelectV2>
+          ) : (
+            <InputV2 label="Opening reason" value={f.reason} onChange={(e) => set('reason')(e.target.value)} error={errs.openingReason} disabled={ro} hint="Reason list not available." />
+          )}
+          {openingOther ? (
+            <InputV2 label="Reason note" value={f.reasonNote} onChange={(e) => set('reasonNote')(e.target.value)} error={errs.reasonNote} disabled={ro} hint="Required when the reason is “Other”." />
+          ) : null}
+        </div>
+        {nationalities ? (
+          <fieldset className="rf2-req__nationalities" disabled={ro}>
+            <legend className="rf2-field__label">Nationality preference <span className="rf2-jtable__sub">(soft signal — never excludes a candidate)</span></legend>
+            <div className="rf2-req__nationalities-list">
+              {nationalities.map((n) => (
+                <label key={n} className="rf2-req__nationality">
+                  <input type="checkbox" checked={f.nationalityPreference.includes(n)} onChange={() => toggleNationality(n)} disabled={ro} />
+                  <span>{n}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : null}
         <PersonSelect people={people} value={f.assignee} onChange={set('assignee')} error={errs.assignee} disabled={!(editable || approved)}
           hint={approved ? 'Activate job makes this person the owner.' : undefined} />
         <div className="rf2-req__section-title">Role Scope &amp; Justification</div>

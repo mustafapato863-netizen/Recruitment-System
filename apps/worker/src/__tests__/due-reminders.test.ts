@@ -33,6 +33,7 @@ function fakePrisma(requests: unknown[]) {
   };
   const prisma = {
     vacancyRequest: { findMany: vi.fn(async () => requests) },
+    hiringCase: { findMany: vi.fn(async () => []) },
     $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
   };
   return { prisma: prisma as unknown as PrismaClient, notifications, raw: prisma };
@@ -87,5 +88,85 @@ describe('B4 due-date reminders', () => {
     const { prisma } = fakePrisma([req({})]);
     expect(await sweepDueDateReminders(prisma, new Date('2026-10-19T04:00:00Z'), CONFIG)).toBe(0); // 07:00 Cairo
     expect(await sweepDueDateReminders(prisma, NOW, { ...CONFIG, enabled: false })).toBe(0);
+  });
+});
+
+// Meeting notes 2026-11-25 (item 4): expected joining dates remind the case owner.
+describe('due-date reminders — expected joining date', () => {
+  function joiningCase(over: Record<string, unknown>) {
+    return {
+      id: 'case-1', organizationId: 'o', ownerUserId: 'owner', status: 'Awaiting Joining',
+      plannedJoiningDate: new Date('2026-10-19T00:00:00Z'),
+      application: {
+        candidate: { firstName: 'Sara', lastName: 'Ali' },
+        vacancy: { position: { title: 'ICU Nurse' } },
+      },
+      ...over,
+    };
+  }
+
+  /** Fake Prisma honouring the hiring-case query (status + planned date) and the sent-log key. */
+  function fakePrismaWithCases(cases: unknown[]) {
+    const log = new Set<string>();
+    const notifications: Array<Record<string, unknown>> = [];
+    const tx = {
+      dueDateReminder: {
+        createMany: vi.fn(async ({ data }: { data: Array<Record<string, unknown>> }) => {
+          const d = data[0]!;
+          const key = [d.entityType, d.entityId, d.kind, (d.reminderDate as Date).toISOString(), d.recipientUserId].join('|');
+          if (log.has(key)) return { count: 0 };
+          log.add(key);
+          return { count: 1 };
+        }),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+      notification: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { notifications.push(data); return { id: `n${notifications.length}` }; }) },
+    };
+    const prisma = {
+      vacancyRequest: { findMany: vi.fn(async () => []) },
+      hiringCase: {
+        findMany: vi.fn(async ({ where }: { where: { plannedJoiningDate: { lte: Date }; status: { in: string[] } } }) =>
+          (cases as Array<{ plannedJoiningDate: Date | null; status: string }>).filter(
+            (c) => c.plannedJoiningDate && c.plannedJoiningDate <= where.plannedJoiningDate.lte && where.status.in.includes(c.status),
+          )),
+      },
+      $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
+    };
+    return { prisma: prisma as unknown as PrismaClient, notifications, raw: prisma };
+  }
+
+  it('reminds the case owner on the due day, once per day (idempotent)', async () => {
+    const { prisma, notifications } = fakePrismaWithCases([joiningCase({})]);
+    expect(await sweepDueDateReminders(prisma, NOW, CONFIG)).toBe(1);
+    expect(await sweepDueDateReminders(prisma, new Date('2026-10-19T15:00:00Z'), CONFIG)).toBe(0);
+    expect(notifications).toEqual([expect.objectContaining({
+      recipientUserId: 'owner', type: 'DueDateReminder',
+      title: 'Due today: Sara Ali · ICU Nurse joining', entityType: 'HiringCase', entityId: 'case-1',
+    })]);
+    // next day it is overdue -> a new reminder
+    expect(await sweepDueDateReminders(prisma, new Date('2026-10-20T06:00:00Z'), CONFIG)).toBe(1);
+    expect(notifications[1]!.title).toMatch(/^Overdue:/);
+  });
+
+  it('reminds 3 days before the expected joining date, and not in between lead days', async () => {
+    const { prisma, notifications } = fakePrismaWithCases([
+      joiningCase({ plannedJoiningDate: new Date('2026-10-22T00:00:00Z') }),
+    ]);
+    expect(await sweepDueDateReminders(prisma, NOW, CONFIG)).toBe(1);
+    expect(notifications[0]!.title).toBe('Due 2026-10-22: Sara Ali · ICU Nurse joining');
+    const twoDaysOut = fakePrismaWithCases([joiningCase({ plannedJoiningDate: new Date('2026-10-21T00:00:00Z') })]);
+    expect(await sweepDueDateReminders(twoDaysOut.prisma, NOW, CONFIG)).toBe(0);
+  });
+
+  it('never reminds Joined, Postponed or No-show cases', async () => {
+    const { prisma, notifications, raw } = fakePrismaWithCases([
+      joiningCase({ id: 'joined', status: 'Joined' }),
+      joiningCase({ id: 'postponed', status: 'Postponed' }),
+      joiningCase({ id: 'noshow', status: 'No-show' }),
+    ]);
+    expect(await sweepDueDateReminders(prisma, NOW, CONFIG)).toBe(0);
+    expect(notifications).toEqual([]);
+    const where = (raw.hiringCase.findMany.mock.calls[0] as unknown as [{ where: { status: { in: string[] } } }])[0].where;
+    expect(where.status.in).toEqual(['Pending Compliance', 'Pending Final Approval', 'Awaiting Joining']);
   });
 });

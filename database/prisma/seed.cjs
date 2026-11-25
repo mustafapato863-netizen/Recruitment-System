@@ -46,7 +46,16 @@ const REASON_LISTS = {
   'close-reasons': [['POSITION_NO_LONGER_NEEDED', 'Position no longer needed'], ['BUDGET_WITHDRAWN', 'Budget withdrawn'], ['FILLED_INTERNALLY', 'Filled internally'], ['OTHER', 'Other']],
   'rejection-reasons': [['REQ_CANCELLED', 'Requisition cancelled'], ['DECLINED_OFFER', 'Declined offer'], ['WITHDRAWN_BY_CANDIDATE', 'Withdrawn by candidate'], ['NOT_QUALIFIED', 'Not qualified'], ['FAILED_SCREENING', 'Did not pass screening'], ['FAILED_INTERVIEW', 'Did not pass interview'], ['NO_RESPONSE', 'No response from candidate'], ['POSITION_FILLED', 'Position filled'], ['OTHER', 'Other']],
   'reassign-reasons': [['WORKLOAD_BALANCING', 'Workload balancing'], ['OWNER_ON_LEAVE', 'Owner on leave'], ['OWNER_LEAVING', 'Owner leaving'], ['SPECIALIST_NEEDED', 'Specialist needed'], ['OTHER', 'Other']],
+  // Meeting notes 2026-11-25: structured opening reasons for vacancy requests.
+  'opening-reasons': [['NEW_PROJECT', 'New project'], ['TEAM_EXPANSION', 'Team expansion'], ['INCREASED_WORKLOAD', 'Increased workload'], ['REPLACEMENT', 'Replacement'], ['SEASONAL', 'Seasonal need'], ['OTHER', 'Other']],
 };
+/**
+ * Meeting notes 2026-11-25: candidate nationalities (master-data list, editable by admins).
+ * Same upsert pattern as REASON_LISTS; seeded for every org by seedReasonLists.
+ */
+const NATIONALITIES = [['EGYPTIAN', 'Egyptian'], ['SAUDI', 'Saudi'], ['INDIAN', 'Indian'], ['FILIPINO', 'Filipino'], ['PAKISTANI', 'Pakistani'], ['BANGLADESHI', 'Bangladeshi'], ['JORDANIAN', 'Jordanian'], ['SUDANESE', 'Sudanese'], ['SYRIAN', 'Syrian'], ['LEBANESE', 'Lebanese'], ['YEMENI', 'Yemeni'], ['NIGERIAN', 'Nigerian'], ['KENYAN', 'Kenyan'], ['ETHIOPIAN', 'Ethiopian'], ['MOROCCAN', 'Moroccan'], ['TUNISIAN', 'Tunisian'], ['SRI_LANKAN', 'Sri Lankan'], ['NEPALESE', 'Nepalese']];
+/** Meeting notes 2026-11-25: interview-type catalog values (incl. the new 'Assessment' type). */
+const INTERVIEW_TYPES = [['SCREENING', 'Screening'], ['TECHNICAL', 'Technical'], ['BEHAVIORAL', 'Behavioral'], ['MANAGERIAL', 'Managerial'], ['ASSESSMENT', 'Assessment']];
 /** B5 seeding path (inside the org transaction); same single list as seedReasonLists. */
 async function seedRejectionReasons(tx, organizationId) {
   await tx.masterDataValue.createMany({
@@ -78,6 +87,21 @@ async function seedReasonLists(organizationId) {
         update: {},
       });
     }
+  }
+  // Meeting notes 2026-11-25: nationalities + interview types use the same idempotent upsert.
+  for (const [code, name] of NATIONALITIES) {
+    await prisma.masterDataValue.upsert({
+      where: { organizationId_category_name: { organizationId, category: 'nationalities', name } },
+      create: { organizationId, category: 'nationalities', name, code },
+      update: {},
+    });
+  }
+  for (const [code, name] of INTERVIEW_TYPES) {
+    await prisma.masterDataValue.upsert({
+      where: { organizationId_category_name: { organizationId, category: 'interview-types', name } },
+      create: { organizationId, category: 'interview-types', name, code },
+      update: {},
+    });
   }
 }
 

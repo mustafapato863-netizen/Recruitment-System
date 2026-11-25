@@ -386,4 +386,48 @@ describe('RecruiterReportsV2 — single-page recruitment analytics dashboard', (
     renderReports('/reports');
     expect(await screen.findByText('Your role does not include reports.')).toBeInTheDocument();
   });
+
+  // Meeting notes 2026-11-25 (item 5): per-entity (per-branch) report section.
+  it('renders the by-entity (branch) report with hires, funnel and time-to-fill', async () => {
+    api.getApi.mockImplementation(async (path: string) => {
+      if (path === '/notifications/unread-count') return { unreadCount: 0 };
+      if (path.startsWith('/reports/overview')) return makeOverview();
+      if (path.startsWith('/reports/by-entity')) return [
+        {
+          entityId: 'branch-1', entityName: 'Cairo Branch', entityCode: 'CAI',
+          applications: 4, hires: 2,
+          funnel: [
+            { name: 'Applied', count: 4, percent: 100 },
+            { name: 'Screening', count: 2, percent: 50 },
+            { name: 'Interview', count: 2, percent: 50 },
+            { name: 'Offer', count: 2, percent: 50 },
+            { name: 'Pre-Hire', count: 2, percent: 50 },
+            { name: 'Joined', count: 2, percent: 50 },
+          ],
+          timeToFillDays: 15, openVacancies: 1, approvedHeadcount: 3, joinedHeadcount: 2,
+        },
+        {
+          entityId: 'branch-2', entityName: 'Giza Branch', entityCode: 'GIZ',
+          applications: 1, hires: 0,
+          funnel: [
+            { name: 'Applied', count: 1, percent: 100 },
+            { name: 'Screening', count: 0, percent: 0 },
+            { name: 'Interview', count: 0, percent: 0 },
+            { name: 'Offer', count: 0, percent: 0 },
+            { name: 'Pre-Hire', count: 0, percent: 0 },
+            { name: 'Joined', count: 0, percent: 0 },
+          ],
+          timeToFillDays: null, openVacancies: 2, approvedHeadcount: 2, joinedHeadcount: 0,
+        },
+      ];
+      return {};
+    });
+    renderReports('/reports');
+    const table = await screen.findByRole('table', { name: 'Report by branch' });
+    expect(within(table).getByText('Cairo Branch')).toBeInTheDocument();
+    expect(within(table).getByText('15 days')).toBeInTheDocument();
+    expect(within(table).getByText('Giza Branch')).toBeInTheDocument();
+    expect(within(table).getByText('3 / 2')).toBeInTheDocument();
+    expect(api.getApi).toHaveBeenCalledWith(expect.stringContaining('/reports/by-entity'), undefined);
+  });
 });

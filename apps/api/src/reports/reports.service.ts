@@ -10,6 +10,7 @@ import type {
   ReportKpis,
   FunnelStage,
   DepartmentHiring,
+  EntityReport,
   RecruiterWorkload,
   ReportOverview,
   ReportTrendPoint,
@@ -1510,6 +1511,21 @@ export class ReportsService {
       }
 
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(overview.trend), 'Trend');
+      // Meeting notes 2026-11-25 (item 5): branch breakdown in the export.
+      const byEntity = await this.getByEntity(organizationId, query, user);
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+        ['Entity (Branch)', 'Applications', 'Hires', 'Time to fill (days)', 'Open vacancies', 'Approved headcount', 'Joined headcount', 'Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire', 'Joined'],
+        ...byEntity.map((row) => [
+          row.entityName,
+          row.applications,
+          row.hires,
+          row.timeToFillDays ?? '',
+          row.openVacancies,
+          row.approvedHeadcount,
+          row.joinedHeadcount,
+          ...row.funnel.map((stage) => stage.count),
+        ]),
+      ]), 'By entity');
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(overview.funnel.map((stage) => ({
         stage: stage.name,
         count: stage.count,
@@ -1596,17 +1612,19 @@ export class ReportsService {
     return points;
   }
 
-  async getKpis(organizationId: string, user?: AuthUser): Promise<ReportKpis> {
+  async getKpis(organizationId: string, user?: AuthUser, query: ReportOverviewQueryDto = {}): Promise<ReportKpis> {
     const visibility = user && this.accessControl
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
+    // Meeting notes 2026-11-25 (item 5): branch filter across the KPIs.
+    const scoped = this.branchScopedVisibility(query, visibility);
     const [applications, offers, interviews, joinedCases] = await Promise.all([
       this.prisma.application.findMany({
-        where: visibility,
+        where: scoped,
         select: { source: true, stage: true, createdAt: true },
       }),
       this.prisma.offer.findMany({
-        where: { organizationId, application: visibility },
+        where: { organizationId, application: scoped },
         select: {
           status: true,
           createdAt: true,
@@ -1614,11 +1632,11 @@ export class ReportsService {
         },
       }),
       this.prisma.interview.findMany({
-        where: { organizationId, application: visibility },
+        where: { organizationId, application: scoped },
         select: { status: true },
       }),
       this.prisma.hiringCase.findMany({
-        where: { organizationId, status: 'Joined', application: visibility },
+        where: { organizationId, status: 'Joined', application: scoped },
         select: {
           actualJoiningDate: true,
           createdAt: true,
@@ -1687,13 +1705,14 @@ export class ReportsService {
     };
   }
 
-  async getFunnel(organizationId: string, user?: AuthUser): Promise<FunnelStage[]> {
+  async getFunnel(organizationId: string, user?: AuthUser, query: ReportOverviewQueryDto = {}): Promise<FunnelStage[]> {
     const visibility = user && this.accessControl
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
+    // Meeting notes 2026-11-25 (item 5): branch filter across the funnel.
     const grouped = await this.prisma.application.groupBy({
       by: ['stage'],
-      where: visibility,
+      where: this.branchScopedVisibility(query, visibility),
       _count: { _all: true },
     });
     const counts = new Map(grouped.map((item) => [item.stage, item._count._all]));
@@ -1706,12 +1725,13 @@ export class ReportsService {
     }));
   }
 
-  async getHiringByDepartment(organizationId: string, user?: AuthUser): Promise<DepartmentHiring[]> {
+  async getHiringByDepartment(organizationId: string, user?: AuthUser, query: ReportOverviewQueryDto = {}): Promise<DepartmentHiring[]> {
     const visibility = user && this.accessControl
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
     const vacancies = await this.prisma.vacancy.findMany({
-      where: { organizationId, applications: { some: visibility } },
+      // Meeting notes 2026-11-25 (item 5): branch filter across the department hiring report.
+      where: { organizationId, ...(query.branchId ? { branchId: query.branchId } : {}), applications: { some: visibility } },
       select: {
         approvedHeadcount: true,
         position: { select: { title: true } },
@@ -1729,16 +1749,17 @@ export class ReportsService {
     return [...grouped.entries()].map(([department, values]) => ({ department, ...values }));
   }
 
-  async getRecruiterWorkload(organizationId: string, user?: AuthUser): Promise<RecruiterWorkload[]> {
+  async getRecruiterWorkload(organizationId: string, user?: AuthUser, query: ReportOverviewQueryDto = {}): Promise<RecruiterWorkload[]> {
     const visibility = user && this.accessControl
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
+    const scoped = this.branchScopedVisibility(query, visibility);
     const users = await this.prisma.user.findMany({
       where: { organizationId, status: 'Active' },
       select: {
         id: true,
         displayName: true,
-        _count: { select: { primaryApplications: { where: visibility }, assignments: { where: { isActive: true } } } },
+        _count: { select: { primaryApplications: { where: scoped }, assignments: { where: { isActive: true } } } },
       },
     });
     return users.map((user) => ({
@@ -1748,5 +1769,106 @@ export class ReportsService {
       applications: user._count.primaryApplications,
       overdueTasks: 0,
     }));
+  }
+
+  /**
+   * Meeting notes 2026-11-25 (item 5): per-entity (per-branch) report — hires,
+   * funnel and time-to-fill for every branch in the org. ENTITY = BRANCH, the
+   * system's org subunit. A `branchId` query narrows the report to one branch.
+   * Time-to-fill follows the KPIs definition (hiring-case creation → actual
+   * joining); null when a branch has no hires in range.
+   */
+  async getByEntity(organizationId: string, query: ReportOverviewQueryDto, user?: AuthUser): Promise<EntityReport[]> {
+    const range = this.resolveRange(query);
+    const visibility = user && this.accessControl
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    const applicationWhere = this.applicationWhere(organizationId, range.from, range.to, query, visibility);
+    const [branches, applications, joinedCases, vacancies] = await Promise.all([
+      this.prisma.branch.findMany({
+        where: { organizationId, ...(query.branchId ? { id: query.branchId } : {}) },
+        select: { id: true, name: true, code: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.application.findMany({
+        where: applicationWhere,
+        select: { stage: true, vacancy: { select: { branchId: true } } },
+      }),
+      this.prisma.hiringCase.findMany({
+        where: {
+          organizationId,
+          status: 'Joined',
+          application: this.applicationRelationFilter(query, visibility),
+        },
+        select: {
+          actualJoiningDate: true,
+          createdAt: true,
+          application: { select: { vacancy: { select: { branchId: true } } } },
+        },
+      }),
+      this.prisma.vacancy.findMany({
+        where: { organizationId, ...(query.branchId ? { branchId: query.branchId } : {}) },
+        select: { branchId: true, status: true, approvedHeadcount: true, joinedHeadcount: true },
+      }),
+    ]);
+
+    const stages = [...PROGRESSION_STAGES];
+    const rows = new Map<string, EntityReport>();
+    for (const branch of branches) {
+      rows.set(branch.id, {
+        entityId: branch.id,
+        entityName: branch.name,
+        entityCode: branch.code ?? null,
+        applications: 0,
+        hires: 0,
+        funnel: stages.map((name) => ({ name, count: 0, percent: 0 })),
+        timeToFillDays: null,
+        openVacancies: 0,
+        approvedHeadcount: 0,
+        joinedHeadcount: 0,
+      });
+    }
+    const fillDays = new Map<string, number[]>();
+    for (const application of applications) {
+      const row = rows.get(application.vacancy.branchId);
+      if (!row) continue;
+      row.applications += 1;
+      const stage = row.funnel.find((s) => s.name === application.stage);
+      if (stage) stage.count += 1;
+    }
+    for (const joinedCase of joinedCases) {
+      const branchId = joinedCase.application.vacancy.branchId;
+      const row = rows.get(branchId);
+      if (!row) continue;
+      const hireDate = joinedCase.actualJoiningDate ?? joinedCase.createdAt;
+      if (hireDate < range.from || hireDate >= range.to) continue;
+      row.hires += 1;
+      const end = joinedCase.actualJoiningDate ?? joinedCase.createdAt;
+      const days = Math.max(0, Math.round((end.getTime() - joinedCase.createdAt.getTime()) / DAY_MS));
+      const list = fillDays.get(branchId) ?? [];
+      list.push(days);
+      fillDays.set(branchId, list);
+    }
+    for (const vacancy of vacancies) {
+      const row = rows.get(vacancy.branchId);
+      if (!row) continue;
+      if (['Open', 'Partially Filled'].includes(vacancy.status)) row.openVacancies += 1;
+      row.approvedHeadcount += vacancy.approvedHeadcount;
+      row.joinedHeadcount += vacancy.joinedHeadcount;
+    }
+    for (const row of rows.values()) {
+      const applied = row.funnel.find((s) => s.name === 'Applied')?.count ?? 0;
+      for (const stage of row.funnel) {
+        stage.percent = applied === 0 ? 0 : Math.round((stage.count / applied) * 100);
+      }
+      const days = fillDays.get(row.entityId) ?? [];
+      row.timeToFillDays = days.length === 0 ? null : Math.max(0, Math.round(days.reduce((a, b) => a + b, 0) / days.length));
+    }
+    return [...rows.values()];
+  }
+
+  /** Meeting notes 2026-11-25 (item 5): a branchId filter never replaces the access scope. */
+  private branchScopedVisibility(query: ReportOverviewQueryDto, visibility: Prisma.ApplicationWhereInput): Prisma.ApplicationWhereInput {
+    return query.branchId ? { AND: [visibility, { vacancy: { branchId: query.branchId } }] } : visibility;
   }
 }

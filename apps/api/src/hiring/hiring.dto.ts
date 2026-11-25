@@ -30,4 +30,16 @@ export class JoiningUpdateDto {
   @IsOptional()
   @IsDateString()
   actualJoiningDate?: string;
+
+  /** Meeting notes 2026-11-25 (item 4): edit the expected joining date on the case. */
+  @IsOptional()
+  @IsDateString()
+  plannedJoiningDate?: string | null;
+}
+
+/** Meeting notes 2026-11-25 (item 4): edit only the expected joining date (no status change). */
+export class UpdatePlannedJoiningDateDto {
+  @IsOptional()
+  @IsDateString()
+  plannedJoiningDate?: string | null;
 }

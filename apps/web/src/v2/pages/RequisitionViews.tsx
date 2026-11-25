@@ -323,6 +323,12 @@ export function RequisitionDetailView({ current, ctx, people, me = null, go }: R
             <div><dt>Due</dt><dd>{formatDue(due)}</dd></div>
             <div><dt>Primary recruiter</dt><dd>{ownerOf(current, people)}</dd></div>
             <div><dt>Target</dt><dd>{targetLabel}</dd></div>
+            {/* Meeting notes 2026-11-25 (items 1–2): approvers see the opening kind, hiring type, reason and preference. */}
+            <div><dt>Opening type</dt><dd>{current.openingType ?? 'New position'}</dd></div>
+            {current.openingType === 'Replacement' && current.replacedEmployee ? <div><dt>Replaces</dt><dd>{current.replacedEmployee.name}</dd></div> : null}
+            <div><dt>Employment type</dt><dd>{current.employmentType ?? '—'}</dd></div>
+            <div><dt>Opening reason</dt><dd>{current.reason ?? '—'}</dd></div>
+            <div><dt>Nationality preference</dt><dd>{(current.nationalityPreference ?? []).length ? current.nationalityPreference!.join(', ') : 'None — soft preference only'}</dd></div>
           </dl>
         </div>
         <div className="rf2-req__actions">

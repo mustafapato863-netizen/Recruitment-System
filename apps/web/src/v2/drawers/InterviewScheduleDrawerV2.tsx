@@ -246,7 +246,7 @@ export function InterviewScheduleDrawerV2({
             value={type}
             onChange={(e) => setType(e.target.value)}
           >
-            {['Screening', 'Technical', 'Behavioral', 'Managerial'].map((t) => (
+            {['Screening', 'Technical', 'Behavioral', 'Managerial', 'Assessment'].map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>

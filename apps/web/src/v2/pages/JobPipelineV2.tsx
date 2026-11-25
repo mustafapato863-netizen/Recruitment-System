@@ -212,6 +212,8 @@ export function JobPipelineV2() {
                   {job.department ? <span>{job.department}</span> : null}
                   {job.branch?.name ? <span><Building2 aria-hidden="true" />{job.branch.name}</span> : null}
                   {owner ? <span>Owner: {owner.name}</span> : null}
+                  {/* Meeting notes 2026-11-25 (item 2): nationality preference is a soft signal. */}
+                  {(job.nationalityPreference ?? []).length > 0 ? <span>Prefers: {job.nationalityPreference!.join(', ')}</span> : null}
                 </p>
               ) : null}
               {me?.isAdmin ? <p className="rf2-jtable__sub" data-testid="admin-status-note">{ADMIN_STATUS_TEXT}</p> : null}

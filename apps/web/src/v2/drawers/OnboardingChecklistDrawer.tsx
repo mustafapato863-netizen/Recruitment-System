@@ -18,6 +18,10 @@ export interface OnboardingCase {
   branchName: string;
   plannedJoiningDate: string | null;
   status: string;
+  /** Meeting notes 2026-11-25 (item 6): reporting cycle recorded at Joined. */
+  reportingCycle?: string | null;
+  /** Meeting notes 2026-11-25 (item 6): the NewJoinerTargets task status. */
+  newJoinerTargetsStatus?: 'Pending' | 'Done' | null;
   complianceRequirements?: LicenceFact[];
   approvedHeadcount?: number | null;
   joinedHeadcount?: number | null;
@@ -34,6 +38,30 @@ export function OnboardingChecklistDrawer({ hiringCase, onClose, onUpdated }: Pr
   const [actualJoiningDate, setActualJoiningDate] = useState(
     new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()),
   );
+  // Meeting notes 2026-11-25 (item 4): the expected joining date is editable here;
+  // it is pre-filled from the accepted offer's start date.
+  const [plannedJoiningDate, setPlannedJoiningDate] = useState(hiringCase.plannedJoiningDate?.slice(0, 10) ?? '');
+  const [savingDate, setSavingDate] = useState(false);
+  const [dateSaved, setDateSaved] = useState(false);
+  const plannedDateChanged = plannedJoiningDate !== (hiringCase.plannedJoiningDate?.slice(0, 10) ?? '');
+
+  /** Meeting notes 2026-11-25 (item 4): save only the expected date, without recording a joining status. */
+  const handleSavePlannedDate = async () => {
+    setSavingDate(true);
+    setError(null);
+    setDateSaved(false);
+    try {
+      await patchApi(`/hiring/${encodeURIComponent(hiringCase.id)}/planned-joining-date`, {
+        plannedJoiningDate: plannedJoiningDate || null,
+      });
+      setDateSaved(true);
+      onUpdated();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not save the expected joining date.');
+    } finally {
+      setSavingDate(false);
+    }
+  };
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [requirements, setRequirements] = useState<LicenceFact[]>(hiringCase.complianceRequirements ?? []);
@@ -77,6 +105,9 @@ export function OnboardingChecklistDrawer({ hiringCase, onClose, onUpdated }: Pr
       await postApi(`/hiring/${encodeURIComponent(hiringCase.id)}/joining`, {
         status,
         ...(status === 'Joined' && actualJoiningDate ? { actualJoiningDate } : {}),
+        // Meeting notes 2026-11-25 (item 4): send the expected date when it changed
+        // (it is also saved standalone via "Save expected date" above).
+        ...(plannedDateChanged ? { plannedJoiningDate: plannedJoiningDate || null } : {}),
       });
       onUpdated();
       onClose();
@@ -165,6 +196,29 @@ export function OnboardingChecklistDrawer({ hiringCase, onClose, onUpdated }: Pr
 
         <section className="rf2-stage-form__section">
           <h3 className="rf2-stage-form__section-title">Record Day-One Show Status</h3>
+          {/* Meeting notes 2026-11-25 (item 6): reporting cycle + targets status for the joiner. */}
+          {hiringCase.reportingCycle ? (
+            <p className="rf2-stage-form__hint">
+              Reporting cycle: {hiringCase.reportingCycle === 'weekly' ? 'Weekly' : 'Monthly'}
+              {' · '}Initial targets: {hiringCase.newJoinerTargetsStatus === 'Done' ? 'Set' : hiringCase.newJoinerTargetsStatus === 'Pending' ? 'Pending — the hiring manager has a task to set them' : 'Not started'}
+            </p>
+          ) : null}
+          <div className="rf2-stage-form__row">
+            <InputV2
+              label="Expected Joining Date"
+              type="date"
+              value={plannedJoiningDate}
+              onChange={(e) => { setPlannedJoiningDate(e.target.value); setDateSaved(false); }}
+            />
+            <ButtonV2
+              kind="secondary"
+              size="sm"
+              disabled={!plannedDateChanged || savingDate}
+              onClick={handleSavePlannedDate}
+            >
+              {savingDate ? 'Saving…' : dateSaved ? 'Saved' : 'Save expected date'}
+            </ButtonV2>
+          </div>
           <div className="rf2-stage-form__row">
             <SelectV2
               label="Joining Outcome"

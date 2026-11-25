@@ -103,6 +103,8 @@ export class AtsScoringService {
             requiredSkills: true,
             minExperienceYears: true,
             jdCriteria: true,
+            // Meeting notes 2026-11-25 (item 2): soft preference signal, never scored.
+            nationalityPreference: true,
           },
         },
       },
@@ -247,6 +249,20 @@ export class AtsScoringService {
     const overallScore = Math.round(computedOverall * 10) / 10;
     const mustHaveSkillsPassed = mustHaveMatchedCount === mustHaveTotalCount;
 
+    // Meeting notes 2026-11-25 (item 2): nationality preference is a soft, visible
+    // signal only. It is computed here for display and never enters the score
+    // (the ATS scorer strips protected attributes before scoring).
+    const preferredNationalities = (vacancy.nationalityPreference ?? []).filter(Boolean);
+    const candidateNationality = candidate.nationality ?? null;
+    const nationalityPreference = {
+      preferred: preferredNationalities,
+      candidateNationality,
+      matchesPreference:
+        preferredNationalities.length > 0 && candidateNationality
+          ? preferredNationalities.some((n) => n.toLowerCase() === candidateNationality.toLowerCase())
+          : null,
+    };
+
     const breakdown: AtsMatchBreakdown = {
       overallScore,
       knockoutsPassed,
@@ -260,6 +276,7 @@ export class AtsScoringService {
       semanticSkillMatchPct: Math.round(skillsScore),
       skillBreakdown,
       missingKeywords,
+      nationalityPreference,
       experienceMatch: {
         actualYears: candidateExpYears,
         requiredYears: reqExp,
@@ -479,6 +496,15 @@ export class AtsScoringService {
       }
       if (missingKeywords.length > 0) {
         fitReasons.push(`Missing keywords: ${missingKeywords.slice(0, 3).join(', ')}${missingKeywords.length > 3 ? ` (+${missingKeywords.length - 3} more)` : ''}`);
+      }
+      // Meeting notes 2026-11-25 (item 2): soft preference signal — visible only, never scored.
+      const preferredNationalities = (vac.nationalityPreference ?? []).filter(Boolean);
+      if (preferredNationalities.length > 0 && candidate.nationality) {
+        fitReasons.push(
+          preferredNationalities.some((n) => n.toLowerCase() === candidate.nationality!.toLowerCase())
+            ? `Nationality preference match: ${candidate.nationality} is among the preferred nationalities`
+            : `Nationality preference: this role prefers ${preferredNationalities.join(', ')}`,
+        );
       }
 
       recommendations.push({

@@ -68,4 +68,17 @@ describe('FinalApprovalInboxV2', () => {
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('link', { name: 'Review case' })).toBeInTheDocument();
   });
+
+  // Meeting notes 2026-11-25 (item 4): approvers see the expected joining date.
+  it('shows the expected joining date in the inbox, or Not set when there is none', async () => {
+    fetchApprovals.mockResolvedValue([
+      { ...record, plannedJoiningDate: '2026-12-15T00:00:00.000Z' },
+      { ...record, id: 'case-2', candidateName: 'Omar Hassan', plannedJoiningDate: null },
+    ]);
+    show();
+    const table = await screen.findByRole('table', { name: 'Pending final hiring approvals' });
+    expect(within(table).getByText('15/12/2026')).toBeInTheDocument();
+    expect(within(table).getByText('Not set')).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Expected joining' })).toBeInTheDocument();
+  });
 });

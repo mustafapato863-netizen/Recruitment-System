@@ -20,7 +20,8 @@ export interface EvidenceItem {
 export interface SkillRef { id: string | null; name: string }
 export interface MatchedSkill { skill: SkillRef; hasEvidence: boolean; evidence: EvidenceItem[] }
 export interface Suggestion {
-  candidate: { id: string; code: string; name: string; currentTitle: string | null; location: string | null };
+  /** Meeting notes 2026-11-25 (item 2): candidate nationality (soft signal; never scored). */
+  candidate: { id: string; code: string; name: string; currentTitle: string | null; location: string | null; nationality: string | null };
   matchedSkills: MatchedSkill[];
   missingSkills: SkillRef[];
   /** File already open on this job, when one exists. */
@@ -42,10 +43,12 @@ export interface SuggestionsResponse {
 export type CompareCell = { candidateId: string; status: 'evidence' | 'no-evidence' | 'missing'; evidence: EvidenceItem[] };
 export interface CompareResponse {
   vacancyId: string;
+  /** Meeting notes 2026-11-25 (item 2): the job's nationality preference (soft signal; never a filter). */
+  nationalityPreference: string[];
   candidates: Suggestion['candidate'][];
   rows: Array<{ skill: SkillRef; cells: CompareCell[] }>;
   /** Non-skill rows: notice period and the fit note from this job's screening. No score. */
-  infoRows: Array<{ key: 'notice-period' | 'fit-note'; label: string; cells: CompareInfoCell[] }>;
+  infoRows: Array<{ key: 'notice-period' | 'fit-note' | 'nationality'; label: string; cells: CompareInfoCell[] }>;
 }
 export interface CompareInfoCell {
   candidateId: string;
@@ -98,7 +101,7 @@ const ACTIVE_CANDIDATE = 'Active';
 const SUGGESTION_LIMIT = 50;
 
 type CandidateWithSkills = {
-  id: string; candidateCode: string; firstName: string; lastName: string; currentTitle: string | null; location: string | null; updatedAt: Date;
+  id: string; candidateCode: string; firstName: string; lastName: string; currentTitle: string | null; location: string | null; nationality: string | null; updatedAt: Date;
   skills?: string[] | null;
   skillLinks: Array<{ skillId: string; evidence: Array<{ id: string; sourceType: string; sourceRef: string | null; snippet: string | null; createdAt: Date; addedBy: { id: string; displayName: string } | null }> }>;
 };
@@ -123,6 +126,7 @@ export class MatchingService {
         status: true,
         primaryRecruiterId: true,
         requiredSkills: true,
+        nationalityPreference: true,
         assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, select: { userId: true, user: { select: { managerId: true } } } },
       },
     });
@@ -159,7 +163,7 @@ export class MatchingService {
 
   private candidateSelect(skillIds: string[]) {
     return {
-      id: true, candidateCode: true, firstName: true, lastName: true, currentTitle: true, location: true, updatedAt: true, skills: true,
+      id: true, candidateCode: true, firstName: true, lastName: true, currentTitle: true, location: true, nationality: true, updatedAt: true, skills: true,
       skillLinks: {
         where: { skillId: { in: skillIds } },
         select: {
@@ -191,7 +195,7 @@ export class MatchingService {
       matchedSkills.push({ skill, hasEvidence: evidence.length > 0, evidence });
     }
     return {
-      candidate: { id: c.id, code: c.candidateCode, name: `${c.firstName} ${c.lastName}`.trim(), currentTitle: c.currentTitle, location: c.location },
+      candidate: { id: c.id, code: c.candidateCode, name: `${c.firstName} ${c.lastName}`.trim(), currentTitle: c.currentTitle, location: c.location, nationality: c.nationality ?? null },
       matchedSkills, missingSkills,
       _evidenced: matchedSkills.filter((m) => m.hasEvidence).length, _held: matchedSkills.length, _latest: latest,
     };
@@ -255,7 +259,12 @@ export class MatchingService {
       orderBy: { screenedAt: 'desc' },
       select: { notes: true, noticePeriodDays: true, screenedAt: true, application: { select: { candidateId: true } }, screener: { select: { id: true, displayName: true } } },
     });
-    const profiles = await this.prisma.candidate.findMany({ where: { id: { in: ids } }, select: { id: true, availability: true } });
+    const profiles = await this.prisma.candidate.findMany({ where: { id: { in: ids } }, select: { id: true, availability: true, nationality: true } });
+    const nationality = (id: string): CompareInfoCell => {
+      // Meeting notes 2026-11-25 (item 2): shown for information only — never a filter.
+      const value = profiles.find((p) => p.id === id)?.nationality?.trim() || null;
+      return { candidateId: id, value, source: value ? 'profile' : null };
+    };
     const notice = (id: string): CompareInfoCell => {
       const log = logs.find((l) => l.application.candidateId === id && l.noticePeriodDays !== null);
       if (log) return { candidateId: id, value: log.noticePeriodDays, source: 'screening', at: log.screenedAt.toISOString() };
@@ -270,6 +279,7 @@ export class MatchingService {
     };
     return {
       vacancyId,
+      nationalityPreference: vacancy.nationalityPreference ?? [],
       candidates: shaped.map((s) => s.candidate),
       rows: required.map((skill) => ({
         skill,
@@ -279,6 +289,7 @@ export class MatchingService {
         }),
       })),
       infoRows: [
+        { key: 'nationality', label: 'Nationality', cells: ids.map(nationality) },
         { key: 'notice-period', label: 'Notice period', cells: ids.map(notice) },
         { key: 'fit-note', label: 'Fit note', cells: ids.map(fit) },
       ],

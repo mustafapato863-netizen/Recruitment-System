@@ -37,13 +37,42 @@ export class CreateVacancyRequestDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(['Full-time', 'Part-time', 'Contract', 'Temporary'])
   @MaxLength(60)
   employmentType?: string | null;
 
+  /** Meeting notes 2026-11-25: 'New position' | 'Replacement'. */
+  @IsOptional()
+  @IsString()
+  @IsIn(['New position', 'Replacement'])
+  openingType?: string | null;
+
+  /** Meeting notes 2026-11-25: the employee being replaced (Replacement only). */
+  @IsOptional()
+  @IsUUID()
+  replacedEmployeeId?: string | null;
+
+  /** Meeting notes 2026-11-25: preferred nationalities — a soft signal, not a hard filter. */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(60, { each: true })
+  nationalityPreference?: string[] | null;
+
+  /**
+   * Meeting notes 2026-11-25: opening reason, a value from the 'opening-reasons'
+   * master-data list (or "Other" + `reasonNote`). Free text moved to `reasonNote`.
+   */
   @IsOptional()
   @IsString()
   @MaxLength(120)
   reason?: string | null;
+
+  /** Meeting notes 2026-11-25: free-text note, required when reason is "Other". */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  reasonNote?: string | null;
 
   @IsOptional()
   @IsString()
@@ -158,13 +187,42 @@ export class UpdateVacancyRequestDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(['Full-time', 'Part-time', 'Contract', 'Temporary'])
   @MaxLength(60)
   employmentType?: string | null;
 
+  /** Meeting notes 2026-11-25: 'New position' | 'Replacement'. */
+  @IsOptional()
+  @IsString()
+  @IsIn(['New position', 'Replacement'])
+  openingType?: string | null;
+
+  /** Meeting notes 2026-11-25: the employee being replaced (Replacement only). */
+  @IsOptional()
+  @IsUUID()
+  replacedEmployeeId?: string | null;
+
+  /** Meeting notes 2026-11-25: preferred nationalities — a soft signal, not a hard filter. */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(60, { each: true })
+  nationalityPreference?: string[] | null;
+
+  /**
+   * Meeting notes 2026-11-25: opening reason, a value from the 'opening-reasons'
+   * master-data list (or "Other" + `reasonNote`). Free text moved to `reasonNote`.
+   */
   @IsOptional()
   @IsString()
   @MaxLength(120)
   reason?: string | null;
+
+  /** Meeting notes 2026-11-25: free-text note, required when reason is "Other". */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  reasonNote?: string | null;
 
   @IsOptional()
   @IsString()

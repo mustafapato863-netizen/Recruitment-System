@@ -16,6 +16,7 @@ import {
   UpdateComplianceDto,
   FinalApprovalDto,
   JoiningUpdateDto,
+  UpdatePlannedJoiningDateDto,
 } from './hiring.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -139,5 +140,19 @@ export class HiringController {
     @Body() dto: JoiningUpdateDto,
   ) {
     return this.hiringService.confirmJoining(user.organizationId, id, dto, user);
+  }
+
+  /** Meeting notes 2026-11-25 (item 4): edit only the expected joining date. */
+  @Patch(':id/planned-joining-date')
+  @RequirePermissions('CANDIDATE_EDIT')
+  @AuditAction('HIRING_PLANNED_JOINING_UPDATE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'hiringCase', param: 'id' })
+  updatePlannedJoiningDate(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePlannedJoiningDateDto,
+  ) {
+    return this.hiringService.updatePlannedJoiningDate(user.organizationId, id, dto, user);
   }
 }

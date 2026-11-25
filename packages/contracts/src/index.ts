@@ -218,6 +218,13 @@ export interface VacancyRequest {
   targetChip?: TargetChip;
   requestedHeadcount: number;
   employmentType: string | null;
+  /** Meeting notes 2026-11-25: 'New position' | 'Replacement'. */
+  openingType?: string | null;
+  /** Meeting notes 2026-11-25: the employee being replaced (Replacement only). */
+  replacedEmployeeId?: string | null;
+  replacedEmployee?: { id: string; name: string } | null;
+  /** Meeting notes 2026-11-25: preferred nationalities — a soft signal, not a hard filter. */
+  nationalityPreference?: string[] | null;
   reason: string | null;
   budgetStatus: string | null;
   budgetMin: number | null;
@@ -274,6 +281,8 @@ export interface Vacancy {
   location?: string | null;
   department?: string | null;
   requiredSkills?: string[] | null;
+  /** Meeting notes 2026-11-25: copied from the requisition at activation (soft preference). */
+  nationalityPreference?: string[] | null;
   minExperienceYears?: number | null;
   jobSummary?: string | null;
   description?: string | null;
@@ -368,6 +377,12 @@ export interface CreateVacancyRequestInput {
   requesterId: string;
   requestedHeadcount: number;
   employmentType?: string | null;
+  /** Meeting notes 2026-11-25: 'New position' | 'Replacement'. */
+  openingType?: string | null;
+  /** Meeting notes 2026-11-25: the employee being replaced (Replacement only). */
+  replacedEmployeeId?: string | null;
+  /** Meeting notes 2026-11-25: preferred nationalities — a soft signal, not a hard filter. */
+  nationalityPreference?: string[] | null;
   reason?: string | null;
   budgetStatus?: string | null;
   budgetMin?: number | null;
@@ -409,6 +424,12 @@ export interface UpdateVacancyRequestInput {
   positionId?: string;
   requestedHeadcount?: number;
   employmentType?: string | null;
+  /** Meeting notes 2026-11-25: 'New position' | 'Replacement'. */
+  openingType?: string | null;
+  /** Meeting notes 2026-11-25: the employee being replaced (Replacement only). */
+  replacedEmployeeId?: string | null;
+  /** Meeting notes 2026-11-25: preferred nationalities — a soft signal, not a hard filter. */
+  nationalityPreference?: string[] | null;
   reason?: string | null;
   budgetStatus?: string | null;
   budgetMin?: number | null;
@@ -437,6 +458,10 @@ export interface VacancyRequestFilterInput {
   branchId?: string;
   positionId?: string;
   requesterId?: string;
+  /** Meeting notes 2026-11-25. */
+  openingType?: string;
+  employmentType?: string;
+  nationality?: string;
   search?: string;
   page?: number;
   pageSize?: number;
@@ -447,6 +472,8 @@ export interface VacancyFilterInput {
   branchId?: string;
   positionId?: string;
   criticality?: string;
+  /** Meeting notes 2026-11-25. */
+  nationality?: string;
   search?: string;
   page?: number;
   pageSize?: number;
@@ -821,6 +848,8 @@ export interface Candidate {
   skills?: string[];
   experienceYears?: number | null;
   location?: string | null;
+  /** Meeting notes 2026-11-25: candidate nationality (matched as a soft signal). */
+  nationality?: string | null;
   certifications?: string[];
   languages?: string[];
   availability?: string | null;
@@ -850,6 +879,8 @@ export interface CreateCandidateInput {
   skills?: string[];
   experienceYears?: number | null;
   location?: string | null;
+  /** Meeting notes 2026-11-25: candidate nationality (matched as a soft signal). */
+  nationality?: string | null;
   certifications?: string[];
   languages?: string[];
   availability?: string | null;
@@ -869,6 +900,8 @@ export interface UpdateCandidateInput {
   skills?: string[];
   experienceYears?: number | null;
   location?: string | null;
+  /** Meeting notes 2026-11-25: candidate nationality (matched as a soft signal). */
+  nationality?: string | null;
   certifications?: string[];
   languages?: string[];
   availability?: string | null;
@@ -879,6 +912,8 @@ export interface CandidateFilterInput {
   search?: string;
   status?: string;
   source?: string;
+  /** Meeting notes 2026-11-25. */
+  nationality?: string;
   page?: number;
   pageSize?: number;
 }
@@ -1141,7 +1176,14 @@ export interface UpsertScreeningDraftInput {
   moveToInterview?: boolean;
 }
 
-export type InterviewType = 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive' | (string & {});
+export type InterviewType = 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive' | 'Assessment' | (string & {});
+
+/** Meeting notes 2026-11-25: structured opening kinds for vacancy requests. */
+export const OPENING_TYPES = ['New position', 'Replacement'] as const;
+export type OpeningType = (typeof OPENING_TYPES)[number];
+/** Meeting notes 2026-11-25: fixed employment-type list for vacancy requests. */
+export const EMPLOYMENT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Temporary'] as const;
+export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 export type InterviewStatus = 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled' | 'No-show';
 
 export interface InterviewAttendeeItem {
@@ -1156,7 +1198,7 @@ export interface InterviewAttendeeItem {
 
 export type InterviewAttendeeResponse = 'Pending' | 'Accepted' | 'Confirmed' | 'Reschedule Requested' | 'Declined';
 
-export type MasterDataCategory = 'departments' | 'skills' | 'candidate-sources' | 'interview-types';
+export type MasterDataCategory = 'departments' | 'skills' | 'candidate-sources' | 'interview-types' | 'nationalities' | 'opening-reasons';
 
 export interface MasterDataValueRecord {
   id: string;
@@ -1558,6 +1600,10 @@ export interface HiringCase {
   status: HiringCaseStatus;
   plannedJoiningDate?: string | null;
   actualJoiningDate?: string | null;
+  /** Meeting notes 2026-11-25: reporting cycle recorded at Joined ('weekly' | 'monthly'). */
+  reportingCycle?: string | null;
+  /** Meeting notes 2026-11-25: the NewJoinerTargets task status ('Pending' | 'Done'), null before joining. */
+  newJoinerTargetsStatus?: 'Pending' | 'Done' | null;
   ownerUserId?: string | null;
   ownerName?: string | null;
 
@@ -1591,6 +1637,8 @@ export interface FinalApprovalInput {
 export interface JoiningUpdateInput {
   status: 'Joined' | 'Postponed' | 'No-show';
   actualJoiningDate?: string | null;
+  /** Meeting notes 2026-11-25: edit the expected joining date on the hiring case. */
+  plannedJoiningDate?: string | null;
 }
 
 // --- Phase 7: Talent Pool & Import ---
@@ -1739,6 +1787,24 @@ export interface DepartmentHiring {
   department: string;
   target: number;
   joined: number;
+}
+
+/**
+ * Meeting notes 2026-11-25 (item 5): per-entity report row. ENTITY = BRANCH, the
+ * system's org subunit. Time-to-fill follows the KPIs definition (hiring-case
+ * creation → actual joining); null when the branch has no hires in range.
+ */
+export interface EntityReport {
+  entityId: string;
+  entityName: string;
+  entityCode: string | null;
+  applications: number;
+  hires: number;
+  funnel: FunnelStage[];
+  timeToFillDays: number | null;
+  openVacancies: number;
+  approvedHeadcount: number;
+  joinedHeadcount: number;
 }
 
 export interface RecruiterWorkload {

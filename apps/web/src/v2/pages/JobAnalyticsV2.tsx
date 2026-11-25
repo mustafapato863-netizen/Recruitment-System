@@ -76,6 +76,9 @@ export function JobAnalyticsPage() {
   const departmentName = (vacancy as unknown as { department?: string } | null | undefined)?.department || vacancy?.branch?.name || '—';
   const locationText = vacancy?.location || vacancy?.branch?.name || '—';
   const employmentType = vacancy?.vacancyRequest?.employmentType || 'Full-time';
+  // Meeting notes 2026-11-25 (items 1–2): opening kind + nationality preference from the requisition.
+  const openingType = vacancy?.vacancyRequest?.openingType || 'New position';
+  const nationalityPreference = (vacancy?.vacancyRequest?.nationalityPreference ?? []).filter(Boolean);
   const openedDateStr = vacancy?.openedAt || vacancy?.createdAt
     ? new Date(vacancy.openedAt || vacancy.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
@@ -159,6 +162,9 @@ export function JobAnalyticsPage() {
             <span>{locationText}</span>
             <span>&bull;</span>
             <span>{employmentType}</span>
+            <span>&bull;</span>
+            <span>{openingType}</span>
+            {nationalityPreference.length > 0 ? (<><span>&bull;</span><span>Prefers: {nationalityPreference.join(', ')}</span></>) : null}
             <span>&bull;</span>
             <span>Opened {openedDateStr}</span>
             <span>&bull;</span>

@@ -434,6 +434,7 @@ describe('CV Bank truthful records', () => {
       phone: '+971500000001',
       currentTitle: 'Senior Nurse',
       location: 'Dubai',
+      nationality: null,
       skills: ['ICU'],
     }));
     expect(toastShow).toHaveBeenCalledWith(expect.objectContaining({ tone: 'success', title: 'Reviewed details saved' }));
