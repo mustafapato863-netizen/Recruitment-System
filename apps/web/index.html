@@ -5,26 +5,32 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Saudi German Health • RecruitFlow</title>
-    <script>
-      (() => {
-        try {
-          const storedTheme = localStorage.getItem('recruitflow.theme');
-          const theme = storedTheme === 'dark' ? 'dark' : 'light';
-          document.documentElement.dataset.theme = theme;
-          document.documentElement.classList.toggle('dark', theme === 'dark');
-          document.documentElement.style.colorScheme = theme;
-        } catch {
-          document.documentElement.dataset.theme = 'light';
-          document.documentElement.style.colorScheme = 'light';
-        }
-      })();
-    </script>
+    <meta
+      name="description"
+      content="Saudi German Health RecruitFlow — Enterprise recruitment workflow, applicant tracking, and candidate career portal."
+    />
+    <meta name="theme-color" content="#0084ce" />
+    <meta property="og:title" content="Saudi German Health • RecruitFlow" />
+    <meta
+      property="og:description"
+      content="Enterprise recruitment workflow, applicant tracking, and candidate career portal."
+    />
+    <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
+      id="rf-google-fonts"
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
+      media="print"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

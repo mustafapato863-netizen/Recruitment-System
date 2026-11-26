@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import type { UserProfile, LoginRequest } from '@recruitflow/contracts';
+import type { AuthSessionResponse, UserProfile, LoginRequest } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
 import { clearViewCache, setViewCacheUser } from '../v2/api/viewCache';
 
@@ -32,20 +32,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     const initialRequestVersion = ++authRequestVersion.current;
-    refreshUser()
-      .catch(() => {
+
+    const checkSession = async () => {
+      try {
+        const session = await fetchApi<AuthSessionResponse>('/auth/session', undefined, false);
+        if (!isMounted || authRequestVersion.current !== initialRequestVersion) return;
+        if (session?.authenticated && session.user?.id) {
+          setViewCacheUser(session.user.id);
+          setUser(session.user);
+          return;
+        }
+        if (session?.canRefresh) {
+          await refreshUser();
+          return;
+        }
+        setUser(null);
+      } catch {
         // Do not let the unauthenticated startup probe overwrite a login that
         // completed while the probe was still in flight.
         if (isMounted && authRequestVersion.current === initialRequestVersion) {
           setUser(null);
         }
-      })
-      .finally(() => {
+      } finally {
         if (isMounted) {
           initialSessionCheckPending.current = false;
           setIsLoading(false);
         }
-      });
+      }
+    };
+
+    void checkSession();
 
     const handleUnauthorized = () => {
       // A cold /login page performs an initial /auth/me probe. Its expected

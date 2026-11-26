@@ -8,6 +8,7 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { PageState } from '../components/ui/PageState';
 import { PublicSiteLayout } from './PublicSiteLayout';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 export function PublicJobsPage() {
   const { organizationCode = '' } = useParams<{ organizationCode: string }>();
@@ -16,6 +17,13 @@ export function PublicJobsPage() {
   const [result, setResult] = useState<PublicJobsResponse | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
+
+  useDocumentMeta(
+    result?.organization.name ? `Open Roles • ${result.organization.name} Careers` : 'Open Roles • Careers',
+    result?.organization.name
+      ? `Explore open career opportunities at ${result.organization.name} and apply online.`
+      : 'Explore open career opportunities and apply online.',
+  );
 
   const loadJobs = useCallback(async () => {
     if (!organizationCode) return;

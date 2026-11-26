@@ -9,6 +9,7 @@ import { Input } from '../components/ui/Input';
 import { PageState } from '../components/ui/PageState';
 import { PublicSiteLayout } from './PublicSiteLayout';
 import { parsePortalToken } from './portal-link';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 interface PortalDocument {
   id: string;
@@ -63,6 +64,11 @@ export function CandidatePortalPage() {
   const [contactMessage, setContactMessage] = useState('');
   const [contactResult, setContactResult] = useState('');
   const [contactError, setContactError] = useState('');
+
+  useDocumentMeta(
+    view ? `Application ${view.applicationCode} • ${view.organizationName}` : 'Candidate Application Portal',
+    'Track your application status and upload requested documents.',
+  );
 
   const load = useCallback(async (quiet = false) => {
     if (!token) {

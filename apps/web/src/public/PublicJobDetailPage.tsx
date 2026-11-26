@@ -9,12 +9,18 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { PageState } from '../components/ui/PageState';
 import { PublicSiteLayout } from './PublicSiteLayout';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 export function PublicJobDetailPage() {
   const { organizationCode = '', vacancyCode = '' } = useParams<{ organizationCode: string; vacancyCode: string }>();
   const [job, setJob] = useState<PublicJob | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
+
+  useDocumentMeta(
+    job ? `${job.positionTitle} • ${job.organizationName} Careers` : 'Role Details • Careers',
+    job?.jobSummary || job?.description || 'View role responsibilities, qualifications, and apply online.',
+  );
 
   const loadJob = useCallback(async () => {
     setStatus('loading');

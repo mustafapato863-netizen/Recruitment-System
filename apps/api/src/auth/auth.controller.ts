@@ -14,10 +14,11 @@ import type { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
-import type { AuthUser } from '@recruitflow/contracts';
+import type { AuthSessionResponse, AuthUser } from '@recruitflow/contracts';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 type AuthCookieSameSite = 'lax' | 'strict' | 'none';
+const DEFAULT_SESSION_HINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function authCookieSameSite(): AuthCookieSameSite {
   const configured = process.env.AUTH_COOKIE_SAME_SITE?.trim().toLowerCase();
@@ -41,6 +42,19 @@ export function authCookieOptions(path: string): {
   };
 }
 
+export function sessionHintCookieOptions(): {
+  httpOnly: true;
+  secure: boolean;
+  sameSite: AuthCookieSameSite;
+  path: string;
+  maxAge: number;
+} {
+  return {
+    ...authCookieOptions('/api/v1/auth'),
+    maxAge: DEFAULT_SESSION_HINT_MAX_AGE_MS,
+  };
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -58,6 +72,7 @@ export class AuthController {
 
     response.cookie('access_token', result.accessToken, authCookieOptions('/api/v1'));
     response.cookie('refresh_token', result.refreshToken, authCookieOptions('/api/v1/auth/refresh'));
+    response.cookie('rf_has_session', '1', sessionHintCookieOptions());
 
     return { user: result.user };
   }
@@ -78,6 +93,11 @@ export class AuthController {
       maxAge: 0,
       expires: new Date(0),
     });
+    response.cookie('rf_has_session', '', {
+      ...authCookieOptions('/api/v1/auth'),
+      maxAge: 0,
+      expires: new Date(0),
+    });
 
     return { message: 'Logged out successfully' };
   }
@@ -93,8 +113,33 @@ export class AuthController {
 
     response.cookie('access_token', accessToken, authCookieOptions('/api/v1'));
     response.cookie('refresh_token', refreshToken, authCookieOptions('/api/v1/auth/refresh'));
+    response.cookie('rf_has_session', '1', sessionHintCookieOptions());
 
     return { message: 'Token refreshed' };
+  }
+
+  @Public()
+  @Get('session')
+  @HttpCode(HttpStatus.OK)
+  async getSession(@Req() request: Request): Promise<AuthSessionResponse> {
+    const bearer = request.headers.authorization?.startsWith('Bearer ')
+      ? request.headers.authorization.slice(7).trim()
+      : undefined;
+    const accessToken = request.cookies?.access_token || bearer;
+    const user = await this.authService.resolveAccessTokenSession(accessToken);
+    if (user) {
+      return {
+        authenticated: true,
+        user,
+        canRefresh: true,
+      };
+    }
+
+    return {
+      authenticated: false,
+      user: null,
+      canRefresh: Boolean(request.cookies?.rf_has_session || request.cookies?.refresh_token),
+    };
   }
 
   @Get('me')

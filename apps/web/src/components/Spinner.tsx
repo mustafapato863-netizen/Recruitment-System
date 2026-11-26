@@ -1,5 +1,5 @@
 import type { HTMLAttributes } from 'react';
-import { SghAnimatedLogo } from '../design-system/brand/sgh-animated-logo';
+import { SghBrandEmblem } from '../design-system/brand/sgh-logo';
 
 export interface SpinnerProps extends HTMLAttributes<SVGSVGElement> {
   size?: number;
@@ -47,7 +47,7 @@ export function PageLoadingFallback({ message = 'Loading workspace...' }: { mess
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20 p-4 backdrop-blur-[2px]">
       <div className="flex flex-col items-center gap-4 rounded-3xl border border-rf-border-subtle bg-rf-surface/95 px-8 py-7 shadow-[var(--shadow-float)] animate-in zoom-in-95 duration-300">
-        <SghAnimatedLogo size={48} showText={false} />
+        <SghBrandEmblem size={48} />
         <span className="text-[13px] font-bold tracking-tight text-rf-ink mt-2">{message}</span>
       </div>
     </div>
@@ -58,7 +58,7 @@ export function InlinePageLoadingFallback({ message = 'Loading page...' }: { mes
   return (
     <div className="flex min-h-[55vh] w-full items-center justify-center px-4 py-12" role="status" aria-live="polite">
       <div className="flex flex-col items-center gap-4 rounded-3xl border border-rf-border-subtle bg-rf-surface/90 px-8 py-7 shadow-[var(--shadow-card)] backdrop-blur-sm animate-in fade-in duration-300">
-        <SghAnimatedLogo size={42} showText={false} />
+        <SghBrandEmblem size={42} />
         <div className="text-center mt-1">
           <strong className="block text-[13px] font-bold tracking-tight text-rf-ink">{message}</strong>
           <span className="mt-1 block text-[11px] font-medium text-rf-ink-muted uppercase tracking-wider">Preparing your workspace</span>

@@ -190,6 +190,32 @@ export class AuthService {
     return tokenVersion + 1;
   }
 
+  /**
+   * Resolves the active user profile from an access token without throwing on
+   * missing, expired, or invalidated tokens so public session checks stay 200 OK.
+   */
+  async resolveAccessTokenSession(token?: string): Promise<UserProfile | null> {
+    if (!token) return null;
+    try {
+      const payload = await this.jwtService.verifyAsync<{ sub?: string; tokenVersion?: number }>(token, {
+        secret: requireJwtSecret(this.configService, 'JWT_ACCESS_SECRET'),
+      });
+      if (!payload?.sub || typeof payload.tokenVersion !== 'number') {
+        return null;
+      }
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, status: true, tokenVersion: true },
+      });
+      if (!user || user.status !== 'Active' || user.tokenVersion !== payload.tokenVersion) {
+        return null;
+      }
+      return await this.getUserProfile(user.id);
+    } catch {
+      return null;
+    }
+  }
+
   async getUserProfile(userId: string): Promise<UserProfile> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

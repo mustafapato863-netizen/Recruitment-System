@@ -4,7 +4,7 @@ import { ChangePasswordDto, UpdateSelfProfileDto, UpdateUserPreferencesDto } fro
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { AuthService } from './auth.service';
-import { authCookieOptions } from './auth.controller';
+import { authCookieOptions, sessionHintCookieOptions } from './auth.controller';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -51,6 +51,7 @@ export class MeController {
     const refreshToken = await this.authService.generateRefreshToken(user.userId, user.organizationId, result.tokenVersion);
     response.cookie('access_token', accessToken, authCookieOptions('/api/v1'));
     response.cookie('refresh_token', refreshToken, authCookieOptions('/api/v1/auth/refresh'));
+    response.cookie('rf_has_session', '1', sessionHintCookieOptions());
     return { message: 'Password updated successfully', user: result.user };
   }
 }

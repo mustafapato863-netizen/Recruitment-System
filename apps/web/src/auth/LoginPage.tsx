@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { getFieldError, getErrorFields } from '../api/errors';
@@ -9,8 +9,8 @@ import { FormField } from '../components/ui/FormField';
 import { Input } from '../components/ui/Input';
 import { BorderGlow } from '../components/ui/BorderGlow';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
-import { SghAnimatedLogo } from '../design-system/brand/sgh-animated-logo';
-import { SghLogo } from '../design-system/brand/sgh-logo';
+import { SghBrandEmblem, SghLogo } from '../design-system/brand/sgh-logo';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 type LoginField = 'email' | 'password';
 type LoginFieldErrors = Partial<Record<LoginField, string>>;
@@ -101,19 +101,19 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const redirectPath = (location.state as { from?: string } | null)?.from;
+  const prefetchedShellRef = useRef(false);
 
-  useEffect(() => {
-    const prefetchSignedInShell = () => {
-      void import('../layout/V2Shell');
-      void import('../v2/pages/MyWorkRoute');
-    };
-    if (typeof window.requestIdleCallback === 'function') {
-      const idleId = window.requestIdleCallback(prefetchSignedInShell, { timeout: 1200 });
-      return () => window.cancelIdleCallback(idleId);
-    }
-    const timerId = window.setTimeout(prefetchSignedInShell, 200);
-    return () => window.clearTimeout(timerId);
-  }, []);
+  useDocumentMeta(
+    'Sign in • Saudi German Health RecruitFlow',
+    'Sign in to the Saudi German Health RecruitFlow hiring workspace.',
+  );
+
+  const prefetchSignedInShell = () => {
+    if (prefetchedShellRef.current) return;
+    prefetchedShellRef.current = true;
+    void import('../layout/V2Shell');
+    void import('../v2/pages/MyWorkRoute');
+  };
 
   const emailInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
@@ -134,6 +134,7 @@ export function LoginPage() {
 
   const selectTestPersona = (personaEmail: string) => {
     if (!TEST_PASSWORD) return;
+    prefetchSignedInShell();
     setEmail(personaEmail);
     setPassword(TEST_PASSWORD);
     setSelectedPersonaEmail(personaEmail);
@@ -215,7 +216,7 @@ export function LoginPage() {
             className="flex w-full max-w-sm flex-col items-center gap-2 rounded-3xl border border-rf-border-subtle px-8 py-8 text-center shadow-[var(--shadow-float)]"
             style={{ background: 'var(--color-surface)' }}
           >
-            <SghAnimatedLogo size={72} showText={false} animated={false} />
+            <SghBrandEmblem size={72} />
             <p className="m-0 font-rf-heading text-xl font-extrabold text-rf-ink">Saudi German Health</p>
             <p className="m-0 text-sm font-medium text-rf-ink-muted">Signing in</p>
           </div>
@@ -238,7 +239,7 @@ export function LoginPage() {
             <div className="relative hidden overflow-hidden border-r border-rf-border-subtle bg-rf-action-soft/45 p-8 lg:flex lg:flex-col lg:justify-between xl:p-10 h-full">
               <div className="relative">
                 <div className="flex items-center gap-3.5">
-                  <SghAnimatedLogo size={52} showText={false} animated={false} />
+                  <SghBrandEmblem size={52} />
                   <div className="h-9 w-px bg-rf-border-subtle" aria-hidden="true" />
                   <div>
                     <p className="m-0 font-rf-heading text-[16px] font-extrabold tracking-[-0.02em] text-rf-ink">
@@ -370,7 +371,9 @@ export function LoginPage() {
                         id="login-email"
                         type="email"
                         value={email}
+                        onFocus={prefetchSignedInShell}
                         onChange={(event) => {
+                          prefetchSignedInShell();
                           setEmail(event.target.value);
                           setSelectedPersonaEmail('');
                           clearFieldError('email');
@@ -408,7 +411,9 @@ export function LoginPage() {
                         id="login-password"
                         type={showPassword ? 'text' : 'password'}
                         value={password}
+                        onFocus={prefetchSignedInShell}
                         onChange={(event) => {
+                          prefetchSignedInShell();
                           setPassword(event.target.value);
                           clearFieldError('password');
                         }}

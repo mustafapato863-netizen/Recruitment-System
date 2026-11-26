@@ -10,7 +10,7 @@ vi.mock('../api/client', () => ({
 const fetchApiMock = vi.mocked(fetchApi);
 
 function AuthProbe() {
-  const { user, login } = useAuth();
+  const { user, isLoading, login } = useAuth();
 
   return (
     <>
@@ -20,6 +20,7 @@ function AuthProbe() {
       >
         Sign in
       </button>
+      <span data-testid="loading">{String(isLoading)}</span>
       <span>{user?.email ?? 'signed-out'}</span>
     </>
   );
@@ -30,6 +31,70 @@ describe('AuthProvider', () => {
     fetchApiMock.mockReset();
   });
 
+  it('does not call /auth/me on cold unauthenticated startup when /auth/session reports canRefresh=false', async () => {
+    fetchApiMock.mockImplementation((path) => {
+      if (path === '/auth/session') {
+        return Promise.resolve({ authenticated: false, user: null, canRefresh: false });
+      }
+      return Promise.resolve({});
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'));
+    expect(screen.getByText('signed-out')).toBeInTheDocument();
+    expect(fetchApiMock).toHaveBeenCalledTimes(1);
+    expect(fetchApiMock).toHaveBeenCalledWith('/auth/session', undefined, false);
+  });
+
+  it('hydrates directly from /auth/session when already authenticated', async () => {
+    fetchApiMock.mockImplementation((path) => {
+      if (path === '/auth/session') {
+        return Promise.resolve({
+          authenticated: true,
+          user: { id: 'user-1', email: 'active@example.com' },
+          canRefresh: true,
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('active@example.com')).toBeInTheDocument());
+    expect(fetchApiMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to /auth/me to refresh when /auth/session reports canRefresh=true', async () => {
+    fetchApiMock.mockImplementation((path) => {
+      if (path === '/auth/session') {
+        return Promise.resolve({ authenticated: false, user: null, canRefresh: true });
+      }
+      if (path === '/auth/me') {
+        return Promise.resolve({ id: 'user-2', email: 'refreshed@example.com' });
+      }
+      return Promise.resolve({});
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('refreshed@example.com')).toBeInTheDocument());
+    expect(fetchApiMock).toHaveBeenCalledWith('/auth/session', undefined, false);
+    expect(fetchApiMock).toHaveBeenCalledWith('/auth/me');
+  });
+
   it('does not let a slow unauthenticated startup probe log out a completed login', async () => {
     let rejectInitialProbe: (reason?: unknown) => void = () => undefined;
     const initialProbe = new Promise<never>((_, reject) => {
@@ -37,7 +102,7 @@ describe('AuthProvider', () => {
     });
 
     fetchApiMock.mockImplementation((path) => {
-      if (path === '/auth/me') return initialProbe;
+      if (path === '/auth/session') return initialProbe;
       if (path === '/auth/login') {
         return Promise.resolve({
           user: { id: 'user-1', email: 'new-user@example.com' },

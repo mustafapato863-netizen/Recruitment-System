@@ -11,6 +11,7 @@ import { Input } from '../components/ui/Input';
 import { PageState } from '../components/ui/PageState';
 import { PublicSiteLayout } from './PublicSiteLayout';
 import { applyDraftOwner, clearApplyDraft, readApplyDraft, writeApplyDraft } from './public-apply-draft';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 interface ApplicationForm {
   firstName: string;
@@ -49,6 +50,11 @@ export function PublicApplyPage() {
   const [fieldError, setFieldError] = useState('');
   const [confirmation, setConfirmation] = useState<PublicApplicationResponse | null>(null);
   const [draftReady, setDraftReady] = useState(false);
+
+  useDocumentMeta(
+    job ? `Apply: ${job.positionTitle} • ${job.organizationName}` : 'Apply • Careers',
+    job ? `Submit your application for ${job.positionTitle} at ${job.organizationName}.` : 'Submit your job application online.',
+  );
 
   useEffect(() => {
     const owner = applyDraftOwner(window.sessionStorage);

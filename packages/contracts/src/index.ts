@@ -528,6 +528,12 @@ export interface LoginResponse {
   user: UserProfile;
 }
 
+export interface AuthSessionResponse {
+  authenticated: boolean;
+  user: UserProfile | null;
+  canRefresh: boolean;
+}
+
 export interface UserProfile {
   id: string;
   email: string;

@@ -25,6 +25,37 @@ export function SghHeartIcon({
   );
 }
 
+/** Lightweight static SGH emblem with ambient radial halo (zero motion/react dependency). */
+export function SghBrandEmblem({
+  size = 48,
+  className = "",
+  glow = true,
+}: {
+  size?: number;
+  className?: string;
+  glow?: boolean;
+}) {
+  return (
+    <div
+      className={`relative flex items-center justify-center p-2 select-none ${className}`.trim()}
+      style={{ width: size * 1.3, height: size * 1.2 }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 4,
+          borderRadius: 999,
+          pointerEvents: "none",
+          background:
+            "radial-gradient(circle, rgba(0,163,224,0.28), rgba(0,168,89,0.12) 58%, transparent 72%)",
+        }}
+      />
+      <SghHeartSvg size={size} glow={glow} />
+    </div>
+  );
+}
+
 export function SghLogo({
   size = "md",
   variant = "horizontal",
