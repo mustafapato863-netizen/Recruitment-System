@@ -15,6 +15,7 @@ import { Prisma } from '@recruitflow/database';
 import type { AuthUser, Candidate, CandidateMetrics, PaginatedResult } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
 import { AccessControlService } from '../access-control/access-control.service';
+import { findActiveReason } from '../master-data/reason-lists';
 import { exportFailed } from '../common/errors/api-error';
 /* DocumentStorageService is a runtime Nest dependency and must remain a value import. */
 /* eslint-disable @typescript-eslint/consistent-type-imports */
@@ -174,6 +175,10 @@ export class CandidatesService {
     }
     if (query.source) {
       where.source = query.source;
+    }
+    // Meeting notes 2026-11-25 (item 2): filter candidates by nationality.
+    if (query.nationality) {
+      where.nationality = query.nationality;
     }
     if (query.search?.trim()) {
       const term = query.search.trim();
@@ -357,6 +362,8 @@ export class CandidatesService {
         skills: dto.skills ?? [],
         experienceYears: dto.experienceYears ?? null,
         location: dto.location?.trim() ?? null,
+        // Meeting notes 2026-11-25 (item 2): nationality must be an active master-data value.
+        nationality: dto.nationality ? await this.resolveNationality(organizationId, dto.nationality) : null,
         certifications: dto.certifications ?? [],
         languages: dto.languages ?? [],
         availability: dto.availability?.trim() ?? null,
@@ -408,6 +415,8 @@ export class CandidatesService {
     if (dto.skills !== undefined) dataToUpdate.skills = dto.skills;
     if (dto.experienceYears !== undefined) dataToUpdate.experienceYears = dto.experienceYears;
     if (dto.location !== undefined) dataToUpdate.location = dto.location?.trim() ?? null;
+    // Meeting notes 2026-11-25 (item 2): nationality must be an active master-data value.
+    if (dto.nationality !== undefined) dataToUpdate.nationality = dto.nationality ? await this.resolveNationality(organizationId, dto.nationality) : null;
     if (dto.certifications !== undefined) dataToUpdate.certifications = dto.certifications;
     if (dto.languages !== undefined) dataToUpdate.languages = dto.languages;
     if (dto.availability !== undefined) dataToUpdate.availability = dto.availability?.trim() ?? null;
@@ -636,6 +645,19 @@ export class CandidatesService {
     return { id, status: 'anonymized', anonymizedAt: now.toISOString() };
   }
 
+  /**
+   * Meeting notes 2026-11-25 (item 2): a candidate nationality must be an active
+   * value of the 'nationalities' master-data list; stored by its canonical name.
+   */
+  private async resolveNationality(organizationId: string, nationality: string): Promise<string> {
+    const text = nationality.trim();
+    const value = await findActiveReason(this.prisma, organizationId, 'nationalities', text);
+    if (!value) {
+      throw new BadRequestException({ code: 'NATIONALITY_NOT_IN_LIST', field: 'nationality', message: `"${text}" is not an active nationality. Pick one from the list.` });
+    }
+    return value.name;
+  }
+
   private async nextCandidateCode(): Promise<string> {
     const year = new Date().getUTCFullYear();
     const seq = await this.prisma.codeSequence.upsert({
@@ -691,6 +713,7 @@ export class CandidatesService {
       skills: record.skills,
       experienceYears: record.experienceYears,
       location: record.location,
+      nationality: record.nationality ?? null,
       certifications: record.certifications,
       languages: record.languages,
       availability: record.availability,

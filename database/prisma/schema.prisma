@@ -132,6 +132,7 @@ model User {
   userRoles                UserRole[]
   vacancyRequests          VacancyRequest[]           @relation("Requesters")
   assignedVacancyRequests  VacancyRequest[]           @relation("VacancyRequestAssignee")
+  replacedInRequests       VacancyRequest[]           @relation("ReplacedEmployee")
   vacancyStatusChanges     VacancyStatusHistory[]     @relation("VacancyStatusChanges")
   approvals                VacancyRequestApproval[]   @relation("ApprovalAssignee")
   assignments              VacancyAssignment[]
@@ -290,6 +291,13 @@ model VacancyRequest {
   status             String                   @default("Draft") @db.VarChar(40)
   requestedHeadcount Int
   employmentType     String?                  @db.VarChar(60)
+  /// Meeting notes 2026-11-25: structured opening kind. 'New position' | 'Replacement'.
+  openingType          String                   @default("New position") @db.VarChar(20)
+  /// Meeting notes 2026-11-25: the employee being replaced (only when openingType is 'Replacement').
+  replacedEmployeeId   String?                  @db.Uuid
+  replacedEmployee     User?                    @relation("ReplacedEmployee", fields: [replacedEmployeeId], references: [id], onDelete: SetNull)
+  /// Meeting notes 2026-11-25: preferred nationalities for the role (soft signal, not a hard filter).
+  nationalityPreference String[]                @default([]) @db.VarChar(60)
   reason             String?                  @db.VarChar(120)
   budgetStatus       String?                  @db.VarChar(60)
   budgetMin          Int?
@@ -374,6 +382,8 @@ model Vacancy {
   openedAt           DateTime?              @db.Timestamptz(6)
   targetStartDate    DateTime?              @db.Date
   requiredSkills     String[]               @default([]) @db.VarChar(100)
+  /// Meeting notes 2026-11-25: copied from the requisition at activation (soft preference, not a hard filter).
+  nationalityPreference String[]              @default([]) @db.VarChar(60)
   minExperienceYears Int?
   location           String?                @db.VarChar(120)
   department         String?                @db.VarChar(120)
@@ -483,6 +493,8 @@ model Candidate {
   skillLinks            CandidateSkill[]
   experienceYears       Int?
   location              String?               @db.VarChar(120)
+  /// Meeting notes 2026-11-25: candidate nationality (matched against the job's preference as a soft signal).
+  nationality           String?               @db.VarChar(60)
   certifications        String[]              @default([]) @db.VarChar(120)
   languages             String[]              @default([]) @db.VarChar(50)
   availability          String?               @db.VarChar(60)
@@ -936,6 +948,8 @@ model HiringCase {
   status             String       @default("Pending Compliance") @db.VarChar(50) // Pending Compliance, Pending Final Approval, Awaiting Joining, Joined, Postponed, No-show, Withdrawn
   plannedJoiningDate DateTime?    @db.Timestamptz(6)
   actualJoiningDate  DateTime?    @db.Timestamptz(6)
+  /// Meeting notes 2026-11-25: reporting cycle recorded when the case reaches Joined ('weekly' | 'monthly', default 'monthly').
+  reportingCycle       String?      @db.VarChar(20)
   /// Checks required for this accepted case. Null means the historical universal rule. Not rewritten when the job profile changes.
   requirementSnapshot Json?
   /// Fingerprint of the case facts the current approval authorized. Null when no approval can authorize joining.

@@ -47,7 +47,7 @@ import './compare-skills.css';
 
 type App = { id: string; candidateId: string; stage: string; source?: string | null };
 
-function infoText(key: 'notice-period' | 'fit-note', cell?: CompareInfoCell) {
+function infoText(key: 'notice-period' | 'fit-note' | 'nationality', cell?: CompareInfoCell) {
   if (!cell || cell.value === null || cell.value === '') return <p className="rf2-jtable__sub">Not recorded.</p>;
   const main =
     key === 'notice-period' && typeof cell.value === 'number'
@@ -458,6 +458,10 @@ function LegacyE24CompareV2() {
         <p className="rf2-jobs__sub">
           Required skills: {data.rows.map((r) => r.skill.name).join(', ') || 'none'}. Each cell is written evidence or a
           written gap. No scores or percentages.
+          {/* Meeting notes 2026-11-25 (item 2): nationality preference is a soft signal, never a filter. */}
+          {(data.nationalityPreference ?? []).length > 0
+            ? ` Nationality preference (soft signal only): ${data.nationalityPreference!.join(', ')}.`
+            : ''}
         </p>
       </div>
       <section className="rf2-panel">
@@ -549,7 +553,7 @@ function LegacyE24CompareV2() {
                 <th scope="row">
                   <p className="rf2-jtable__name">{r.label}</p>
                   <p className="rf2-jtable__sub">
-                    {r.key === 'fit-note' ? 'From this job’s screening' : 'Screening, else profile'}
+                    {r.key === 'fit-note' ? 'From this job’s screening' : r.key === 'nationality' ? 'Candidate profile · soft signal only' : 'Screening, else profile'}
                   </p>
                 </th>
                 {data.candidates.map((c) => {

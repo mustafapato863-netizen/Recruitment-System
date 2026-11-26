@@ -77,6 +77,8 @@ export interface JobDetail {
   targetStartDate: string | null;
   vacancyRequestId?: string;
   requiredSkills?: string[];
+  /** Meeting notes 2026-11-25 (item 2): nationality preference copied from the requisition (soft signal). */
+  nationalityPreference?: string[] | null;
   minExperienceYears?: number | null;
   qualifications?: string | null;
   location?: string | null;

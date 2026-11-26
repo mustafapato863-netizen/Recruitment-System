@@ -136,6 +136,40 @@ describe('M1 requisitions list', () => {
     await u.type(screen.getByLabelText('Search requisitions'), 'riyadh');
     expect(screen.getAllByRole('row')).toHaveLength(3);
   });
+  // Meeting notes 2026-11-25 (item 1): opening-type + employment-type filters.
+  it('filters by opening type and employment type', async () => {
+    const u = userEvent.setup();
+    serve({
+      // The fixture defaults every row to employmentType 'Full-time'; give each
+      // row a distinct value so the filters can be told apart.
+      '/vacancy-requests': fx.requisitions.map((r) =>
+        r.id === 'r412'
+          ? { ...r, openingType: 'Replacement', employmentType: 'Contract' }
+          : r.id === 'r415'
+            ? { ...r, openingType: 'New position', employmentType: 'Full-time' }
+            : r.id === 'r420'
+              ? { ...r, openingType: 'New position', employmentType: 'Part-time' }
+              : r.id === 'r421'
+                ? { ...r, openingType: 'New position', employmentType: 'Temporary' }
+                : { ...r, openingType: 'New position', employmentType: 'Part-time' },
+      ),
+    });
+    renderAt();
+    const table = await screen.findByRole('table');
+    expect(within(table).getAllByRole('row')).toHaveLength(6);
+    await u.selectOptions(screen.getByLabelText('Opening type'), 'Replacement');
+    expect(screen.getByTestId('loc')).toHaveTextContent('opening=Replacement');
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+    expect(screen.getByRole('table')).toHaveTextContent('HRIS Developer');
+    await u.selectOptions(screen.getByLabelText('Opening type'), '');
+    await u.selectOptions(screen.getByLabelText('Employment type'), 'Contract');
+    expect(screen.getByTestId('loc')).toHaveTextContent('employment=Contract');
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+    expect(screen.getByRole('table')).toHaveTextContent('HRIS Developer');
+    await u.selectOptions(screen.getByLabelText('Employment type'), 'Full-time');
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+    expect(screen.getByRole('table')).toHaveTextContent('Laravel Backend Engineer');
+  });
   it('sorts due date, newest, and title from the address', async () => {
     const earliest = renderAt('/vacancy-requests?sort=due');
     const earlyRows = within(await screen.findByRole('table')).getAllByRole('row').slice(1);
@@ -209,7 +243,8 @@ describe('M03 requisition drawer', () => {
     expect(await axeViolations(baseElement)).toEqual([]);
     await u.click(within(d).getByRole('button', { name: 'Activate job' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r-new/activate', { assignedEmployeeId: 'u-youssef' }));
-    expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests', { positionId: 'p-payroll', branchId: 'b-riyadh', requestedHeadcount: 1, dueDate: '2099-11-20', gradeId: 'g7', assignedEmployeeId: 'u-youssef', justification: null });
+    // Meeting notes 2026-11-25 (item 1): the drawer now sends the opening details too.
+    expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests', { positionId: 'p-payroll', branchId: 'b-riyadh', requestedHeadcount: 1, dueDate: '2099-11-20', gradeId: 'g7', assignedEmployeeId: 'u-youssef', justification: null, openingType: 'New position', replacedEmployeeId: null, employmentType: null, reason: null, reasonNote: null, nationalityPreference: [] });
     expect(api.postApi).not.toHaveBeenCalledWith(expect.stringMatching(/\/submit$/), expect.anything());
     expect(await screen.findByRole('status')).toHaveTextContent('Job active — Payroll Systems Analyst is now in Youssef Ibrahim’s Open jobs.');
   });

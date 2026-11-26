@@ -13,6 +13,10 @@ type HiringCaseRow = {
   branchName: string;
   plannedJoiningDate?: string | null;
   status: string;
+  /** Meeting notes 2026-11-25 (item 6): reporting cycle recorded at Joined. */
+  reportingCycle?: string | null;
+  /** Meeting notes 2026-11-25 (item 6): the NewJoinerTargets task status. */
+  newJoinerTargetsStatus?: 'Pending' | 'Done' | null;
   ownerUserId?: string | null;
   approvedHeadcount?: number | null;
   joinedHeadcount?: number | null;
@@ -122,13 +126,14 @@ export function HiresV2() {
         {state.kind === 'ready' && rows.length > 0 ? (
           <div className="rf2-jscroll">
             <table className="rf2-jtable" aria-label="Hiring cases">
-              <thead><tr><th scope="col">Candidate</th><th scope="col">Position / Site</th><th scope="col">Planned start</th><th scope="col">Status</th><th scope="col">Next step</th></tr></thead>
+              <thead><tr><th scope="col">Candidate</th><th scope="col">Position / Site</th><th scope="col">Planned start</th><th scope="col">Status</th><th scope="col">Reporting cycle</th><th scope="col">Next step</th></tr></thead>
               <tbody>{rows.map((item) => (
                 <tr key={item.id}>
                   <td><strong className="rf2-jtable__name">{item.candidateName}</strong></td>
                   <td><strong>{item.positionTitle}</strong><p className="rf2-jtable__sub">{item.branchName}</p></td>
                   <td>{dateLabel(item.plannedJoiningDate)}</td>
                   <td><StatusChip tone={tone[item.status] ?? 'neutral'} label={item.status} /></td>
+                  <td>{item.reportingCycle ? `${item.reportingCycle === 'weekly' ? 'Weekly' : 'Monthly'}${item.newJoinerTargetsStatus ? ` · Targets ${item.newJoinerTargetsStatus === 'Done' ? 'set' : 'pending'}` : ''}` : '—'}</td>
                   <td><Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={caseHref(item.id, item.status)}>{nextStep(item.status)}</Link></td>
                 </tr>
               ))}</tbody>

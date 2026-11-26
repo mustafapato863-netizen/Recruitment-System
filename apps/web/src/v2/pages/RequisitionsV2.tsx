@@ -261,7 +261,10 @@ export function RequisitionsV2() {
   const siteQ = params.get('site') ?? '';
   const ownerQ = params.get('owner') ?? '';
   const sort = sortKeyOf(params.get('sort'));
-  const setList = useCallback((patch: { q?: string; status?: string; site?: string; owner?: string; due?: string; sort?: string; desk?: string }) => {
+  // Meeting notes 2026-11-25 (item 1): opening-type + employment-type list filters.
+  const openingQ = params.get('opening') ?? '';
+  const employmentQ = params.get('employment') ?? '';
+  const setList = useCallback((patch: { q?: string; status?: string; site?: string; owner?: string; due?: string; sort?: string; desk?: string; opening?: string; employment?: string }) => {
     setMenu(null);
     setParams((prev) => {
       const n = new URLSearchParams(prev);
@@ -277,6 +280,8 @@ export function RequisitionsV2() {
       put('due', patch.due, '');
       put('sort', patch.sort, 'due');
       put('desk', patch.desk, '');
+      put('opening', patch.opening, '');
+      put('employment', patch.employment, '');
       return n;
     });
   }, [setParams]);
@@ -347,6 +352,9 @@ export function RequisitionsV2() {
     else if (status !== 'all' && r.status !== status) return false;
     if (siteQ && site(r) !== siteQ) return false;
     if (ownerQ && owner(r) !== ownerQ) return false;
+    // Meeting notes 2026-11-25 (item 1): opening-type + employment-type filters.
+    if (openingQ && (r.openingType ?? 'New position') !== openingQ) return false;
+    if (employmentQ && (r.employmentType ?? '') !== employmentQ) return false;
     const hay = `${title(r)} ${r.requestCode} ${site(r)} ${owner(r)} ${deptOf(r, data?.ctx ?? null) ?? ''}`;
     return !q.trim() || hay.toLowerCase().includes(q.trim().toLowerCase());
   }).sort((a, b) => compareReq(a, b, sort, title));
@@ -363,7 +371,7 @@ export function RequisitionsV2() {
   const showJd = Boolean(current && drawer === 'jd');
   const showEdit = Boolean(current && !showTarget && !showJd && (drawer === 'edit' || (modeParam === 'edit' && drawer !== 'detail')));
   const showDetail = Boolean(current && !showTarget && !showJd && !showEdit && (drawer === 'detail' || viewParam === 'detail'));
-  const filtersActive = Boolean(q || status !== 'all' || siteQ || ownerQ || sort !== 'due' || params.get('due') || params.get('desk'));
+  const filtersActive = Boolean(q || status !== 'all' || siteQ || ownerQ || openingQ || employmentQ || sort !== 'due' || params.get('due') || params.get('desk'));
   const outsideScope = Boolean(open && open !== 'new' && data && !current);
   const canCreate = can('VACANCY_REQUEST_CREATE') && !!data?.ctx;
   const canActivate = can('VACANCY_MANAGE');
@@ -397,7 +405,7 @@ export function RequisitionsV2() {
     setMenu({ id, top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) });
   };
   const canDecide = can('VACANCY_REQUEST_APPROVE');
-  const clearFilters = () => setList({ q: '', status: 'all', site: '', owner: '', due: '', sort: 'due', desk: '' });
+  const clearFilters = () => setList({ q: '', status: 'all', site: '', owner: '', due: '', sort: 'due', desk: '', opening: '', employment: '' });
   const menuRow = menu ? rows.find((r) => r.id === menu.id) ?? scoped.find((r) => r.id === menu.id) ?? null : null;
 
   const onMenuKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -461,6 +469,19 @@ export function RequisitionsV2() {
                 <option value="">All owners</option>
                 {owners.map((name) => <option key={name} value={name}>{name}</option>)}
                 {ownerQ && !owners.includes(ownerQ) ? <option value={ownerQ}>{ownerQ}</option> : null}
+              </SelectV2>
+              {/* Meeting notes 2026-11-25 (item 1): opening-type + employment-type filters. */}
+              <SelectV2 label="Opening type" fieldClassName="rf2-sr-label" value={openingQ} onChange={(e) => setList({ opening: e.target.value })}>
+                <option value="">All opening types</option>
+                <option value="New position">New position</option>
+                <option value="Replacement">Replacement</option>
+              </SelectV2>
+              <SelectV2 label="Employment type" fieldClassName="rf2-sr-label" value={employmentQ} onChange={(e) => setList({ employment: e.target.value })}>
+                <option value="">All employment types</option>
+                <option value="Full-time">Full-time</option>
+                <option value="Part-time">Part-time</option>
+                <option value="Contract">Contract</option>
+                <option value="Temporary">Temporary</option>
               </SelectV2>
             </div>
             <div className="rf2-reqs__sort">

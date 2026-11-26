@@ -66,6 +66,12 @@ export class CreateCandidateDto {
   @MaxLength(120)
   location?: string | null;
 
+  /** Meeting notes 2026-11-25 (item 2): candidate nationality, from the 'nationalities' master-data list. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  nationality?: string | null;
+
   @IsOptional()
   @IsString({ each: true })
   certifications?: string[];
@@ -141,6 +147,12 @@ export class UpdateCandidateDto {
   @MaxLength(120)
   location?: string | null;
 
+  /** Meeting notes 2026-11-25 (item 2): candidate nationality, from the 'nationalities' master-data list. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  nationality?: string | null;
+
   @IsOptional()
   @IsString({ each: true })
   certifications?: string[];
@@ -170,6 +182,11 @@ export class CandidateQueryDto {
   @IsOptional()
   @IsString()
   source?: string;
+
+  /** Meeting notes 2026-11-25 (item 2): filter candidates by nationality. */
+  @IsOptional()
+  @IsString()
+  nationality?: string;
 
   @IsOptional()
   @Type(() => Number)

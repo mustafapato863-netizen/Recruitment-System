@@ -13,6 +13,8 @@ interface ApprovalRow {
   positionTitle: string;
   branchName: string;
   status: string;
+  /** Meeting notes 2026-11-25 (item 4): expected joining date shown to approvers. */
+  plannedJoiningDate?: string | null;
 }
 
 type LoadState =
@@ -113,11 +115,13 @@ export function FinalApprovalInboxV2() {
         {state.kind === 'ready' && items.length > 0 ? (
           <div className="rf2-jscroll">
             <table className="rf2-jtable" aria-label="Pending final hiring approvals">
-              <thead><tr><th scope="col">Candidate</th><th scope="col">Position</th><th scope="col">Site</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+              <thead><tr><th scope="col">Candidate</th><th scope="col">Position</th><th scope="col">Site</th><th scope="col">Expected joining</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
               <tbody>{items.map((row) => (
                 <tr key={row.id}>
                   <td><strong className="rf2-jtable__name">{row.candidateName}</strong></td>
                   <td>{row.positionTitle}</td>
+                  <td>{row.branchName}</td>
+                  <td>{row.plannedJoiningDate ? new Date(row.plannedJoiningDate).toLocaleDateString('en-GB') : 'Not set'}</td>
                   <td>{row.branchName}</td>
                   <td><StatusChip tone="warning" label={row.status} /></td>
                   <td>

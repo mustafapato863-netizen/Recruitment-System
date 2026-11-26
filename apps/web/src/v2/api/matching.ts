@@ -21,7 +21,7 @@ const enc = encodeURIComponent;
 export interface EvidenceItem { id: string; sourceType: string; sourceRef: string | null; snippet: string | null; addedBy: { id: string; name: string } | null; addedAt: string }
 export interface SkillRef { id: string | null; name: string }
 export interface MatchedSkill { skill: SkillRef; hasEvidence: boolean; evidence: EvidenceItem[] }
-export interface SuggestionCandidate { id: string; code: string; name: string; currentTitle: string | null; location: string | null }
+export interface SuggestionCandidate { id: string; code: string; name: string; currentTitle: string | null; location: string | null; nationality?: string | null }
 /** People already on the job come back too, with their application id, stage, and addable:false. */
 export interface Suggestion { candidate: SuggestionCandidate; matchedSkills: MatchedSkill[]; missingSkills: SkillRef[]; applicationId?: string | null; alreadyOnJob?: boolean; stage?: string | null; addable?: boolean }
 export interface SuggestionsResponse { vacancyId: string; requiredSkills: SkillRef[]; unmappedRequiredSkills: string[]; orderedBy: string[]; suggestions: Suggestion[] }
@@ -29,8 +29,8 @@ export type CompareStatus = 'evidence' | 'no-evidence' | 'missing';
 export interface CompareCell { candidateId: string; status: CompareStatus; evidence: EvidenceItem[] }
 /** notice-period: days (number) or profile availability text; fit-note: this job's screening note. null = not recorded. */
 export interface CompareInfoCell { candidateId: string; value: number | string | null; source: 'screening' | 'profile' | null; by?: { id: string; name: string } | null; at?: string | null }
-export interface CompareInfoRow { key: 'notice-period' | 'fit-note'; label: string; cells: CompareInfoCell[] }
-export interface CompareResponse { vacancyId: string; candidates: SuggestionCandidate[]; rows: Array<{ skill: SkillRef; cells: CompareCell[] }>; infoRows?: CompareInfoRow[] }
+export interface CompareInfoRow { key: 'notice-period' | 'fit-note' | 'nationality'; label: string; cells: CompareInfoCell[] }
+export interface CompareResponse { vacancyId: string; nationalityPreference?: string[]; candidates: SuggestionCandidate[]; rows: Array<{ skill: SkillRef; cells: CompareCell[] }>; infoRows?: CompareInfoRow[] }
 /** Server sends addable; older servers did not list people on the job at all, so missing = addable. */
 export const canAdd = (s: Suggestion) => s.addable !== false && !s.alreadyOnJob;
 

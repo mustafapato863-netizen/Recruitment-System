@@ -822,6 +822,15 @@ export class OffersService {
           where: { id: offer.applicationId },
           data: { stage: 'Pre-Hire' },
         });
+        // Meeting notes 2026-11-25 (item 4): a (re-)accepted version's start date
+        // becomes the hiring case's expected joining date (only when the version has one,
+        // so a manually edited date is never wiped by a dateless version).
+        if (currentVersion.proposedJoiningDate) {
+          await tx.hiringCase.updateMany({
+            where: { applicationId: offer.applicationId },
+            data: { plannedJoiningDate: currentVersion.proposedJoiningDate },
+          });
+        }
       }
       if (dto.reason?.trim() && typeof tx.applicationNote?.create === 'function') {
         await tx.applicationNote.create({

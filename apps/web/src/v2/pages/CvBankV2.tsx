@@ -8,6 +8,7 @@ import {
 import { withReturnTo } from '../returnTarget';
 import { importBankCv, type BankCvImportResult, type ValidatedCvIntakeResult } from '../api/cvImport';
 import { fetchCandidateJobRecommendations } from '../api/ats';
+import { fetchNationalities } from '../api/requisitions';
 import { CvIntakeEngineDrawer } from '../drawers/CvIntakeEngineDrawer';
 import { SuggestJobsDrawer } from '../drawers/SuggestJobsDrawer';
 import type { Candidate, CandidateDocument, CandidateJobRecommendation, CvBankBackupStatus, PaginatedResult } from '@recruitflow/contracts';
@@ -49,6 +50,8 @@ interface ReviewDraft {
   phone: string;
   currentTitle: string;
   location: string;
+  /** Meeting notes 2026-11-25 (item 2): candidate nationality. */
+  nationality: string;
   skills: string;
 }
 
@@ -59,6 +62,7 @@ const EMPTY_DRAFT: ReviewDraft = {
   phone: '',
   currentTitle: '',
   location: '',
+  nationality: '',
   skills: '',
 };
 
@@ -143,6 +147,7 @@ function draftFromRow(row: CVRow): ReviewDraft {
       phone: candidate.phone ?? '',
       currentTitle: candidate.currentTitle ?? '',
       location: candidate.location ?? '',
+      nationality: candidate.nationality ?? '',
       skills: skillNames(candidate).join(', '),
     };
   }
@@ -154,6 +159,7 @@ function draftFromRow(row: CVRow): ReviewDraft {
     phone: '',
     currentTitle: '',
     location: '',
+    nationality: '',
     skills: '',
   };
 }
@@ -191,6 +197,8 @@ export function CVBankPage() {
   const [search, setSearch] = useState(params.get('search') ?? '');
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  // Meeting notes 2026-11-25 (item 2): filter candidates by nationality.
+  const [nationalityFilter, setNationalityFilter] = useState('');
   const [sortAsc, setSortAsc] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -199,6 +207,8 @@ export function CVBankPage() {
   const [archiving, setArchiving] = useState(false);
   const [viewingKey, setViewingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<ReviewDraft>(EMPTY_DRAFT);
+  // Meeting notes 2026-11-25 (item 2): nationality catalog for the review form.
+  const [nationalities, setNationalities] = useState<string[]>([]);
   const [docUrl, setDocUrl] = useState<string | null>(null);
   const [docUrlLoading, setDocUrlLoading] = useState(false);
   const [docUrlError, setDocUrlError] = useState('');
@@ -243,6 +253,13 @@ export function CVBankPage() {
   useEffect(() => {
     setSearch(appliedSearch);
   }, [appliedSearch]);
+
+  // Meeting notes 2026-11-25 (item 2): load the nationality list once.
+  useEffect(() => {
+    let live = true;
+    fetchNationalities().then((rows) => { if (live && rows) setNationalities(rows); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => {
     if (!openMenuId) return undefined;
@@ -433,6 +450,8 @@ export function CVBankPage() {
       const file = (row.fileName ?? '').toLowerCase();
       if (q && !cand.includes(q) && !file.includes(q)) return false;
       if (statusFilter && row.parseStatus !== statusFilter) return false;
+      // Meeting notes 2026-11-25 (item 2): filter by nationality.
+      if (nationalityFilter && (row.candidate?.nationality ?? '') !== nationalityFilter) return false;
       if (dateFilter) {
         const createdMs = new Date(row.createdAt).getTime();
         const days = dateFilter === '7d' ? 7 : dateFilter === '30d' ? 30 : 90;
@@ -441,7 +460,7 @@ export function CVBankPage() {
       return true;
     });
     return [...list].sort((a, b) => (sortAsc ? a.candidateName.localeCompare(b.candidateName) : b.candidateName.localeCompare(a.candidateName)));
-  }, [allRows, search, statusFilter, dateFilter, sortAsc]);
+  }, [allRows, search, statusFilter, dateFilter, nationalityFilter, sortAsc]);
 
   const totalRecords = allRows.length;
   const storedCount = backupStatus?.storedFiles ?? allRows.filter((row) => row.doc?.hasFile).length;
@@ -601,6 +620,7 @@ export function CVBankPage() {
     const phone = draft.phone.trim() || null;
     const currentTitle = draft.currentTitle.trim() || null;
     const location = draft.location.trim() || null;
+    const nationality = draft.nationality.trim() || null;
     const skills = draft.skills.split(',').map((skill) => skill.trim()).filter(Boolean);
     if (!firstName || !lastName) {
       show({ tone: 'error', title: 'Name required', message: 'Enter a first and last name before saving.' });
@@ -615,6 +635,7 @@ export function CVBankPage() {
         phone,
         currentTitle,
         location,
+        nationality,
         skills,
       });
       show({
@@ -1044,6 +1065,17 @@ export function CVBankPage() {
               <option value="30d">Last 30 days</option>
               <option value="90d">Last 90 days</option>
             </select>
+
+            {/* Meeting notes 2026-11-25 (item 2): filter by nationality. */}
+            <select
+              aria-label="Filter by nationality"
+              value={nationalityFilter}
+              onChange={(event) => setNationalityFilter(event.target.value)}
+              className="rf2-cvb__select"
+            >
+              <option value="">All nationalities</option>
+              {nationalities.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
           </div>
 
           <span className="rf2-cvb__count">{filteredRows.length} results</span>
@@ -1059,7 +1091,7 @@ export function CVBankPage() {
               kind="empty"
               title="No CV records found"
               description={
-                search || statusFilter || dateFilter
+                search || statusFilter || dateFilter || nationalityFilter
                   ? 'Try adjusting your search or filter criteria.'
                   : 'Upload a CV from a candidate profile to build the bank.'
               }
@@ -1440,6 +1472,19 @@ export function CVBankPage() {
                   value={draft.location}
                   onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
                 />
+              </div>
+              {/* Meeting notes 2026-11-25 (item 2): candidate nationality. */}
+              <div className="rf2-cvb__field">
+                <label htmlFor="rf2-cvb-nationality">Nationality</label>
+                <select
+                  id="rf2-cvb-nationality"
+                  value={draft.nationality}
+                  onChange={(event) => setDraft((current) => ({ ...current, nationality: event.target.value }))}
+                >
+                  <option value="">Not recorded</option>
+                  {nationalities.map((n) => <option key={n} value={n}>{n}</option>)}
+                  {draft.nationality && !nationalities.includes(draft.nationality) ? <option value={draft.nationality}>{draft.nationality}</option> : null}
+                </select>
               </div>
               <div className="rf2-cvb__field rf2-cvb__field--wide">
                 <label htmlFor="rf2-cvb-skills">Skills</label>

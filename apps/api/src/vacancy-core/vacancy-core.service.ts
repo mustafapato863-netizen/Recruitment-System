@@ -59,6 +59,7 @@ import {
 import { MasterDataService } from '../master-data/master-data.service';
 import type { AuthUser } from '@recruitflow/contracts';
 import { assertEligibleOwner } from '../common/access/file-access';
+import { findActiveReason, OTHER_REASON } from '../master-data/reason-lists';
 
 @Injectable()
 export class VacancyCoreService {
@@ -89,6 +90,7 @@ export class VacancyCoreService {
             include: { user: { select: { displayName: true } } },
           },
           applications: { where: applicationVisibility, select: { id: true } },
+          vacancyRequest: { select: { openingType: true, employmentType: true } },
         },
       });
 
@@ -99,6 +101,10 @@ export class VacancyCoreService {
         'Branch Name',
         'Branch Code',
         'Status',
+        // Meeting notes 2026-11-25 (items 1–2): opening kind, hiring type, nationality preference.
+        'Opening Type',
+        'Employment Type',
+        'Nationality Preference',
         'Approved Headcount',
         'Joined Headcount',
         'Remaining Headcount',
@@ -112,7 +118,7 @@ export class VacancyCoreService {
         if (!access.isFull(v.id)) {
           // B1 redaction: title, site and seats only.
           return [
-            '', v.position.title, '', v.branch.name, '', '', v.approvedHeadcount, v.joinedHeadcount,
+            '', v.position.title, '', v.branch.name, '', '', '', '', '', v.approvedHeadcount, v.joinedHeadcount,
             '', '', '', '', '',
           ];
         }
@@ -128,6 +134,9 @@ export class VacancyCoreService {
           v.branch.name,
           v.branch.code,
           v.status,
+          v.vacancyRequest?.openingType ?? '',
+          v.vacancyRequest?.employmentType ?? '',
+          (v.nationalityPreference ?? []).join(', '),
           v.approvedHeadcount,
           v.joinedHeadcount,
           Math.max(0, v.approvedHeadcount - v.joinedHeadcount),
@@ -475,6 +484,12 @@ export class VacancyCoreService {
     actorUserId: string,
     input: CreateVacancyRequestDto,
   ): Promise<VacancyRequest> {
+    const openingType = input.openingType ?? 'New position';
+    const replacedEmployeeId = openingType === 'Replacement' ? (input.replacedEmployeeId ?? null) : null;
+    if (openingType === 'Replacement' && !replacedEmployeeId) {
+      throw new BadRequestException({ code: 'REPLACED_EMPLOYEE_REQUIRED', field: 'replacedEmployeeId', message: 'A replacement opening needs the employee being replaced.' });
+    }
+    if (replacedEmployeeId) await this.assertReplacedEmployee(organizationId, replacedEmployeeId);
     const payload: CreateVacancyRequestInput = {
       organizationId,
       branchId: input.branchId,
@@ -482,7 +497,10 @@ export class VacancyCoreService {
       requesterId: actorUserId,
       requestedHeadcount: input.requestedHeadcount,
       employmentType: input.employmentType ?? null,
-      reason: input.reason ?? null,
+      openingType,
+      replacedEmployeeId,
+      nationalityPreference: input.nationalityPreference ?? [],
+      reason: input.reason ? await this.resolveOpeningReason(organizationId, input.reason, input.reasonNote) : null,
       budgetStatus: input.budgetStatus ?? null,
       budgetMin: input.budgetMin ?? null,
       budgetMax: input.budgetMax ?? null,
@@ -509,6 +527,31 @@ export class VacancyCoreService {
     await this.assertRequisitionRefs(organizationId, payload);
     if (payload.assignedEmployeeId) await this.assertAssigneeInTree(organizationId, actorUserId, payload.assignedEmployeeId);
     return this.repository.createRequest(payload);
+  }
+
+  /**
+   * Meeting notes 2026-11-25 (item 1): resolve the opening reason against the
+   * 'opening-reasons' master-data list. "Other" needs a note (stored "Other: <note>",
+   * ≤107 chars, fits the column); any other list value is stored by its canonical name.
+   */
+  private async resolveOpeningReason(organizationId: string, reason: string, note?: string | null): Promise<string> {
+    const text = reason.trim();
+    const value = await findActiveReason(this.prisma, organizationId, 'opening-reasons', text);
+    if (!value) {
+      throw new BadRequestException({ code: 'REASON_NOT_IN_LIST', field: 'reason', message: `"${text}" is not an active opening reason. Pick one from the list, or "Other" with a note.` });
+    }
+    if (value.name.toLowerCase() === OTHER_REASON.toLowerCase()) {
+      const free = note?.trim() ?? '';
+      if (free.length < 3) throw new BadRequestException({ code: 'REASON_REQUIRED', field: 'reasonNote', message: '"Other" needs a short note.' });
+      return `${OTHER_REASON}: ${free}`;
+    }
+    return value.name;
+  }
+
+  /** Meeting notes 2026-11-25 (item 1): the replaced employee must be an active user in the org. */
+  private async assertReplacedEmployee(organizationId: string, userId: string): Promise<void> {
+    const row = await this.prisma.user.findFirst({ where: { id: userId, organizationId, status: 'Active' }, select: { id: true } });
+    if (!row) throw new BadRequestException({ code: 'REPLACED_EMPLOYEE_NOT_FOUND', field: 'replacedEmployeeId', message: 'The employee being replaced must be an active user in this organization.' });
   }
 
   /**
@@ -579,7 +622,21 @@ export class VacancyCoreService {
     if (input.positionId !== undefined) request.positionId = input.positionId;
     if (input.requestedHeadcount !== undefined) request.requestedHeadcount = input.requestedHeadcount;
     if (input.employmentType !== undefined) request.employmentType = input.employmentType;
-    if (input.reason !== undefined) request.reason = input.reason;
+    // Meeting notes 2026-11-25 (item 1): opening type + replaced employee + nationality preference.
+    if (input.openingType !== undefined) request.openingType = input.openingType;
+    if (input.openingType === 'Replacement' && input.replacedEmployeeId === undefined && !request.replacedEmployeeId) {
+      throw new BadRequestException({ code: 'REPLACED_EMPLOYEE_REQUIRED', field: 'replacedEmployeeId', message: 'A replacement opening needs the employee being replaced.' });
+    }
+    if (input.replacedEmployeeId !== undefined) {
+      if (request.openingType === 'Replacement' && input.replacedEmployeeId) await this.assertReplacedEmployee(organizationId, input.replacedEmployeeId);
+      request.replacedEmployeeId = request.openingType === 'Replacement' ? input.replacedEmployeeId : null;
+    } else if (input.openingType === 'New position') {
+      request.replacedEmployeeId = null;
+    }
+    if (input.nationalityPreference !== undefined) request.nationalityPreference = input.nationalityPreference ?? [];
+    if (input.reason !== undefined) {
+      request.reason = input.reason ? await this.resolveOpeningReason(organizationId, input.reason, input.reasonNote) : null;
+    }
     if (input.budgetStatus !== undefined) request.budgetStatus = input.budgetStatus;
     if (input.budgetMin !== undefined) request.budgetMin = input.budgetMin;
     if (input.budgetMax !== undefined) request.budgetMax = input.budgetMax;
@@ -894,7 +951,7 @@ export class VacancyCoreService {
       if (existingVacancy) {
         // Placeholder kept by the B3 migration (was Pending Activation): reuse it.
         jobId = existingVacancy.id;
-        await tx.vacancy.update({ where: { id: jobId }, data: { status: deferred ? 'On Hold' : 'Open', openedAt: now } });
+        await tx.vacancy.update({ where: { id: jobId }, data: { status: deferred ? 'On Hold' : 'Open', openedAt: now, nationalityPreference: request.nationalityPreference ?? [] } });
         await tx.vacancyStatusHistory.create({
           data: { vacancyId: jobId, fromStatus: existingVacancy.status, toStatus: deferred ? 'On Hold' : 'Open', reason: 'Requisition activated', changedById: actorUserId },
         });
@@ -913,6 +970,8 @@ export class VacancyCoreService {
             joinedHeadcount: 0,
             openedAt: now,
             targetStartDate: request.targetStartDate ? new Date(request.targetStartDate) : null,
+            // Meeting notes 2026-11-25 (item 2): the job inherits the requisition's preference.
+            nationalityPreference: request.nationalityPreference ?? [],
             jobSummary: request.jobSummary,
             description: request.description,
             responsibilities: request.responsibilities,

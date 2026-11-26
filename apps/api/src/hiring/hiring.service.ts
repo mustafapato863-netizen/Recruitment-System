@@ -32,6 +32,7 @@ import type {
   FinalApprovalDto,
   JoiningUpdateDto,
   UpdateComplianceDto,
+  UpdatePlannedJoiningDateDto,
 } from './hiring.dto';
 import { AccessControlService } from '../access-control/access-control.service';
 import { loadAccessProfile, reportingLineUserIds } from '../common/access/file-access';
@@ -168,7 +169,11 @@ export class HiringService {
     const visibility = await this.applicationVisibility(user);
     const offer = await this.prisma.offer.findFirst({
       where: { id: dto.offerId, organizationId, ...(visibility ? { application: visibility } : {}) },
-      include: { application: { include: { vacancy: { include: { position: { select: { metadata: true } } } } } } },
+      include: {
+        application: { include: { vacancy: { include: { position: { select: { metadata: true } } } } } },
+        // Meeting notes 2026-11-25 (item 4): the accepted version's start date becomes the expected joining date.
+        versions: { where: { status: 'Accepted' }, orderBy: { versionNumber: 'desc' }, take: 1, select: { proposedJoiningDate: true } },
+      },
     });
 
     if (!offer) {
@@ -188,6 +193,7 @@ export class HiringService {
     }
 
     const snapshot = snapshotForNewCase(offer.application.vacancy.position?.metadata);
+    const acceptedVersion = offer.versions[0] ?? null;
     const hiringCase = await this.prisma.$transaction(async (tx) => {
       const verified = await tx.joiningCheck.findMany({ where: { applicationId: offer.applicationId, verified: true } });
       const created = await tx.hiringCase.create({
@@ -197,6 +203,8 @@ export class HiringService {
           offerId: offer.id,
           status: 'Pending Compliance',
           ownerUserId: user.userId,
+          // Meeting notes 2026-11-25 (item 4): expected joining date from the accepted offer.
+          plannedJoiningDate: acceptedVersion?.proposedJoiningDate ?? null,
           requirementSnapshot: snapshot as unknown as Prisma.InputJsonValue,
           complianceRequirements: {
             create: compliancePlan(snapshot).map((item) => {
@@ -279,6 +287,17 @@ export class HiringService {
 
     if (await this.isLicenseOnly(user)) return cases.map(licenseView);
     if (await this.isFinalApproverOnly(user)) return cases.map(finalApproverView);
+    // Meeting notes 2026-11-25 (item 6): targets status = the NewJoinerTargets task
+    // created when the case reached Joined (Open/In Progress → Pending, Completed → Done).
+    const targetsTasks = await this.prisma.task.findMany({
+      where: { organizationId, type: 'NewJoinerTargets', entityType: 'HiringCase', entityId: { in: cases.map((c) => c.id) } },
+      select: { entityId: true, status: true },
+    });
+    const targetsStatus = new Map<string, 'Pending' | 'Done'>();
+    for (const task of targetsTasks) {
+      if (!task.entityId) continue;
+      targetsStatus.set(task.entityId, task.status === 'Completed' ? 'Done' : 'Pending');
+    }
     return cases.map(c => {
       const totalItems = c.complianceRequirements.length;
       const completedItems = c.complianceRequirements.filter(
@@ -293,6 +312,9 @@ export class HiringService {
         status: c.status,
         plannedJoiningDate: c.plannedJoiningDate?.toISOString() ?? null,
         actualJoiningDate: c.actualJoiningDate?.toISOString() ?? null,
+        // Meeting notes 2026-11-25 (item 6): reporting cycle recorded at Joined.
+        reportingCycle: c.reportingCycle ?? null,
+        newJoinerTargetsStatus: targetsStatus.get(c.id) ?? null,
         ownerUserId: c.ownerUserId,
         candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
         positionTitle: c.application.vacancy.position.title,
@@ -333,6 +355,13 @@ export class HiringService {
     if (await this.isFinalApproverOnly(user)) return finalApproverView(hiringCase);
     const seeSalary = user ? await this.userHas(user, 'VIEW_CURRENT_SALARY') : false;
 
+    // Meeting notes 2026-11-25 (item 6): targets status for this case.
+    const targetsTask = await this.prisma.task.findFirst({
+      where: { organizationId, type: 'NewJoinerTargets', entityType: 'HiringCase', entityId: hiringCase.id },
+      select: { status: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
     return {
       ...hiringCase,
       createdAt: hiringCase.createdAt.toISOString(),
@@ -344,6 +373,9 @@ export class HiringService {
       joinedHeadcount: hiringCase.application.vacancy.joinedHeadcount,
       plannedJoiningDate: hiringCase.plannedJoiningDate?.toISOString() ?? null,
       actualJoiningDate: hiringCase.actualJoiningDate?.toISOString() ?? null,
+      // Meeting notes 2026-11-25 (item 6): reporting cycle recorded at Joined.
+      reportingCycle: hiringCase.reportingCycle ?? null,
+      newJoinerTargetsStatus: targetsTask ? (targetsTask.status === 'Completed' ? 'Done' : 'Pending') : null,
       complianceRequirements: hiringCase.complianceRequirements.map(req => ({
          ...req,
          expiryDate: req.expiryDate?.toISOString() ?? null,
@@ -521,7 +553,9 @@ export class HiringService {
       candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
       positionTitle: c.application.vacancy.position.title,
       branchName: c.application.vacancy.branch.name,
-      status: c.status
+      status: c.status,
+      // Meeting notes 2026-11-25 (item 4): approvers see the expected joining date.
+      plannedJoiningDate: c.plannedJoiningDate ? c.plannedJoiningDate.toISOString() : null,
     }));
   }
 
@@ -652,7 +686,12 @@ export class HiringService {
       if (dto.status !== 'Joined') {
         await tx.hiringCase.update({
           where: { id: caseId },
-          data: { status: dto.status, ...(joiningDate ? { actualJoiningDate: joiningDate } : {}) },
+          data: {
+            status: dto.status,
+            ...(joiningDate ? { actualJoiningDate: joiningDate } : {}),
+            // Meeting notes 2026-11-25 (item 4): the expected joining date is editable on the case.
+            ...(dto.plannedJoiningDate !== undefined ? { plannedJoiningDate: dto.plannedJoiningDate ? new Date(dto.plannedJoiningDate) : null } : {}),
+          },
         });
         return 'updated' as const;
       }
@@ -664,8 +703,44 @@ export class HiringService {
       await recordJoin(tx, vacancy, user.userId);
       await tx.hiringCase.updateMany({
         where: { id: caseId, status: { not: 'Joined' } },
-        data: { status: 'Joined', ...(joiningDate ? { actualJoiningDate: joiningDate } : {}) },
+        data: {
+          status: 'Joined',
+          // Meeting notes 2026-11-25 (item 6): the new joiner starts on the default monthly reporting cycle.
+          reportingCycle: 'monthly',
+          ...(joiningDate ? { actualJoiningDate: joiningDate } : {}),
+          ...(dto.plannedJoiningDate !== undefined ? { plannedJoiningDate: dto.plannedJoiningDate ? new Date(dto.plannedJoiningDate) : null } : {}),
+        },
       });
+      // Meeting notes 2026-11-25 (item 6): prompt the hiring manager (the
+      // requisition requester, else the case owner) to set the joiner's initial
+      // activity targets. The joiner has no User account yet, so targets cannot
+      // be created here — the manager's task is the prompt, and completing it
+      // is the targets status. Guarded by claimApplicationJoin above: a second
+      // call returns 'already' before this runs, so the task is created once.
+      const requisition = await tx.vacancyRequest.findUnique({
+        where: { id: hiringCase.application.vacancy.vacancyRequestId },
+        select: { requesterId: true },
+      });
+      const managerId = requisition?.requesterId ?? hiringCase.ownerUserId;
+      if (managerId) {
+        const candidate = await tx.candidate.findUnique({ where: { id: hiringCase.application.candidateId }, select: { firstName: true, lastName: true } });
+        const candidateName = candidate ? `${candidate.firstName} ${candidate.lastName}`.trim() : 'The new joiner';
+        await tx.task.create({
+          data: {
+            organizationId,
+            assigneeUserId: managerId,
+            createdById: user.userId,
+            type: 'NewJoinerTargets',
+            title: `Set initial activity targets for ${candidateName}`,
+            description: `${candidateName} joined (monthly reporting cycle). Set their initial activity targets so their reporting cycle can start.`,
+            priority: 'Normal',
+            status: 'Open',
+            dueAt: new Date(Date.now() + 7 * 86_400_000),
+            entityType: 'HiringCase',
+            entityId: caseId,
+          },
+        });
+      }
       await tx.applicationStatusHistory.create({
         data: { applicationId: hiringCase.applicationId, fromStage: hiringCase.application.stage, toStage: 'Joined', changedById: user.userId, reason: 'Candidate joined' },
       });
@@ -684,6 +759,42 @@ export class HiringService {
     });
 
     return { success: true, alreadyJoined: false };
+  }
+
+  /**
+   * Meeting notes 2026-11-25 (item 4): edit only the expected joining date.
+   * The responsible recruiter (case owner / primary recruiter / vacancy owner)
+   * or an oversight admin may change it; a joined case keeps its actual date.
+   */
+  async updatePlannedJoiningDate(
+    organizationId: string,
+    caseId: string,
+    dto: UpdatePlannedJoiningDateDto,
+    user: AuthUser,
+  ) {
+    const visibility = await this.applicationVisibility(user);
+    const hiringCase = await this.prisma.hiringCase.findFirst({
+      where: { id: caseId, organizationId, ...(visibility ? { application: visibility } : {}) },
+      include: { application: { include: { vacancy: true } } },
+    });
+    if (!hiringCase) throw new NotFoundException({ code: 'WRONG_ORGANIZATION', message: 'Hiring case not found.' });
+    const profile = await loadAccessProfile(this.prisma, user);
+    const responsible = isResponsibleRecruiter(user.userId, {
+      caseOwnerId: hiringCase.ownerUserId,
+      primaryRecruiterId: hiringCase.application.primaryRecruiterId,
+      vacancyPrimaryRecruiterId: hiringCase.application.vacancy.primaryRecruiterId,
+    });
+    if (!profile.isOversight && !responsible) {
+      throw new ForbiddenException({ code: 'JOINING_NOT_OWNER', message: 'Only the responsible recruiter can change the expected joining date.' });
+    }
+    if (hiringCase.status === 'Joined') {
+      throw new ConflictException({ code: 'ALREADY_JOINED', message: 'This candidate already joined; the expected date can no longer be changed.' });
+    }
+    const updated = await this.prisma.hiringCase.update({
+      where: { id: caseId },
+      data: { plannedJoiningDate: dto.plannedJoiningDate ? new Date(dto.plannedJoiningDate) : null },
+    });
+    return { success: true, plannedJoiningDate: updated.plannedJoiningDate?.toISOString() ?? null };
   }
 }
 

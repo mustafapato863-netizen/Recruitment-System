@@ -70,6 +70,11 @@ export interface JoiningFacts {
   checks: JoiningCheckFact[];
   joinedHeadcount: number;
   approvedHeadcount: number;
+  /**
+   * Meeting notes 2026-11-25 (item 3): Assessment interviews scheduled for this
+   * application. Empty when none was ever scheduled — the gate then passes.
+   */
+  assessmentInterviews?: Array<{ title: string; status: string }>;
 }
 
 export interface JoiningBlock {
@@ -239,6 +244,20 @@ export function decideJoining(facts: JoiningFacts): JoiningDecision {
   if (facts.joinedHeadcount >= facts.approvedHeadcount) {
     return missing('CAPACITY_FULL', 'Approved capacity is already filled.', ['available seat'], 409, 'capacity');
   }
+  // Meeting notes 2026-11-25 (item 3): a scheduled Assessment interview is a joining
+  // gate — it must be Completed before Joined. A cancelled assessment does not block.
+  // Applications that never had one scheduled are unaffected. This runs AFTER the
+  // fingerprint comparison, so completing an assessment never stales a final approval.
+  const pendingAssessments = (facts.assessmentInterviews ?? []).filter((i) => i.status !== 'Completed' && i.status !== 'Cancelled');
+  if (pendingAssessments.length) {
+    return missing(
+      'GATE_ASSESSMENT_INCOMPLETE',
+      `Joined needs the pre-hire assessment interview completed. Pending: ${pendingAssessments.map((i) => i.title).join(', ')}.`,
+      pendingAssessments.map((i) => i.title),
+      409,
+      'assessment',
+    );
+  }
   if (facts.enforceRecord && !facts.actualJoiningDate) {
     return missing('JOINING_DATE_REQUIRED', 'Actual joining needs the date the candidate joined.', ['actualJoiningDate'], 400);
   }
@@ -269,6 +288,8 @@ interface LoadedApplication {
     approvals: Array<{ id: string; status: string; roleCode: string; invalidatedAt: Date | null; decisionFingerprint: string | null }>;
   };
   joiningChecks: JoiningCheckFact[];
+  // Meeting notes 2026-11-25 (item 3): Assessment interviews for the joining gate.
+  interviews?: Array<{ title: string; status: string }>;
 }
 
 /** Prisma's promise type is invariant, so the loader accepts the client structurally and narrows the row itself. */
@@ -296,6 +317,8 @@ export async function assertCanMarkJoined(tx: JoiningReadTx, args: {
       offers: { include: { versions: { where: { status: 'Accepted' }, select: { id: true, status: true, versionNumber: true }, orderBy: { versionNumber: 'desc' } } } },
       hiringCase: { include: { approvals: true } },
       joiningChecks: { select: { type: true, verified: true, expiryDate: true, documentId: true } },
+      // Meeting notes 2026-11-25 (item 3): Assessment interviews gate joining.
+      interviews: { where: { interviewType: 'Assessment' }, select: { title: true, status: true } },
     },
   }) as LoadedApplication | null;
   if (!application) throw new NotFoundException({ code: 'WRONG_ORGANIZATION', message: 'Hiring case not found.' });
@@ -317,6 +340,7 @@ export async function assertCanMarkJoined(tx: JoiningReadTx, args: {
     checks: application.joiningChecks,
     joinedHeadcount: application.vacancy.joinedHeadcount,
     approvedHeadcount: application.vacancy.approvedHeadcount,
+    assessmentInterviews: application.interviews ?? [],
   });
   throwJoiningDecision(decision);
   return decision;

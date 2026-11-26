@@ -39,6 +39,13 @@ export interface Requisition {
   position?: { title: string; specialty?: string | null } | null;
   requestedHeadcount: number; targetFillDate: string | null; dueDate?: string | null;
   gradeId?: string | null; assignedEmployeeId?: string | null; justification: string | null;
+  /** Meeting notes 2026-11-25 (items 1–2): opening kind, replaced employee, hiring type, reason, nationality preference. */
+  employmentType?: string | null;
+  openingType?: string | null;
+  replacedEmployeeId?: string | null;
+  replacedEmployee?: { id: string; name: string } | null;
+  nationalityPreference?: string[] | null;
+  reason?: string | null;
   /** Coming from Backend (CoS): server-filled names and department. Optional; client fill is the fallback. */
   positionTitle?: string | null; branchName?: string | null; assignedEmployeeName?: string | null; requesterName?: string | null;
   /** #21 (B2-16): the job's owner once activated, else the assigned employee. Present = the server named them (null = nobody). */
@@ -93,7 +100,27 @@ export async function fetchPeople(): Promise<Person[] | null> {
 }
 
 /** The fields M1 edits. Never budget, never pay. */
-export interface ReqFields { departmentId?: string | null; positionId: string; branchId: string; requestedHeadcount: number; dueDate: string | null; gradeId: string | null; assignedEmployeeId: string | null; justification: string | null }
+export interface ReqFields {
+  departmentId?: string | null; positionId: string; branchId: string; requestedHeadcount: number; dueDate: string | null; gradeId: string | null; assignedEmployeeId: string | null; justification: string | null;
+  /** Meeting notes 2026-11-25 (items 1–2). */
+  employmentType?: string | null; openingType?: string | null; replacedEmployeeId?: string | null;
+  nationalityPreference?: string[] | null; reason?: string | null; reasonNote?: string | null;
+}
+
+/** Meeting notes 2026-11-25 (item 1): fixed employment-type list. */
+export const EMPLOYMENT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Temporary'] as const;
+/** Meeting notes 2026-11-25 (item 1): opening kinds. */
+export const OPENING_TYPES = ['New position', 'Replacement'] as const;
+
+/** Meeting notes 2026-11-25 (items 1–2): active names of a master-data catalog (null = unavailable). */
+async function fetchCatalogNames(category: string): Promise<string[] | null> {
+  try {
+    const rows = list(await getApi<Array<{ name?: string; status?: string }> | { data: Array<{ name?: string; status?: string }> }>(`/master-data/catalog/${category}`));
+    return rows.filter((r) => r.name?.trim() && (r.status ?? 'Active') === 'Active').map((r) => r.name!.trim());
+  } catch { return null; }
+}
+export const fetchNationalities = () => fetchCatalogNames('nationalities');
+export const fetchOpeningReasons = () => fetchCatalogNames('opening-reasons');
 export const createRequisition = (f: ReqFields) => postApi<Requisition>('/vacancy-requests', f);
 export const updateRequisition = (id: string, f: Partial<ReqFields>) => patchApi<Requisition>(`/vacancy-requests/${enc(id)}`, f);
 export const activateRequisition = (id: string, assignedEmployeeId: string | null) =>

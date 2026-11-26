@@ -1,7 +1,8 @@
 import type { PrismaClient } from '@recruitflow/database';
 
 /**
- * B4 (v2 §1/§8): due-date reminders for requisitions and their jobs.
+ * B4 (v2 §1/§8): due-date reminders for requisitions and their jobs, plus
+ * expected joining dates (meeting notes 2026-11-25, item 4).
  *
  * - "before": N days before the due date (DUE_REMINDER_LEAD_DAYS, default "3,1")
  * - "due": on the due date
@@ -153,6 +154,70 @@ export async function sweepDueDateReminders(
       if (created) sent += 1;
     }
   }
+
+  // Meeting notes 2026-11-25 (item 4): the same mechanism for expected joining dates.
+  // Hiring cases still awaiting joining, with a planned date, remind their owner
+  // (the responsible recruiter) before / on / after the date. Joined, Postponed and
+  // No-show cases never remind.
+  const joiningCases = await prisma.hiringCase.findMany({
+    where: {
+      plannedJoiningDate: { not: null, lte: horizon },
+      status: { in: ['Pending Compliance', 'Pending Final Approval', 'Awaiting Joining'] },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      ownerUserId: true,
+      plannedJoiningDate: true,
+      application: {
+        select: {
+          candidate: { select: { firstName: true, lastName: true } },
+          vacancy: { select: { position: { select: { title: true } } } },
+        },
+      },
+    },
+    take: 500,
+  });
+
+  for (const hiringCase of joiningCases) {
+    const due = hiringCase.plannedJoiningDate!.toISOString().slice(0, 10);
+    const kind = reminderKind(today, due, config.leadDays);
+    if (!kind || !hiringCase.ownerUserId) continue;
+    const candidateName = hiringCase.application?.candidate
+      ? `${hiringCase.application.candidate.firstName} ${hiringCase.application.candidate.lastName}`.trim()
+      : 'Candidate';
+    const subject = `${candidateName} · ${hiringCase.application?.vacancy?.position?.title ?? 'Joining'}`;
+    const title = kind === 'overdue' ? `Overdue: ${subject} joining` : kind === 'due' ? `Due today: ${subject} joining` : `Due ${due}: ${subject} joining`;
+    const message = kind === 'overdue'
+      ? `${subject} was expected to join on ${due} and has not joined yet.`
+      : kind === 'due' ? `${subject} is expected to join today (${due}).` : `${subject} is expected to join on ${due}.`;
+    const recipientUserId = hiringCase.ownerUserId;
+    const created = await prisma.$transaction(async (tx) => {
+      const claim = await tx.dueDateReminder.createMany({
+        data: [{ organizationId: hiringCase.organizationId, entityType: 'HiringCase', entityId: hiringCase.id, kind, reminderDate: new Date(`${today}T00:00:00Z`), recipientUserId }],
+        skipDuplicates: true,
+      });
+      if (claim.count === 0) return false;
+      const notification = await tx.notification.create({
+        data: {
+          organizationId: hiringCase.organizationId,
+          recipientUserId,
+          type: 'DueDateReminder',
+          title: title.slice(0, 255),
+          message,
+          entityType: 'HiringCase',
+          entityId: hiringCase.id,
+        },
+      });
+      await tx.dueDateReminder.updateMany({
+        where: { entityType: 'HiringCase', entityId: hiringCase.id, kind, reminderDate: new Date(`${today}T00:00:00Z`), recipientUserId },
+        data: { notificationId: notification.id },
+      });
+      return true;
+    });
+    if (created) sent += 1;
+  }
+
   return sent;
 }
 

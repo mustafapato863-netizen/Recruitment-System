@@ -83,6 +83,16 @@ export interface AtsMatchBreakdown {
     required: string[];
     passed: boolean | null;
   };
+  /**
+   * Meeting notes 2026-11-25 (item 2): nationality preference is a soft, visible
+   * signal only — it never changes the score and never excludes a candidate.
+   */
+  nationalityPreference?: {
+    preferred: string[];
+    candidateNationality: string | null;
+    /** null when the job has no preference or the candidate has none recorded. */
+    matchesPreference: boolean | null;
+  };
   calculatedAt: string;
 }
 

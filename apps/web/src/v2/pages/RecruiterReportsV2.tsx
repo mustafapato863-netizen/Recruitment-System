@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Download, RotateCw, X } from 'lucide-react';
 import type {
+  EntityReport,
   ReportFunnelRecord,
   ReportOverview,
   ReportReachedFunnel,
@@ -27,6 +28,12 @@ import './reports-v2.css';
 
 export type PeriodPreset = '30d' | '7d' | '90d' | 'month';
 export type MetricDrillKey = 'newCandidates' | 'interviewsScheduled' | 'offersSent' | 'hires';
+
+/** Meeting notes 2026-11-25 (item 5): per-entity (per-branch) report load state. */
+export type EntityReportState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; entities: EntityReport[] }
+  | { kind: 'error'; message: string };
 
 const SOURCE_PALETTE = [
   '#0ea5e9', // SGH Blue
@@ -303,6 +310,9 @@ export function RecruiterReportsV2() {
     | { kind: 'error'; message: string }
   >({ kind: 'loading' });
 
+  // Meeting notes 2026-11-25 (item 5): per-entity (per-branch) report for the same range.
+  const [entityState, setEntityState] = useState<EntityReportState>({ kind: 'loading' });
+
   const updateParams = (
     patch: Partial<
       Record<'period' | 'month' | 'job' | 'stage' | 'source' | 'drillJob' | 'date' | 'metric', string | null>
@@ -342,6 +352,15 @@ export function RecruiterReportsV2() {
         } else {
           setState({ kind: 'error', message: e?.message || 'Could not load reports.' });
         }
+      });
+    // Meeting notes 2026-11-25 (item 5): same range, per-branch breakdown.
+    setEntityState({ kind: 'loading' });
+    getApi<EntityReport[]>(`/reports/by-entity?${q.toString()}`)
+      .then((entities) => {
+        if (live) setEntityState({ kind: 'ready', entities: Array.isArray(entities) ? entities : [] });
+      })
+      .catch((e: { message?: string }) => {
+        if (live) setEntityState({ kind: 'error', message: e?.message || 'Could not load the per-branch report.' });
       });
     return () => {
       live = false;
@@ -447,6 +466,7 @@ export function RecruiterReportsV2() {
       {state.kind === 'ready' ? (
         <DashboardContent
           overview={state.data}
+          entityState={entityState}
           periodLabel={periodDisplayLabel}
           selectedJobLabel={selectedJobLabel}
           stageFilter={stageFilter}
@@ -540,6 +560,7 @@ function SummaryMetricDelta({ metric }: { metric: ReportSummaryCardMetric }) {
 
 function DashboardContent({
   overview,
+  entityState,
   periodLabel,
   selectedJobLabel,
   stageFilter,
@@ -558,6 +579,8 @@ function DashboardContent({
   returnHref,
 }: {
   overview: ReportOverview;
+  /** Meeting notes 2026-11-25 (item 5): per-entity (per-branch) report for the same range. */
+  entityState: EntityReportState;
   periodLabel: string;
   selectedJobLabel: string;
   stageFilter: string;
@@ -1076,6 +1099,53 @@ function DashboardContent({
               );
             })}
           </ul>
+        </section>
+
+        {/* Meeting notes 2026-11-25 (item 5): per-entity (per-branch) report — ENTITY = BRANCH. */}
+        <section className="rf2-rep-panel" aria-labelledby="rep-by-entity-heading">
+          <div className="rf2-rep-panel__head">
+            <h2 id="rep-by-entity-heading" className="rf2-rep-panel__title">
+              By entity (branch)
+            </h2>
+          </div>
+          <p className="rf2-rep-panel__sub">Hires, funnel and time-to-fill for each branch in the selected period.</p>
+          {entityState.kind === 'loading' ? (
+            <p className="rf2-rep-panel__sub">Loading per-branch report…</p>
+          ) : entityState.kind === 'error' ? (
+            <p className="rf2-rep-panel__sub">{entityState.message}</p>
+          ) : entityState.entities.length === 0 ? (
+            <p className="rf2-rep-panel__sub">No branches in this organisation yet.</p>
+          ) : (
+            <table className="rf2-jtable" aria-label="Report by branch">
+              <thead>
+                <tr>
+                  <th scope="col">Branch</th>
+                  <th scope="col">Applications</th>
+                  <th scope="col">Hires</th>
+                  <th scope="col">Time to fill</th>
+                  <th scope="col">Open vacancies</th>
+                  <th scope="col">Approved / joined</th>
+                  <th scope="col">Funnel</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entityState.entities.map((entity) => (
+                  <tr key={entity.entityId}>
+                    <th scope="row">
+                      <p className="rf2-jtable__name">{entity.entityName}</p>
+                      {entity.entityCode ? <p className="rf2-jtable__sub">{entity.entityCode}</p> : null}
+                    </th>
+                    <td>{entity.applications}</td>
+                    <td>{entity.hires}</td>
+                    <td>{entity.timeToFillDays === null ? '—' : `${entity.timeToFillDays} days`}</td>
+                    <td>{entity.openVacancies}</td>
+                    <td>{entity.approvedHeadcount} / {entity.joinedHeadcount}</td>
+                    <td>{entity.funnel.map((stage) => `${stage.name}: ${stage.count}`).join(' · ') || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
       </div>
 

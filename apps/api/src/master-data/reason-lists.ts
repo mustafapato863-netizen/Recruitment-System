@@ -8,17 +8,17 @@ import type { Prisma } from '@recruitflow/database';
  * (DELETE also deactivates). Lists with an "Other" value require a note when it is picked.
  * Seeds live in database/prisma/seed.cjs (seedReasonLists) and the 20261010_b3d_reason_lists migration.
  */
-export const REASON_CATEGORIES = ['hold-reasons', 'close-reasons', 'rejection-reasons', 'reassign-reasons'] as const;
+export const REASON_CATEGORIES = ['hold-reasons', 'close-reasons', 'rejection-reasons', 'reassign-reasons', 'opening-reasons'] as const;
 export type ReasonCategory = (typeof REASON_CATEGORIES)[number];
 export const OTHER_REASON = 'Other';
-const LABEL: Record<ReasonCategory, string> = { 'hold-reasons': 'hold', 'close-reasons': 'close', 'rejection-reasons': 'rejection', 'reassign-reasons': 'reassign' };
+const LABEL: Record<ReasonCategory, string> = { 'hold-reasons': 'hold', 'close-reasons': 'close', 'rejection-reasons': 'rejection', 'reassign-reasons': 'reassign', 'opening-reasons': 'opening' };
 
 export function isReasonCategory(category: string): category is ReasonCategory {
   return (REASON_CATEGORIES as readonly string[]).includes(category);
 }
 
 /** The ACTIVE value of the list matching `text` by name or code (case-insensitive), or null. */
-export async function findActiveReason(db: Pick<Prisma.TransactionClient, 'masterDataValue'>, organizationId: string, category: ReasonCategory, text: string) {
+export async function findActiveReason(db: Pick<Prisma.TransactionClient, 'masterDataValue'>, organizationId: string, category: string, text: string) {
   const t = text.trim();
   if (!t) return null;
   return db.masterDataValue.findFirst({

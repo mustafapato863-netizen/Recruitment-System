@@ -16,6 +16,8 @@ describe('Vacancies Export Service', () => {
       branchId: 'br-1',
       branch: { name: 'Riyadh Main Hospital', code: 'BR-001' },
       status: 'Open',
+      vacancyRequest: { openingType: 'Replacement', employmentType: 'Contract' },
+      nationalityPreference: ['Egyptian', 'Indian'],
       approvedHeadcount: 5,
       joinedHeadcount: 2,
       targetStartDate: new Date('2026-06-01T00:00:00.000Z'),
@@ -56,6 +58,9 @@ describe('Vacancies Export Service', () => {
       'Branch Name',
       'Branch Code',
       'Status',
+      'Opening Type',
+      'Employment Type',
+      'Nationality Preference',
       'Approved Headcount',
       'Joined Headcount',
       'Remaining Headcount',
@@ -71,11 +76,14 @@ describe('Vacancies Export Service', () => {
     expect(rows[1][3]).toBe('Riyadh Main Hospital');
     expect(rows[1][4]).toBe('BR-001');
     expect(rows[1][5]).toBe('Open');
-    expect(rows[1][6]).toBe(5);
-    expect(rows[1][7]).toBe(2);
-    expect(rows[1][8]).toBe(3); // 5 - 2 = 3 remaining headcount
-    expect(rows[1][9]).toBe(14);
-    expect(rows[1][10]).toBe('Mona AlHarbi');
-    expect(rows[1][11]).toBe('2026-06-01');
+    expect(rows[1][6]).toBe('Replacement');
+    expect(rows[1][7]).toBe('Contract');
+    expect(rows[1][8]).toBe('Egyptian, Indian');
+    expect(rows[1][9]).toBe(5);
+    expect(rows[1][10]).toBe(2);
+    expect(rows[1][11]).toBe(3); // 5 - 2 = 3 remaining headcount
+    expect(rows[1][12]).toBe(14);
+    expect(rows[1][13]).toBe('Mona AlHarbi');
+    expect(rows[1][14]).toBe('2026-06-01');
   });
 });

@@ -269,6 +269,34 @@ describe('E24 Compare on skills', () => {
     renderAt('/candidates/compare?job=v1&ids=c-a7,c-a4');
     expect(await screen.findByText(/Only the job owner, their manager/)).toBeInTheDocument();
   });
+  // Meeting notes 2026-11-25 (item 2): candidate nationality vs the job's preference (soft signal).
+  it('shows nationality as an info row and the job preference as a soft signal only', async () => {
+    serve({
+      '/applications@v1': mfx.myApplications,
+      '/vacancies/v1/compare': {
+        ...mfx.compare,
+        nationalityPreference: ['Egyptian'],
+        infoRows: [
+          ...mfx.compare.infoRows,
+          {
+            key: 'nationality', label: 'Nationality',
+            cells: [
+              { candidateId: 'c-a7', value: 'Egyptian', source: 'profile' },
+              { candidateId: 'c-a4', value: null, source: null },
+            ],
+          },
+        ],
+      },
+    });
+    renderAt('/candidates/compare?job=v1&ids=c-a7,c-a4');
+    expect(await screen.findByRole('heading', { name: 'Compare on skills — HRIS Developer' })).toBeInTheDocument();
+    expect(screen.getByText(/Nationality preference \(soft signal only\): Egyptian\./)).toBeInTheDocument();
+    const table = screen.getByRole('table');
+    const row = within(table).getAllByRole('row').find((r) => r.textContent?.includes('Nationality'));
+    expect(row).toBeDefined();
+    expect(row).toHaveTextContent(/Nationality.*Egyptian.*Not recorded\./);
+    expect(row).toHaveTextContent('Candidate profile · soft signal only');
+  });
 });
 
 describe('/candidates routes', () => {
