@@ -1,11 +1,16 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { AuthProvider, useAuth } from './AuthContext';
-import { fetchApi } from '../api/client';
+import { ApiError, fetchApi } from '../api/client';
+import type * as ClientModule from '../api/client';
 
-vi.mock('../api/client', () => ({
-  fetchApi: vi.fn(),
-}));
+vi.mock('../api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof ClientModule>();
+  return {
+    ...actual,
+    fetchApi: vi.fn(),
+  };
+});
 
 const fetchApiMock = vi.mocked(fetchApi);
 
@@ -91,6 +96,28 @@ describe('AuthProvider', () => {
     );
 
     await waitFor(() => expect(screen.getByText('refreshed@example.com')).toBeInTheDocument());
+    expect(fetchApiMock).toHaveBeenCalledWith('/auth/session', undefined, false);
+    expect(fetchApiMock).toHaveBeenCalledWith('/auth/me');
+  });
+
+  it('falls back to /auth/me when /auth/session returns 404 (older API deployment)', async () => {
+    fetchApiMock.mockImplementation((path) => {
+      if (path === '/auth/session') {
+        return Promise.reject(new ApiError(404, 'The requested resource was not found.'));
+      }
+      if (path === '/auth/me') {
+        return Promise.resolve({ id: 'user-3', email: 'legacy-api@example.com' });
+      }
+      return Promise.resolve({});
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('legacy-api@example.com')).toBeInTheDocument());
     expect(fetchApiMock).toHaveBeenCalledWith('/auth/session', undefined, false);
     expect(fetchApiMock).toHaveBeenCalledWith('/auth/me');
   });

@@ -8,8 +8,8 @@ vi.mock('@recruitflow/database', () => ({
 
 import { AuthController } from '../auth.controller';
 import { AuthService } from '../auth.service';
+import { JwtService } from '@nestjs/jwt';
 import type { PrismaService } from '../../database/prisma.service';
-import type { JwtService } from '@nestjs/jwt';
 import type { ConfigService } from '@nestjs/config';
 import type { RateLimiterService } from '../rate-limiter.service';
 import type { EmailOutboxService } from '../../email/email-outbox.service';
@@ -95,6 +95,39 @@ describe('AuthService.resolveAccessTokenSession', () => {
     const profile = await service.resolveAccessTokenSession('valid.jwt');
     expect(profile).toMatchObject({ id: 'user-1', email: 'recruiter@sgh.com' });
     expect(getUserProfileSpy).toHaveBeenCalledWith('user-1');
+  });
+
+  it('round-trips a real JWT signed by generateAccessToken into getSession', async () => {
+    const realJwt = new JwtService({});
+    const findUnique = vi.fn(async () => ({ id: 'user-1', status: 'Active', tokenVersion: 4 }));
+    const prisma = { user: { findUnique } } as unknown as PrismaService;
+    const configService = {
+      get: vi.fn((key: string) => (key === 'JWT_ACCESS_SECRET' ? SECRET : key === 'JWT_ACCESS_EXPIRES_IN' ? '15m' : undefined)),
+    } as unknown as ConfigService;
+
+    const service = new AuthService(
+      prisma,
+      realJwt,
+      configService,
+      {} as RateLimiterService,
+      {} as EmailOutboxService,
+    );
+    const expectedProfile = sampleProfile();
+    vi.spyOn(service, 'getUserProfile').mockResolvedValue(expectedProfile);
+
+    const token = await service.generateAccessToken('user-1', 'org-1', 4);
+    const controller = new AuthController(service);
+
+    const session = await controller.getSession({
+      headers: {},
+      cookies: { access_token: token, rf_has_session: '1' },
+    } as unknown as Request);
+
+    expect(session).toEqual({
+      authenticated: true,
+      user: expectedProfile,
+      canRefresh: true,
+    });
   });
 });
 

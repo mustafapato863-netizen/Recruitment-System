@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { AuthSessionResponse, UserProfile, LoginRequest } from '@recruitflow/contracts';
-import { fetchApi } from '../api/client';
+import { ApiError, fetchApi } from '../api/client';
 import { clearViewCache, setViewCacheUser } from '../v2/api/viewCache';
 
 interface AuthContextType {
@@ -42,12 +42,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(session.user);
           return;
         }
-        if (session?.canRefresh) {
+        if (session?.canRefresh || typeof session?.authenticated !== 'boolean') {
           await refreshUser();
           return;
         }
         setUser(null);
-      } catch {
+      } catch (err) {
+        // Backwards compatibility: if the API deployment does not expose
+        // /auth/session yet (e.g. split web/API deploy returning 404/405/501),
+        // fall back to /auth/me so signed-in users keep their session on refresh.
+        if (
+          err instanceof ApiError &&
+          (err.statusCode === 404 || err.statusCode === 405 || err.statusCode === 501)
+        ) {
+          try {
+            await refreshUser();
+            return;
+          } catch {
+            // Fall through to signed-out cleanup
+          }
+        }
         // Do not let the unauthenticated startup probe overwrite a login that
         // completed while the probe was still in flight.
         if (isMounted && authRequestVersion.current === initialRequestVersion) {
