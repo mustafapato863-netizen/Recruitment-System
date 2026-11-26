@@ -58,7 +58,7 @@ export class VacancyRequestsController {
   @Get('inbox')
   @RequirePermissions('VACANCY_REQUEST_APPROVE')
   getApproverInbox(@CurrentUser() user: AuthUser) {
-    return this.vacancyCoreService.getApproverInbox(user.organizationId, user.roleCodes);
+    return this.vacancyCoreService.getApproverInbox(user.organizationId, user.roleCodes, user.userId);
   }
 
   @Get(':id')
@@ -66,7 +66,7 @@ export class VacancyRequestsController {
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'vacancyRequest', param: 'id' })
   getRequest(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
-    return this.vacancyCoreService.getRequest(user.organizationId, id);
+    return this.vacancyCoreService.getRequest(user.organizationId, id, user);
   }
 
   @Post()

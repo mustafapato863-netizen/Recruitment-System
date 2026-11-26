@@ -1,3 +1,4 @@
+import { evidencedSkillPercentage } from '../api/matching';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchVacancyList } from '../../utils/vacancyAccess';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -32,8 +33,8 @@ interface ScoredBenchCandidate {
   stage: string | null;
   /** null until a server suggestion names this person. */
   addable: boolean | null;
-  /** Set when the server match could not be loaded, so local scores are not shown. */
-  scoreState?: 'unavailable';
+  /** Set when vacancy requirements are missing or server match could not be loaded, so local/0% scores are never counted in rating tiers. */
+  scoreState?: 'unavailable' | 'needs-requirements';
 }
 
 interface ServerMatchedSkill {
@@ -259,7 +260,7 @@ function applyServerMatch(
     ...row,
     matchedSkills,
     missingSkills,
-    displayScore: totalRequiredCount === 0 ? 0 : Math.round((evidenced.length / totalRequiredCount) * 100),
+    displayScore: evidencedSkillPercentage(evidenced.length, totalRequiredCount) ?? 0,
     evidenceSnippets: evidenced.map((skill) => ({ skill: skill.name, snippets: skill.snippets })),
     alreadyOnJob: match.alreadyOnJob,
     applicationId: match.applicationId,
@@ -635,6 +636,7 @@ export function TalentPoolPage() {
             displayScore: 0,
             availability,
             ...EMPTY_SERVER_FIELDS,
+            scoreState: 'needs-requirements' as const,
           };
         }
 
@@ -673,12 +675,13 @@ export function TalentPoolPage() {
     return Array.from(new Set(benchCandidates.map((c) => c.location).filter((loc): loc is string => Boolean(loc))));
   }, [benchCandidates]);
 
-  // Tier Counts
+  // Tier Counts (Ticket 15: exclude candidates without evaluable requirements or unavailable scores from rating buckets).
   const tierCounts = useMemo(() => {
-    const best = scoredCandidates.filter((i) => i.displayScore >= 85).length;
-    const good = scoredCandidates.filter((i) => i.displayScore >= 75 && i.displayScore < 85).length;
-    const potential = scoredCandidates.filter((i) => i.displayScore >= 60 && i.displayScore < 75).length;
-    const low = scoredCandidates.filter((i) => i.displayScore < 60).length;
+    const scored = scoredCandidates.filter((i) => !i.scoreState);
+    const best = scored.filter((i) => i.displayScore >= 85).length;
+    const good = scored.filter((i) => i.displayScore >= 75 && i.displayScore < 85).length;
+    const potential = scored.filter((i) => i.displayScore >= 60 && i.displayScore < 75).length;
+    const low = scored.filter((i) => i.displayScore < 60).length;
     return { all: scoredCandidates.length, best, good, potential, low };
   }, [scoredCandidates]);
 
@@ -704,10 +707,12 @@ export function TalentPoolPage() {
 
       const matchesTier =
         tierFilter === 'all' ||
-        (tierFilter === 'best' && item.displayScore >= 85) ||
-        (tierFilter === 'good' && item.displayScore >= 75 && item.displayScore < 85) ||
-        (tierFilter === 'potential' && item.displayScore >= 60 && item.displayScore < 75) ||
-        (tierFilter === 'low' && item.displayScore < 60);
+        (!item.scoreState && (
+          (tierFilter === 'best' && item.displayScore >= 85) ||
+          (tierFilter === 'good' && item.displayScore >= 75 && item.displayScore < 85) ||
+          (tierFilter === 'potential' && item.displayScore >= 60 && item.displayScore < 75) ||
+          (tierFilter === 'low' && item.displayScore < 60)
+        ));
 
       return matchesSearch && matchesLoc && matchesExp && matchesAvail && matchesTier;
     });

@@ -140,13 +140,28 @@ export function TeamWorkV2() {
       return { status: 'ready', pending: [], changes: 0, ctx: null };
     }
     const scoped = mineOrTeam(reqRes.data.rows, meId, reports.map((r) => r.person));
+    const isApprovableByMe = (r: Requisition) => {
+      if (r.status !== 'Pending Approval') return false;
+      if (meId && (r.requesterId === meId || r.submittedById === meId)) return false;
+      const withApprovals = r as Requisition & {
+        approvalRevision?: number;
+        approvals?: Array<{ revision?: number; status?: string; assigneeUserId?: string | null }>;
+      };
+      const pendingStep = [...(withApprovals.approvals ?? [])]
+        .reverse()
+        .find((a) => a.revision === withApprovals.approvalRevision && a.status === 'Pending');
+      if (pendingStep?.assigneeUserId && meId && pendingStep.assigneeUserId !== meId && !user?.roles?.some((role) => role.code === 'ADMINISTRATOR')) {
+        return false;
+      }
+      return true;
+    };
     return {
       status: 'ready',
-      pending: scoped.filter((r) => r.status === 'Pending Approval'),
+      pending: scoped.filter(isApprovableByMe),
       changes: scoped.filter((r) => r.status === 'Changes Requested').length,
       ctx: reqRes.data.ctx,
     };
-  }, [canViewReqs, reqRes, teamRes.kind, reports, meId]);
+  }, [canViewReqs, reqRes, teamRes.kind, reports, meId, user?.roles]);
   const from = reports?.find((r) => r.person.id === params.get('reassign')) ?? null;
   const recruiterId = params.get('recruiter');
   const recruiter = reports?.find((r) => r.person.id === recruiterId) ?? null;

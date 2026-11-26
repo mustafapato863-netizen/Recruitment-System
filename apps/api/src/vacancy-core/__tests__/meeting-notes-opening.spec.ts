@@ -83,13 +83,21 @@ describe('meeting notes item 1 — opening type and hiring details', () => {
     expect(repository.createRequest).toHaveBeenCalled();
   });
 
-  it('rejects a replacement opening without the employee being replaced', async () => {
+  it('allows a replacement opening without selecting a replaced employee (Ticket 03)', async () => {
     const { service } = serviceFor(request());
-    await expect(service.createRequest('org-1', 'user-1', { ...baseInput, openingType: 'Replacement' }))
-      .rejects.toMatchObject({ response: { code: 'REPLACED_EMPLOYEE_REQUIRED' } });
+    const created = await service.createRequest('org-1', 'user-1', { ...baseInput, openingType: 'Replacement' });
+    expect(created.openingType).toBe('Replacement');
+    expect(created.replacedEmployeeId).toBeNull();
   });
 
-  it('rejects a replacement whose employee is not an active user in the org', async () => {
+  it('preserves an existing historical replacedEmployeeId when editing unrelated fields on a replacement request', async () => {
+    const { service } = serviceFor(request({ openingType: 'Replacement', replacedEmployeeId: 'user-replaced' }));
+    const updated = await service.updateRequest('request-1', 'org-1', { justification: 'Updated justification only' });
+    expect(updated.openingType).toBe('Replacement');
+    expect(updated.replacedEmployeeId).toBe('user-replaced');
+  });
+
+  it('still rejects an explicit replacedEmployeeId that is not an active user in the org', async () => {
     const { service } = serviceFor(request());
     await expect(service.createRequest('org-1', 'user-1', { ...baseInput, openingType: 'Replacement', replacedEmployeeId: 'user-gone' }))
       .rejects.toMatchObject({ response: { code: 'REPLACED_EMPLOYEE_NOT_FOUND' } });

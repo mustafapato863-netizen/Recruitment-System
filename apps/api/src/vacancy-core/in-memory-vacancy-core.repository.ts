@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import type {
   CreateVacancyRequestInput,
   Vacancy,
@@ -40,16 +40,24 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
   async listRequests(organizationId: string): Promise<VacancyRequest[]> {
     return [...this.requests.values()]
       .filter((r) => r.organizationId === organizationId)
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .map((request) => structuredClone(request));
   }
 
   async getRequest(organizationId: string, id: string): Promise<VacancyRequest | null> {
     const req = this.requests.get(id);
-    return req?.organizationId === organizationId ? req : null;
+    return req?.organizationId === organizationId ? structuredClone(req) : null;
   }
 
-  async saveRequest(request: VacancyRequest): Promise<VacancyRequest> {
-    this.requests.set(request.id, request);
+  async saveRequest(request: VacancyRequest, pendingApprovalId?: string): Promise<VacancyRequest> {
+    if (pendingApprovalId) {
+      const previous = this.requests.get(request.id);
+      const pending = previous?.approvals.some((approval) =>
+        approval.id === pendingApprovalId && approval.revision === request.approvalRevision && approval.status === 'Pending',
+      );
+      if (!pending) throw new ConflictException({ code: 'APPROVAL_ALREADY_DECIDED', message: 'This approval has already been decided.' });
+    }
+    this.requests.set(request.id, structuredClone(request));
     return request;
   }
 
@@ -57,7 +65,7 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
     request: VacancyRequest,
     vacancy: Vacancy,
   ): Promise<void> {
-    this.requests.set(request.id, request);
+    this.requests.set(request.id, structuredClone(request));
     this.vacancies.set(vacancy.id, vacancy);
   }
 
@@ -81,6 +89,7 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
       budgetMin: input.budgetMin ?? null,
       budgetMax: input.budgetMax ?? null,
       budgetCurrency: input.budgetCurrency ?? null,
+      budgetPeriod: input.budgetPeriod ?? null,
       criticality: input.criticality ?? null,
       targetStartDate: input.targetStartDate ?? null,
       targetFillDate: input.targetFillDate ?? null,
@@ -93,13 +102,14 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
       qualifications: input.qualifications ?? null,
       benefits: input.benefits ?? null,
       submittedAt: null,
+      submittedById: null,
       approvalRevision: 1,
       approvals: [],
       createdAt: now,
       updatedAt: now,
     };
 
-    this.requests.set(request.id, request);
+    this.requests.set(request.id, structuredClone(request));
     return request;
   }
 
@@ -135,15 +145,20 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
     return `VAC-${new Date().getUTCFullYear()}-${String(this.vacancySequence++).padStart(3, '0')}`;
   }
 
-  async getApproverInbox(organizationId: string, userRoleCodes: string[]): Promise<VacancyRequest[]> {
-    return [...this.requests.values()].filter(
-      (r) =>
-        r.organizationId === organizationId &&
-        r.status === 'Pending Approval' &&
-        r.approvals.some(
-          (a) => a.revision === r.approvalRevision && a.status === 'Pending' && userRoleCodes.includes(a.roleCode),
-        ),
-    );
+  async getApproverInbox(organizationId: string, userRoleCodes: string[], userId?: string): Promise<VacancyRequest[]> {
+    const isAdmin = userRoleCodes.includes('ADMINISTRATOR');
+    return [...this.requests.values()].filter((r) => {
+      if (r.organizationId !== organizationId || r.status !== 'Pending Approval') return false;
+      if (userId && (r.requesterId === userId || r.submittedById === userId)) return false;
+      return r.approvals.some(
+        (a) =>
+          a.revision === r.approvalRevision &&
+          a.status === 'Pending' &&
+          (isAdmin ||
+            (userId && a.assigneeUserId === userId) ||
+            (a.assigneeUserId === null && userRoleCodes.includes(a.roleCode))),
+      );
+    });
   }
 
   async getVacancyDetail(organizationId: string, id: string): Promise<VacancyDetailView | null> {

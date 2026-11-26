@@ -346,6 +346,7 @@ export class InterviewsService {
           applicationId: dto.applicationId,
           title: generatedTitle,
           interviewType: dto.interviewType,
+          stageContext: app.stage === 'Pre-Hire' ? 'Pre-Hire' : 'Interview',
           scheduledStart: start,
           scheduledEnd: end,
           timezone: dto.timezone?.trim() ?? 'UTC',
@@ -666,13 +667,14 @@ export class InterviewsService {
       description: `Saudi German Health Recruitment\nInterview: ${interview.title}\nCandidate: ${candidateName}\nPosition: ${
         interview.application?.vacancy?.position?.title || 'Healthcare Role'
       }\nStatus: ${interview.status}`,
-      location: interview.locationUrl || 'Saudi German Health Hospital / Virtual Consultation',
+      // Ticket 12: omit empty room link cleanly in calendar invites.
+      location: interview.locationUrl || interview.roomName || 'To be confirmed',
       start: interview.scheduledStart,
       end: interview.scheduledEnd,
       organizerName: 'Saudi German Health Recruitment',
       organizerEmail: 'careers@sghgroup.sa',
       attendees,
-      url: interview.locationUrl,
+      ...(interview.locationUrl ? { url: interview.locationUrl } : {}),
     });
   }
 
@@ -823,6 +825,11 @@ export class InterviewsService {
       strengths: dto.strengths?.trim() ?? null,
       concerns: dto.concerns?.trim() ?? null,
       notes: dto.notes?.trim() ?? null,
+      ...(dto.evaluationTemplate !== undefined ? { evaluationTemplate: dto.evaluationTemplate ?? null } : {}),
+      ...(dto.decisionSummary !== undefined ? { decisionSummary: dto.decisionSummary?.trim() ?? null } : {}),
+      ...(dto.nextStep !== undefined ? { nextStep: dto.nextStep?.trim() ?? null } : {}),
+      ...(dto.nextStepOwnerId !== undefined ? { nextStepOwnerId: dto.nextStepOwnerId ?? null } : {}),
+      ...(dto.followUpAt !== undefined ? { followUpAt: dto.followUpAt ? new Date(dto.followUpAt) : null } : {}),
       status: submit ? 'Submitted' : 'Draft',
       submittedAt: submit ? new Date() : null,
     };
@@ -832,6 +839,9 @@ export class InterviewsService {
 
     if (dto.criteriaRatings && dto.criteriaRatings.length > 0 && this.prisma.interviewScorecardRating) {
       for (const r of dto.criteriaRatings) {
+        const notObserved = Boolean(r.notObserved);
+        const numericRating = notObserved ? null : (typeof r.rating === 'number' ? r.rating : null);
+        const notObservedPatch = r.notObserved !== undefined ? { notObserved } : {};
         await this.prisma.interviewScorecardRating.upsert({
           where: {
             scorecardId_criterionKey: {
@@ -842,7 +852,8 @@ export class InterviewsService {
           update: {
             criterionName: r.criterionName,
             category: r.category || 'SKILL',
-            rating: r.rating,
+            rating: numericRating,
+            ...notObservedPatch,
             comment: r.comment || null,
           },
           create: {
@@ -850,7 +861,8 @@ export class InterviewsService {
             criterionKey: r.criterionKey,
             criterionName: r.criterionName,
             category: r.category || 'SKILL',
-            rating: r.rating,
+            rating: numericRating,
+            ...notObservedPatch,
             comment: r.comment || null,
           },
         });

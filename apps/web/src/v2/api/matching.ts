@@ -30,7 +30,7 @@ export interface CompareCell { candidateId: string; status: CompareStatus; evide
 /** notice-period: days (number) or profile availability text; fit-note: this job's screening note. null = not recorded. */
 export interface CompareInfoCell { candidateId: string; value: number | string | null; source: 'screening' | 'profile' | null; by?: { id: string; name: string } | null; at?: string | null }
 export interface CompareInfoRow { key: 'notice-period' | 'fit-note' | 'nationality'; label: string; cells: CompareInfoCell[] }
-export interface CompareResponse { vacancyId: string; nationalityPreference?: string[]; candidates: SuggestionCandidate[]; rows: Array<{ skill: SkillRef; cells: CompareCell[] }>; infoRows?: CompareInfoRow[] }
+export interface CompareResponse { unmappedRequiredSkills?: string[]; vacancyId: string; nationalityPreference?: string[]; candidates: SuggestionCandidate[]; rows: Array<{ skill: SkillRef; cells: CompareCell[] }>; infoRows?: CompareInfoRow[] }
 /** Server sends addable; older servers did not list people on the job at all, so missing = addable. */
 export const canAdd = (s: Suggestion) => s.addable !== false && !s.alreadyOnJob;
 
@@ -169,4 +169,8 @@ const MATCH_CODES: readonly string[] = ['COMPARE_COUNT', 'COMPARE_CANDIDATE_NOT_
 export function matchErrorFromError(e: unknown): { code: MatchCode; message: string } | null {
   const d = domainError(e);
   return d && MATCH_CODES.includes(d.code) ? { code: d.code as MatchCode, message: d.message } : null;
+}
+
+export function evidencedSkillPercentage(evidenced: number, total: number): number | null {
+  return total > 0 ? Math.round(100 * evidenced / total) : null;
 }

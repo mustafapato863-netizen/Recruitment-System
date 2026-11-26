@@ -21,6 +21,7 @@ function decisionFacts(overrides: Partial<MyWorkJoiningDecisionFacts> & { staleF
     hiringCaseStatus: overrides.hiringCaseStatus === undefined ? 'Awaiting Joining' : overrides.hiringCaseStatus,
     approvalFingerprint: fingerprint,
     approvals: overrides.approvals ?? [{ status: 'Approved', invalidatedAt: null, roleCode: 'FINAL_HIRING_APPROVER', decisionFingerprint: fingerprint }],
+    assessmentInterviews: overrides.assessmentInterviews ?? [{ title: 'Second assessment', status: 'Completed', attendeeCount: 1, submittedScorecardCount: 1 }],
     checks,
     joinedHeadcount: overrides.joinedHeadcount ?? 0,
     approvedHeadcount: overrides.approvedHeadcount ?? 2,

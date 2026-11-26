@@ -18,14 +18,12 @@ function registered(path: string): boolean {
 }
 
 describe('all public and signed-in screen paths are inventoried', () => {
-  it('inventories 65 routes after /change-password (public 13, core 17, recruiter 11, manager 4, admin 7, legacy 13)', () => {
-    // Recounted from the registry 2026-11-23: core is 17, not 16, so the
-    // pre-change total was 64 — never assert 63 or 65-before-change.
-    expect(SCREEN_ROUTES).toHaveLength(65);
+  it('inventories 68 routes (public 13, core 19, recruiter 12, manager 4, admin 7, legacy 13)', () => {
+    expect(SCREEN_ROUTES).toHaveLength(68);
     const byArea = new Map(SCREEN_ROUTE_GROUPS.map((group) => [group.area, group.paths.length]));
     expect(byArea.get('Public, authentication and candidate entry')).toBe(13);
-    expect(byArea.get('Core recruitment workflows')).toBe(17);
-    expect(byArea.get('Recruiter desk')).toBe(11);
+    expect(byArea.get('Core recruitment workflows')).toBe(19);
+    expect(byArea.get('Recruiter desk')).toBe(12);
     expect(byArea.get('Manager desk')).toBe(4);
     expect(byArea.get('Administration')).toBe(7);
     expect(byArea.get('Legacy aliases and catch-all')).toBe(13);

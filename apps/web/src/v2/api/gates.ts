@@ -4,13 +4,14 @@
  * offer, B3, B6, B7) reaches the client as `code`, and gate 409s also carry
  * `{ gate, missing[] }`. No message matching: we read the code.
  */
-export const GATE_CODES = ['GATE_SCREEN_NOTE_MISSING', 'GATE_SCORECARD_NOT_SUBMITTED', 'GATE_OFFER_NOT_ACCEPTED', 'GATE_JOINING_CHECKS_INCOMPLETE', 'GATE_REJECT_REASON_REQUIRED'] as const;
+export const GATE_CODES = ['GATE_SCREEN_NOTE_MISSING', 'GATE_SCORECARD_NOT_SUBMITTED', 'GATE_OFFER_NOT_ACCEPTED', 'GATE_JOINING_CHECKS_INCOMPLETE', 'GATE_REJECT_REASON_REQUIRED', 'EXPECTED_SALARY_REQUIRED'] as const;
 export type GateCode = (typeof GATE_CODES)[number];
 
 /** Clear inline copy per gate (v2 §8). */
 export const GATE_COPY: Record<GateCode, { gate: string; message: string; fix: string }> = {
   GATE_SCREEN_NOTE_MISSING: { gate: 'Screen note', message: 'Interview needs a saved screen note.', fix: 'Log the screen with a note first.' },
-  GATE_SCORECARD_NOT_SUBMITTED: { gate: 'Scorecard', message: 'Offer needs a submitted interview scorecard.', fix: 'Submit or chase the scorecard first.' },
+  EXPECTED_SALARY_REQUIRED: { gate: 'Expected salary', message: 'Interview needs an expected salary recorded during screening.', fix: 'Record the candidate\'s expected salary on the screening page first.' },
+  GATE_SCORECARD_NOT_SUBMITTED: { gate: 'Scorecard', message: 'Offer needs submitted interview scorecards from all assigned interviewers.', fix: 'Submit or chase pending scorecards first.' },
   GATE_OFFER_NOT_ACCEPTED: { gate: 'Offer accepted', message: 'Pre-hire needs an accepted offer.', fix: 'Record the candidate\'s acceptance first.' },
   GATE_JOINING_CHECKS_INCOMPLETE: { gate: 'Joining checks', message: 'Joined needs this job\'s required checks verified.', fix: 'Verify each required check in the pre-hire checklist.' },
   GATE_REJECT_REASON_REQUIRED: { gate: 'Reject reason', message: 'Rejected needs a reason from the rejection reasons list.', fix: 'Pick a reason.' },

@@ -4,7 +4,7 @@ import { ApiError, downloadFileApi, getApi, postApi } from '../../api/client';
 import { ButtonV2 } from '../../components/v2/Button';
 import { InputV2, SelectV2 } from '../../components/v2/Field';
 import { StatusChip } from '../../components/v2/StatusChip';
-import { downloadDocument, loadMessageSection, type FileDocument, type FileMessages, type FileWhatsAppTemplate, type SectionState } from '../api/applicationFile';
+import { downloadDocument, loadMessageSection, requestWhatsAppLink, type FileDocument, type FileMessages, type FileWhatsAppTemplate, type SectionState } from '../api/applicationFile';
 import { canRetrySection, classifyReadError, isSectionKnown, sectionProblem } from '../api/sectionState';
 
 type HistDoc = FileDocument & {
@@ -413,9 +413,21 @@ const WHATSAPP_MESSAGE_TYPES = [
 ] as const;
 
 /** Candidate files use saved active templates; only admins author their contents. */
-function WhatsAppMessage({ templates, context }: { templates?: FileWhatsAppTemplate[]; context: WhatsAppSendContext }) {
+function WhatsAppMessage({
+  applicationId,
+  templates,
+  context,
+  whatsappReady,
+}: {
+  applicationId: string;
+  templates?: FileWhatsAppTemplate[];
+  context: WhatsAppSendContext;
+  whatsappReady?: boolean;
+}) {
   const [messageType, setMessageType] = useState('');
   const [templateId, setTemplateId] = useState('');
+  const [waBusy, setWaBusy] = useState(false);
+  const [waError, setWaError] = useState<string | null>(null);
   const typeTemplates = templates?.filter((template) => template.category === messageType) ?? [];
   const pool = typeTemplates.length ? typeTemplates : templates ?? [];
   const active = pool.find((template) => template.id === templateId) ?? pickWaTemplate(pool, context);
@@ -432,27 +444,42 @@ function WhatsAppMessage({ templates, context }: { templates?: FileWhatsAppTempl
   const phone = context.phone?.trim() ?? '';
   const digits = phone.replace(/[\s().-]/g, '').replace(/^(?:\+|00)/, '');
   const phoneReady = /^[1-9]\d{7,14}$/.test(digits);
+  const serverPhoneReady = !phoneReady && Boolean(whatsappReady);
   const missing = [...new Set(Array.from(message.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g), (match) => match[1]))];
-  const problem = !phoneReady
+  const problem = !phoneReady && !serverPhoneReady
     ? 'Add a valid mobile number with country code in the candidate profile.'
     : missing.length
       ? 'Complete the missing details or ask an admin to update this template: ' + missing.map((key) => key.replace(/([A-Z])/g, ' $1').toLowerCase()).join(', ') + '.'
       : !message.trim() ? 'This template is empty. Choose another template or contact an admin.' : null;
 
+  const openAuthorizedWhatsApp = async () => {
+    if (waBusy) return;
+    setWaBusy(true);
+    setWaError(null);
+    try {
+      const res = await requestWhatsAppLink(applicationId, { templateId: active.id });
+      window.open(res.waLink, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      setWaError(e instanceof ApiError || e instanceof Error ? e.message : 'Could not open WhatsApp for this candidate.');
+    } finally {
+      setWaBusy(false);
+    }
+  };
+
   return (
     <div className="rf2-wa-message">
       <div className="rf2-wa-message__head">
-        <SelectV2 label="Message type" value={active.category} onChange={(event) => { setMessageType(event.target.value); setTemplateId(''); }}>
+        <SelectV2 label="Message type" value={active.category} onChange={(event) => { setMessageType(event.target.value); setTemplateId(''); setWaError(null); }}>
           {types.map((type) => <option key={type} value={type}>{WHATSAPP_MESSAGE_TYPES.find(([id]) => id === type)?.[1] ?? type}</option>)}
         </SelectV2>
-        <SelectV2 label="WhatsApp template" value={active.id} onChange={(event) => { setMessageType(active.category); setTemplateId(event.target.value); }}>
+        <SelectV2 label="WhatsApp template" value={active.id} onChange={(event) => { setMessageType(active.category); setTemplateId(event.target.value); setWaError(null); }}>
           {choices?.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
         </SelectV2>
       </div>
       <div className="rf2-wa-message__chat">
         <div className="rf2-wa-message__chat-head">
           <span className="rf2-wa-message__avatar" aria-hidden="true">{candidateName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
-          <p className="rf2-wa-message__recipient"><strong>{candidateName}</strong><span dir="ltr">{phone || 'No mobile number'}</span></p>
+          <p className="rf2-wa-message__recipient"><strong>{candidateName}</strong><span dir="ltr">{phone || (serverPhoneReady ? 'Mobile on file (masked)' : 'No mobile number')}</span></p>
           <span className="rf2-wa-message__chat-label"><MessageCircle aria-hidden="true" /> Preview</span>
         </div>
         <div className="rf2-wa-message__chat-body">
@@ -462,10 +489,13 @@ function WhatsAppMessage({ templates, context }: { templates?: FileWhatsAppTempl
         </div>
       </div>
       {problem ? <p className="rf2-file__muted" role="status">{problem}</p> : null}
+      {waError ? <p className="rf2-form-error" role="alert">{waError}</p> : null}
       <div className="rf2-wa-message__footer">
         <p className="rf2-file__muted">Prepared by admin. Review and edit in WhatsApp before sending.</p>
-        {problem ? <ButtonV2 kind="secondary" size="sm" disabled>Open in WhatsApp</ButtonV2> : (
+        {problem ? <ButtonV2 kind="secondary" size="sm" disabled>Open in WhatsApp</ButtonV2> : phoneReady ? (
           <a className="rf2-btn rf2-btn--secondary rf2-btn--sm rf2-wa-open-btn" href={'https://wa.me/' + digits + '?text=' + encodeURIComponent(message)} target="_blank" rel="noopener noreferrer">Open in WhatsApp</a>
+        ) : (
+          <ButtonV2 kind="secondary" size="sm" loading={waBusy} onClick={() => void openAuthorizedWhatsApp()}>Open in WhatsApp</ButtonV2>
         )}
       </div>
     </div>
@@ -538,7 +568,13 @@ export function MessagesCard({ applicationId, followUpDate, omitAttempts = false
         </div>
       ) : null}
       {payload && whatsappContext ? (
-        <WhatsAppMessage key={applicationId} templates={payload.whatsappTemplates} context={whatsappContext} />
+        <WhatsAppMessage
+          key={applicationId}
+          applicationId={applicationId}
+          templates={payload.whatsappTemplates}
+          context={whatsappContext}
+          whatsappReady={payload.whatsappReady}
+        />
       ) : null}
       {payload ? attemptBlock : null}
       {err ? <p className="rf2-form-error" role="alert">{err}</p> : null}

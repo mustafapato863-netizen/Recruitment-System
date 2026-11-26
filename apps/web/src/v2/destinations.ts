@@ -15,10 +15,10 @@ const COMMON = ['/profile', '/notifications', '/search'];
 
 /** Path prefixes per seat ("/x" allows "/x" and "/x/…"). Keep in step with navConfig + the v2 pages. */
 export const SEAT_DESTINATIONS: Record<Seat, string[]> = {
-  employee: ['/offers/:id', '/my-work', '/my-result', '/interviews', '/reports', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id', '/sourcing-match'],
+  employee: ['/offers/:id', '/my-work', '/my-result', '/interviews', '/interviews/:id/scorecard', '/reports', '/vacancies', '/vacancies/:id', '/vacancies/:id/upload-cv', '/candidates', '/candidates/compare', '/applications/:id', '/applications/:id/screening', '/sourcing-match'],
   // '/interviews/:id' stays for the Manager's own scorecard (Team work → Waiting on you → Submit scorecard).
   // v2 default: '/vacancy-requests' is the list only (the drawers carry ?req= / ?req=new); detail and create URLs redirect.
-  manager: ['/offers/:id', '/my-work', '/team-work', '/vacancy-requests', '/approvals', '/team-interviews', '/reports', '/applications/:id', '/vacancies', '/vacancies/:id', '/joinings'],
+  manager: ['/offers/:id', '/my-work', '/team-work', '/vacancy-requests', '/approvals', '/team-interviews', '/interviews/:id/scorecard', '/reports', '/applications/:id', '/applications/:id/screening', '/vacancies', '/vacancies/:id', '/vacancies/:id/upload-cv', '/candidates', '/joinings'],
   admin: ['/users', '/roles', '/licenses', '/pipeline-settings', '/master-data', '/email-templates', '/whatsapp-templates', '/reports', '/audit-log', '/integrations'],
 };
 
@@ -32,8 +32,8 @@ const PARAM_EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> 
   { from: /^\/offers\/create\/?$/, to: { employee: '/my-work', manager: '/my-work' } },
   { from: /^\/vacancy-requests\/create\/?$/, to: { manager: '/vacancy-requests?req=new' } },
   { from: /^\/vacancy-requests\/([^/]+)\/?$/, to: { manager: '/vacancy-requests?req=$1' } },
-  { from: /^\/vacancies\/([^/]+)\/.+$/, to: { employee: '/vacancies/$1' } },
-  { from: /^\/applications\/([^/]+)\/.+$/, to: { employee: '/applications/$1', manager: '/applications/$1' } },
+  { from: /^\/vacancies\/([^/]+)\/(?!upload-cv\/?$).+$/, to: { employee: '/vacancies/$1' } },
+  { from: /^\/applications\/([^/]+)\/(?!screening\/?$).+$/, to: { employee: '/applications/$1', manager: '/applications/$1' } },
 ];
 
 /**
@@ -75,6 +75,7 @@ const ROUTE_GATES: Array<[RegExp, Gate]> = [
   [/^\/hires\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK'] }],
   [/^\/licenses\/?$/, { any: ['APPLICATION_VIEW', 'LICENSE_CHECK', 'USERS_VIEW'] }],
   [/^\/(hires|joinings|offers|reports)\/?$/, { all: ['APPLICATION_VIEW'] }],
+  [/^\/applications\/[^/]+\/screening\/?$/, { all: ['APPLICATION_VIEW'] }],
   // #34: final-hire approvers read the file. LICENSE_CHECK opens the same file on the pre-hire drawer.
   [/^\/applications\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK'] }],
   [/^\/(candidates|cv-bank|sourcing-match|talent-pools|classic\/candidates)(\/|$)/, { all: ['CANDIDATE_VIEW'] }],
@@ -177,9 +178,8 @@ const EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> }> = [
 ];
 
 function matches(pattern: string, pathname: string): boolean {
-  if (pattern.endsWith('/:id')) {
-    const base = pattern.slice(0, -4);
-    return new RegExp(`^${base}/[^/]+/?$`).test(pathname);
+  if (pattern.includes('/:')) {
+    return new RegExp(`^${pattern.replace(/\/:[^/]+/g, '/[^/]+')}/?$`).test(pathname);
   }
   return pathname === pattern || pathname.startsWith(`${pattern}/`);
 }
@@ -210,7 +210,7 @@ const MY_INTERVIEWS = /^\/my-interviews\/?$/;
  * own pages; every other URL (e.g. /candidates, /applications/:id) would be a v1 "Access Restricted" page, so it
  * goes to /my-interviews instead.
  */
-const INTERVIEWER_ONLY_OK = ['/my-work', '/my-interviews', ...COMMON];
+const INTERVIEWER_ONLY_OK = ['/my-work', '/my-interviews', '/interviews/:id/scorecard', ...COMMON];
 // Temporary, permission-gated bridge for import landing and supported dataset batch review routes.
 const IMPORT_BRIDGE = /^\/import(?:\/(?:candidates|vacancy-requests|branches|positions|departments|skills|candidate-sources|interview-types)\/[^/]+)?\/?$/;
 const PERSON_BRIDGE = /^\/(?:candidates\/(?!compare\/?$)[^/]+(?:\/documents)?|cv-bank)\/?$/;

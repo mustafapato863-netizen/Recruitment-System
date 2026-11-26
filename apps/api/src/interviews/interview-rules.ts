@@ -33,9 +33,7 @@ export function validateInterviewRoom(
 ): { locationUrl: string | null; roomName: string | null } {
   const url = input.locationUrl?.trim() || null;
   const room = input.roomName?.trim() || null;
-  if (!url && !room) {
-    throw new BadRequestException({ code: 'ROOM_REQUIRED', message: 'Add a meeting room URL (online) or a physical room.' });
-  }
+  // Ticket 12: interview room link and physical room are optional; validate URL format/host only when provided.
   if (url) {
     let parsed: URL;
     try {

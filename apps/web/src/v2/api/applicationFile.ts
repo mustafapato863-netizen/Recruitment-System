@@ -69,15 +69,27 @@ export interface ScreeningItem {
 }
 export interface InterviewItem {
   id: string; interviewCode: string; applicationId: string; title: string; interviewType: string;
+  stageContext?: string | null;
   scheduledStart: string; scheduledEnd: string; timezone: string; locationUrl?: string | null; roomName?: string | null;
   interviewerName?: string | null; status: 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled' | 'No-show';
   /** Already returned by the interview payload. Absent means the appointment has no recorded creation time. */
   createdAt?: string;
   attendees?: Array<{ userId?: string | null; displayName?: string | null; name?: string | null }>;
 }
+export interface ScorecardCriterionRating {
+  criterionKey: string;
+  criterionName: string;
+  category?: string;
+  rating?: number | null;
+  notObserved?: boolean;
+  comment?: string | null;
+}
 export interface ScorecardItem {
   id: string; interviewId: string; interviewerId: string; interviewerName?: string; overallRating: number;
   recommendation: Recommendation; strengths?: string | null; concerns?: string | null; notes?: string | null;
+  evaluationTemplate?: string | null; decisionSummary?: string | null; nextStep?: string | null;
+  nextStepOwnerId?: string | null; followUpAt?: string | null;
+  ratings?: ScorecardCriterionRating[];
   status?: 'Draft' | 'Submitted'; revision?: number; revisionReason?: string | null; submittedAt: string;
 }
 export type Recommendation = 'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire';
@@ -123,6 +135,7 @@ export interface FileMessages {
   templates: FileMessageTemplate[];
   attempts: FileMessageAttempt[];
   whatsappTemplates?: FileWhatsAppTemplate[];
+  whatsappReady?: boolean;
 }
 
 /** One slot per auxiliary read. Omitted on fixtures that predate this contract. */
@@ -507,6 +520,9 @@ export async function loadMessageSection(applicationId: string): Promise<Section
       whatsappTemplates: Array.isArray((row as { whatsappTemplates?: unknown }).whatsappTemplates)
         ? (row as { whatsappTemplates: FileWhatsAppTemplate[] }).whatsappTemplates
         : undefined,
+      whatsappReady: typeof (row as { whatsappReady?: unknown }).whatsappReady === 'boolean'
+        ? (row as { whatsappReady: boolean }).whatsappReady
+        : undefined,
     });
   } catch (error) {
     return classifyReadError(error);
@@ -628,7 +644,36 @@ export function moveStage(app: Pick<FileApplication, 'id' | 'stage' | 'version'>
 }
 /** = CreateApplicationNoteDto. */
 export const addNote = (id: string, content: string) => postApi<NoteItem>(`/applications/${enc(id)}/notes`, { content });
-/** = CreateScreeningLogDto WITHOUT the salary fields. Next step is stored text; it does not move the stage. */
+/** Ticket 08: server-side authorized wa.me link generation (never increments sent counters). */
+export const requestWhatsAppLink = (applicationId: string, body: { templateId?: string }) =>
+  postApi<{ waLink: string; message: string; templateId: string; templateName: string }>(
+    `/applications/${enc(applicationId)}/whatsapp-link`,
+    body,
+  );
+
+/** Ticket 11: screening page context with authorized vacancy salary range and expected-salary fit. */
+export interface ScreeningContext {
+  applicationId: string;
+  stage: string;
+  candidateName: string;
+  positionTitle: string;
+  vacancySalaryRange: {
+    min: number | null;
+    max: number | null;
+    currency: string | null;
+    period: 'Monthly' | 'Annual' | null;
+  } | null;
+  latestExpectedSalary: {
+    amount: number | null;
+    currency: string | null;
+    period: 'Monthly' | 'Annual' | null;
+  } | null;
+  salaryFit: 'below' | 'within' | 'above' | 'not_comparable' | 'range_missing' | 'not_recorded';
+}
+export const loadScreeningContext = (applicationId: string) =>
+  getApi<ScreeningContext>(`/screening/application/${enc(applicationId)}/context`);
+
+/** = CreateScreeningLogDto. Next step is stored text; it does not move the stage. */
 export const logScreening = (body: {
   applicationId: string;
   outcome: ScreeningItem['outcome'];
@@ -637,6 +682,9 @@ export const logScreening = (body: {
   evidenceSource: string;
   nextStep: string;
   noticePeriodDays?: number;
+  expectedSalary?: number | null;
+  salaryCurrency?: string | null;
+  salaryPeriod?: 'Monthly' | 'Annual' | null;
 }) => postApi<ScreeningItem>('/screening', body);
 
 function emptyToNull(value: string | null | undefined): string | null {
@@ -700,11 +748,37 @@ export function saveScreeningDraft(applicationId: string, body: UpsertScreeningD
     moveToInterview: body.moveToInterview ?? true,
   });
 }
-/** = CreateInterviewDto (B5): room URL only from v2; interviewers are users. */
-export interface ScheduleBody { applicationId: string; title: string; interviewType: string; scheduledStart: string; scheduledEnd: string; timezone: string; locationUrl: string; attendeeUserIds: string[] }
+/** = CreateInterviewDto (B5 + Ticket 12/04): room URL optional; interviewers are users; supports Pre-Hire stageContext. */
+export interface ScheduleBody {
+  applicationId: string;
+  title: string;
+  interviewType: string;
+  stageContext?: 'Interview' | 'Pre-Hire';
+  scheduledStart: string;
+  scheduledEnd: string;
+  timezone: string;
+  locationUrl?: string | null;
+  roomName?: string | null;
+  attendeeUserIds: string[];
+}
 export const scheduleInterview = (body: ScheduleBody) => postApi<InterviewItem>('/interviews', body);
-/** = SubmitScorecardDto (B5 adds status Draft|Submitted). */
-export interface ScorecardBody { overallRating: number; recommendation: Recommendation; strengths?: string; concerns?: string; notes: string; status?: 'Draft' | 'Submitted' }
+export const loadInterviewDetail = (interviewId: string) => getApi<InterviewItem & { candidateName?: string; positionTitle?: string; applicationCode?: string }>(`/interviews/${enc(interviewId)}`);
+export const loadInterviewScorecards = (interviewId: string) => getApi<ScorecardItem[]>(`/interviews/${enc(interviewId)}/scorecard`);
+/** = SubmitScorecardDto (B5 + Ticket 13 SGH template). */
+export interface ScorecardBody {
+  overallRating: number;
+  recommendation: Recommendation;
+  strengths?: string;
+  concerns?: string;
+  notes: string;
+  status?: 'Draft' | 'Submitted';
+  evaluationTemplate?: string;
+  decisionSummary?: string;
+  nextStep?: string;
+  nextStepOwnerId?: string | null;
+  followUpAt?: string | null;
+  criteriaRatings?: ScorecardCriterionRating[];
+}
 export const submitScorecard = (interviewId: string, body: ScorecardBody) => postApi<ScorecardItem>(`/interviews/${enc(interviewId)}/scorecard`, body);
 /** = ReviseScorecardDto. */
 export const reviseScorecard = (interviewId: string, body: Omit<ScorecardBody, 'status'> & { reason: string }) => postApi<ScorecardItem>(`/interviews/${enc(interviewId)}/scorecard/revisions`, body);
@@ -722,7 +796,10 @@ export const submitOffer = (offerId: string) => postApi<{ id: string; status: 'P
 export type SendChannel = 'email' | 'whatsapp';
 /** = SendOfferDto. Response: email → { queued }, whatsapp → { message, waLink } (manual send; already recorded as Sent). */
 export interface SendOfferResult { id: string; status: 'Sent' | 'Approved'; prepared?: boolean; channel: SendChannel; templateId: string; queued?: boolean; message?: string; waLink?: string }
-export const sendOffer = (offerId: string, body: { channel: SendChannel; templateId: string; prepareOnly?: boolean }) => postApi<SendOfferResult>(`/offers/${enc(offerId)}/send`, body);
+export const sendOffer = (
+  offerId: string,
+  body: { channel: SendChannel; templateId: string; prepareOnly?: boolean; proposedJoiningDate?: string; resend?: boolean },
+) => postApi<SendOfferResult>(`/offers/${enc(offerId)}/send`, body);
 /** Active templates per channel: GET /email-templates (EmailTemplateItem) and GET /whatsapp-templates/for-send (WhatsAppTemplateItem). Bodies are not shown. */
 export interface OfferTemplate { id: string; name: string; category: string; isDefault: boolean }
 export async function offerTemplates(channel: SendChannel): Promise<OfferTemplate[]> {

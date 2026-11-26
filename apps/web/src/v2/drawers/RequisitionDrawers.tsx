@@ -1,29 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Briefcase, CircleCheck, Clock, FileText, Info, Play, Plus, Save, Sparkles, Target, Upload, X } from 'lucide-react';
-import { ButtonV2, DangerConfirmButton, DrawerV2, InputV2, SelectV2, StatusChip, TextareaV2 } from '../../components/v2';
+import { ButtonV2, DangerConfirmButton, DiscardChangesDialog, DrawerV2, InputV2, SelectV2, StatusChip, TextareaV2 } from '../../components/v2';
 import { getApi, postApi } from '../../api/client';
 import { parseJobDescriptionFile } from '../../utils/jdParser';
+import { domainError } from '../api/gates';
 import { jobReasons, OTHER_REASON } from '../api/jobs';
 import {
-  activateRequisition, approveRequisition, canActivateDraft, cancelRequisition, createRequisition, declineRequisition, deptOf, draftActivateRefused, dueOf, fetchCancelImpact, fetchNationalities, fetchOpeningReasons, formatDue, isEditable, reqError, requestRequisitionChanges, STATUS_LABEL, STATUS_TONE, submitRequisition,
+  activateRequisition, approveRequisition, canActivateDraft, cancelRequisition, createRequisition, declineRequisition, deptOf, draftActivateRefused, dueOf, fetchCancelImpact, fetchNationalities, fetchOpeningReasons, formatDue, isEditable, reqError, requestRequisitionChanges, SALARY_CURRENCIES, SALARY_PERIODS, STATUS_LABEL, STATUS_TONE, submitRequisition,
   TARGET_UPDATE_LIVE, titleOf, updateRequisition, updateTarget, uploadRequisitionJd, EMPLOYMENT_TYPES, OPENING_TYPES, type CancellationImpact, type Grade, type Person, type ReqContext, type ReqFields, type Requisition,
 } from '../api/requisitions';
 
-type Errs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId' | 'form' | 'openingType' | 'replacedEmployeeId' | 'employmentType' | 'openingReason' | 'reasonNote', string>>;
+type Errs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId' | 'form' | 'openingType' | 'employmentType' | 'openingReason' | 'reasonNote' | 'budgetMin' | 'budgetMax' | 'budgetCurrency' | 'budgetPeriod' | 'approvalManagerMissing', string>>;
 /** reqError → drawer errors: inline field messages (#23) plus whatever the banner keeps. */
-type ReqForm = { positionId: string; branchId: string; seats: string; dueDate: string; departmentId: string; gradeId: string; assignee: string; notes: string; openingType: string; replacedEmployeeId: string; employmentType: string; reason: string; reasonNote: string; nationalityPreference: string[] };
+type ReqForm = {
+  positionId: string; branchId: string; seats: string; dueDate: string; departmentId: string; gradeId: string; assignee: string; notes: string;
+  openingType: string; employmentType: string; reason: string; reasonNote: string; nationalityPreference: string[];
+  budgetMin: string; budgetMax: string; budgetCurrency: string; budgetPeriod: string;
+};
 const formFromJson = (raw: string): ReqForm => {
   const value: unknown = JSON.parse(raw);
   const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const text = (key: keyof ReqForm) => typeof record[key] === 'string' ? record[key] : '';
   return {
     positionId: text('positionId'), branchId: text('branchId'), seats: text('seats'), dueDate: text('dueDate'), departmentId: text('departmentId'), gradeId: text('gradeId'), assignee: text('assignee'), notes: text('notes'),
-    openingType: text('openingType') || 'New position', replacedEmployeeId: text('replacedEmployeeId'), employmentType: text('employmentType'), reason: text('reason'), reasonNote: text('reasonNote'),
+    openingType: text('openingType') || 'New position', employmentType: text('employmentType'), reason: text('reason'), reasonNote: text('reasonNote'),
     nationalityPreference: Array.isArray(record.nationalityPreference) ? (record.nationalityPreference as unknown[]).filter((v): v is string => typeof v === 'string') : [],
+    budgetMin: text('budgetMin'), budgetMax: text('budgetMax'), budgetCurrency: text('budgetCurrency') || 'EGP', budgetPeriod: text('budgetPeriod') || 'Monthly',
   };
 };
-const toErrs = (r: ReturnType<typeof reqError>, only?: ReadonlyArray<keyof Errs>): Errs => {
+const toErrs = (r: ReturnType<typeof reqError>, only?: ReadonlyArray<keyof Errs>, rawError?: unknown): Errs => {
+  if (domainError(rawError)?.code === 'APPROVAL_MANAGER_MISSING') {
+    return { approvalManagerMissing: r.text };
+  }
   if (r.inline) {
     const kept = only ? Object.fromEntries(Object.entries(r.inline).filter(([k]) => only.includes(k as keyof Errs))) : r.inline;
     const dropped = Object.keys(r.inline).length > Object.keys(kept).length;
@@ -61,16 +70,21 @@ function PersonSelect({ people, value, onChange, error, disabled, label = 'Prima
 /** Requisition: draft activation, resubmit after changes, approval decision, and cancellation once commitments are resolved. */
 export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDecide = false, meId, onClose, onDone, initialExtract = false }: ReqDrawerProps) {
   const editable = !req || isEditable(req.status);
-  const [f, setF] = useState({
+  const [f, setF] = useState<ReqForm>({
     positionId: req?.positionId ?? '', branchId: req?.branchId ?? '', seats: String(req?.requestedHeadcount ?? 1),
     dueDate: req ? dueOf(req) ?? '' : '', departmentId: req?.departmentId ?? '', gradeId: req?.gradeId ?? '', assignee: req?.assignedEmployeeId ?? req?.primaryRecruiter?.id ?? '', notes: req?.justification ?? '',
-    // Meeting notes 2026-11-25 (items 1–2): opening kind, replaced employee, hiring type, reason, nationality preference.
-    openingType: req?.openingType ?? 'New position', replacedEmployeeId: req?.replacedEmployeeId ?? '', employmentType: req?.employmentType ?? '',
+    // Tickets 01–03: opening kind (no replaced employee picker), hiring type, reason, optional nationality preference, salary range.
+    openingType: req?.openingType ?? 'New position', employmentType: req?.employmentType ?? '',
     reason: req?.reason ?? '', reasonNote: '', nationalityPreference: req?.nationalityPreference ?? [],
+    budgetMin: req?.budgetMin != null ? String(req.budgetMin) : '',
+    budgetMax: req?.budgetMax != null ? String(req.budgetMax) : '',
+    budgetCurrency: req?.budgetCurrency ?? 'EGP',
+    budgetPeriod: req?.budgetPeriod ?? 'Monthly',
   });
   const initial = useMemo(() => JSON.stringify(f), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState<null | 'save' | 'submit' | 'activate' | 'cancel' | 'approve' | 'changes' | 'decline'>(null);
   const [errs, setErrs] = useState<Errs>({});
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [cancelNote, setCancelNote] = useState('');
   const [decisionNote, setDecisionNote] = useState('');
@@ -247,27 +261,68 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
     }
   };
 
-  const fields = (): ReqFields | null => {
+  const fields = (mode: 'draft' | 'submit' | 'activate'): ReqFields | null => {
     const e: Errs = {};
     if (!f.positionId) e.positionId = 'Pick a title.';
     if (!f.branchId) e.branchId = 'Pick a site.';
     if (!Number.isInteger(seats) || seats < 1) e.seats = 'At least 1 seat.';
-    if (!f.dueDate) e.dueDate = 'Required — a requisition needs a due date.';
-    else if (f.dueDate < cairoToday()) e.dueDate = 'Pick today or a later day.';
-    // Meeting notes 2026-11-25 (item 1): a replacement needs the employee being replaced; "Other" needs a note.
-    if (f.openingType === 'Replacement' && !f.replacedEmployeeId) e.replacedEmployeeId = 'Pick the employee being replaced.';
+    if (mode !== 'draft' && !f.dueDate) e.dueDate = 'Required — a requisition needs a due date.';
+    else if (f.dueDate && f.dueDate < cairoToday()) e.dueDate = 'Pick today or a later day.';
+    // Ticket 01: validate salary range whenever entered, and require min/max/currency on submission.
+    const rawMin = f.budgetMin.trim();
+    const rawMax = f.budgetMax.trim();
+    const minVal = rawMin ? Number(rawMin) : null;
+    const maxVal = rawMax ? Number(rawMax) : null;
+    if (rawMin && (minVal === null || !Number.isFinite(minVal) || minVal <= 0)) {
+      e.budgetMin = 'Enter a minimum salary greater than 0.';
+    }
+    if (rawMax && (maxVal === null || !Number.isFinite(maxVal) || maxVal <= 0)) {
+      e.budgetMax = 'Enter a maximum salary greater than 0.';
+    }
+    if (minVal !== null && maxVal !== null && Number.isFinite(minVal) && Number.isFinite(maxVal) && maxVal < minVal) {
+      e.budgetMax = 'Maximum salary must be greater than or equal to minimum salary.';
+    }
+    if (mode === 'submit' || mode === 'activate') {
+      if (minVal === null) e.budgetMin = 'Minimum salary is required before submitting.';
+      if (maxVal === null) e.budgetMax = 'Maximum salary is required before submitting.';
+      if (!f.budgetCurrency) e.budgetCurrency = 'Select a salary currency.';
+    }
     if (f.reason === OTHER_REASON && f.reasonNote.trim().length < 3) e.reasonNote = '"Other" needs a short note (at least 3 characters).';
     setErrs(e);
     if (Object.keys(e).length) return null;
+    const hasSalary = minVal !== null || maxVal !== null;
     return {
-      ...(departments ? { departmentId: f.departmentId || null } : {}), positionId: f.positionId, branchId: f.branchId, requestedHeadcount: seats, dueDate: f.dueDate, gradeId: f.gradeId || null, assignedEmployeeId: f.assignee || null, justification: f.notes.trim() || null,
-      employmentType: f.employmentType || null, openingType: f.openingType, replacedEmployeeId: f.openingType === 'Replacement' ? (f.replacedEmployeeId || null) : null,
-      nationalityPreference: f.nationalityPreference, reason: f.reason || null, reasonNote: f.reason === OTHER_REASON ? f.reasonNote.trim() || null : null,
+      ...(departments ? { departmentId: f.departmentId || null } : {}),
+      positionId: f.positionId,
+      branchId: f.branchId,
+      requestedHeadcount: seats,
+      dueDate: f.dueDate || null,
+      gradeId: f.gradeId || null,
+      assignedEmployeeId: f.assignee || null,
+      justification: f.notes.trim() || null,
+      employmentType: f.employmentType || null,
+      openingType: f.openingType,
+      // Ticket 03: omit replacedEmployeeId for Replacement so existing historical values stay intact on edit.
+      ...(f.openingType === 'New position' ? { replacedEmployeeId: null } : {}),
+      nationalityPreference: f.nationalityPreference,
+      reason: f.reason || null,
+      reasonNote: f.reason === OTHER_REASON ? f.reasonNote.trim() || null : null,
+      ...(hasSalary ? {
+        budgetMin: minVal !== null ? Math.round(minVal) : null,
+        budgetMax: maxVal !== null ? Math.round(maxVal) : null,
+        budgetCurrency: (f.budgetCurrency as ReqFields['budgetCurrency']) || null,
+        budgetPeriod: (f.budgetPeriod as ReqFields['budgetPeriod']) || 'Monthly',
+      } : req && (req.budgetMin != null || req.budgetMax != null) ? {
+        budgetMin: null,
+        budgetMax: null,
+        budgetCurrency: null,
+        budgetPeriod: null,
+      } : {}),
     };
   };
-  const fail = (e: unknown) => setErrs(toErrs(reqError(e)));
+  const fail = (e: unknown) => setErrs(toErrs(reqError(e), undefined, e));
   const save = async () => {
-    const body = fields(); if (!body) return;
+    const body = fields('draft'); if (!body) return;
     setBusy('save');
     try {
       await syncSkillsIfRequested();
@@ -277,9 +332,21 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
       onDone(`${title} saved as a draft.`);
     } catch (e) { fail(e); } finally { setBusy(null); }
   };
+  const submitForApproval = async () => {
+    const body = fields('submit'); if (!body) return;
+    setBusy('submit');
+    try {
+      await syncSkillsIfRequested();
+      const saved = req ? await updateRequisition(req.id, body) : await createRequisition(body);
+      const targetId = saved?.id ?? req?.id;
+      if (targetId) await uploadJdIfAttached(targetId);
+      await submitRequisition(targetId!);
+      onDone(`${title} submitted for approval.`);
+    } catch (e) { fail(e); } finally { setBusy(null); }
+  };
   const activate = async () => {
     if (draftActivate) {
-      const body = fields(); if (!body) return;
+      const body = fields('activate'); if (!body) return;
       if (!f.assignee) { setErrs({ assignee: 'Pick the primary recruiter who will own the job.' }); return; }
       setBusy('activate');
       let id = req?.id;
@@ -323,7 +390,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
   };
   const resubmit = async () => {
     if (!req) return;
-    const body = fields(); if (!body) return;
+    const body = fields('submit'); if (!body) return;
     setBusy('submit');
     try {
       await updateRequisition(req.id, body);
@@ -353,6 +420,17 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
   const changesRequested = status === 'Changes Requested';
   const pending = status === 'Pending Approval';
   const ro = !editable;
+  // Ticket 16: nobody can approve/decide their own submitted requisition.
+  const isOwnSubmission = Boolean(meId && req && (req.requesterId === meId || req.submittedById === meId));
+  const canActOnPending = pending && canDecide && !isOwnSubmission;
+  const isDirty = editable && (JSON.stringify(f) !== initial || uploadedJdFile !== null);
+  const requestClose = () => {
+    if (!isDirty) {
+      onClose();
+      return;
+    }
+    setConfirmDiscardOpen(true);
+  };
   const canCancel = !!req && status !== 'Cancelled' && status !== 'Rejected';
   const loadedImpact = impact && impact !== 'unavailable' ? impact : null;
   const blockedClose = !!loadedImpact && !loadedImpact.canClose;
@@ -367,37 +445,46 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
     Boolean(f.branchId),
     Boolean(Number.isInteger(seats) && seats >= 1),
     Boolean(f.dueDate),
+    Boolean(f.budgetMin.trim() && f.budgetMax.trim() && Number(f.budgetMin) > 0 && Number(f.budgetMax) >= Number(f.budgetMin)),
     Boolean(f.assignee),
   ];
   const doneCount = checklist.filter(Boolean).length;
-  // A Draft with a due date activates directly. Changes Requested must be resubmitted first.
-  const draftActivate = editable && canActivateDraft(req, meId, f.dueDate || null);
-  const primary = pending && canDecide
+  // A Draft with a due date activates directly for managers with VACANCY_MANAGE; employees submit for manager approval.
+  const draftActivate = editable && canActivate && canActivateDraft(req, meId, f.dueDate || null);
+  const primary = canActOnPending
     ? <ButtonV2 icon={<CircleCheck />} loading={busy === 'approve'} disabled={!!busy} onClick={() => void decide('approve')}>Approve</ButtonV2>
     : changesRequested
       ? <ButtonV2 loading={busy === 'submit'} disabled={!!busy || !f.dueDate} onClick={() => void resubmit()}>Resubmit</ButtonV2>
-      : editable
-        ? <ButtonV2 icon={<Play />} loading={busy === 'activate'} disabled={!!busy || !f.dueDate} onClick={() => void activate()} aria-describedby={!f.dueDate ? 'req-due-why' : undefined}>Activate job</ButtonV2>
-        : approved && canActivate
-          ? <ButtonV2 icon={<Play />} loading={busy === 'activate'} disabled={!!busy} onClick={() => void activate()}>Activate job</ButtonV2>
-          : <ButtonV2 onClick={onClose}>Close</ButtonV2>;
+      : editable && !canActivate
+        ? <ButtonV2 loading={busy === 'submit'} disabled={!!busy} onClick={() => void submitForApproval()}>Submit for approval</ButtonV2>
+        : editable
+          ? <ButtonV2 icon={<Play />} loading={busy === 'activate'} disabled={!!busy || !f.dueDate} onClick={() => void activate()} aria-describedby={!f.dueDate ? 'req-due-why' : undefined}>Activate job</ButtonV2>
+          : approved && canActivate
+            ? <ButtonV2 icon={<Play />} loading={busy === 'activate'} disabled={!!busy} onClick={() => void activate()}>Activate job</ButtonV2>
+            : <ButtonV2 onClick={onClose}>Close</ButtonV2>;
   const secondary = editable
-    ? <ButtonV2 kind="secondary" icon={<Save />} loading={busy === 'save'} disabled={!!busy || !f.dueDate} onClick={() => void save()} aria-describedby={!f.dueDate ? 'req-due-why' : undefined}>Save draft</ButtonV2>
-    : approved || (pending && canDecide) ? <ButtonV2 kind="secondary" onClick={onClose}>Close</ButtonV2> : null;
+    ? <ButtonV2 kind="secondary" icon={<Save />} loading={busy === 'save'} disabled={!!busy} onClick={() => void save()}>Save draft</ButtonV2>
+    : approved || canActOnPending ? <ButtonV2 kind="secondary" onClick={onClose}>Close</ButtonV2> : null;
 
   return (
-    <DrawerV2 open onClose={onClose} kicker={`Requisition${req ? ` · ${req.requestCode}` : ''} · ${STATUS_LABEL[status]}`} title={title}
-      primaryAction={primary} secondaryAction={secondary}
-      confirmClose={() => !editable || JSON.stringify(f) === initial || window.confirm('Discard the changes to this requisition?')}>
+    <>
+    <DrawerV2 open onClose={requestClose} kicker={`Requisition${req ? ` · ${req.requestCode}` : ''} · ${STATUS_LABEL[status]}`} title={title}
+      primaryAction={primary} secondaryAction={secondary}>
       <div className="rf2-drawer-form rf2-req">
+        {errs.approvalManagerMissing ? (
+          <div className="rf2-form-error" role="alert">
+            <p>{errs.approvalManagerMissing}</p>
+            <p><Link className="rf2-link" to="/users">Assign reporting manager in Users &amp; Access</Link></p>
+          </div>
+        ) : null}
         {errs.form ? <p className="rf2-form-error" role="alert">{errs.form}</p> : null}
-        <p className="rf2-jtable__sub">One record for the request and its hiring goal. Seats, the due date and the owner save on this requisition.</p>
+        <p className="rf2-jtable__sub">One record for the request and its hiring goal. Seats, salary range, due date, and owner save on this requisition.</p>
         {req ? <p className="rf2-jtable__sub"><Link className="rf2-link" to={`/vacancy-requests?req=${encodeURIComponent(req.id)}&drawer=detail`}>Open full requisition details</Link></p> : null}
         {!req ? (
           <section className="rf2-req__progress" aria-label="Requisition progress">
             <div className="rf2-req__progress-head">
               <h3 className="rf2-field__label">Requisition progress & policy checklist</h3>
-              <StatusChip tone={doneCount === 5 ? 'success' : 'neutral'} label={`${doneCount} of 5 requirements ready`} />
+              <StatusChip tone={doneCount === checklist.length ? 'success' : 'neutral'} label={`${doneCount} of ${checklist.length} requirements ready`} />
             </div>
             <p className="rf2-req__workflow-line">Draft → Pending approval → Approved / Changes requested / Declined → Job active (or direct activation when policy allows)</p>
             <ul>
@@ -405,6 +492,9 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
               <li data-state={f.branchId ? 'done' : 'needed'}>{f.branchId ? 'Done' : 'Needed'} — Site selected</li>
               <li data-state={Number.isInteger(seats) && seats >= 1 ? 'done' : 'needed'}>{Number.isInteger(seats) && seats >= 1 ? 'Done' : 'Needed'} — Seats {'>='} 1</li>
               <li data-state={f.dueDate ? 'done' : 'needed'}>{f.dueDate ? 'Done' : 'Needed'} — Due date set</li>
+              <li data-state={f.budgetMin.trim() && f.budgetMax.trim() && Number(f.budgetMin) > 0 && Number(f.budgetMax) >= Number(f.budgetMin) ? 'done' : 'needed'}>
+                {f.budgetMin.trim() && f.budgetMax.trim() && Number(f.budgetMin) > 0 && Number(f.budgetMax) >= Number(f.budgetMin) ? 'Done' : 'Needed'} — Salary range
+              </li>
               <li data-state={f.assignee ? 'done' : 'needed'}>{f.assignee ? 'Done' : 'Needed'} — Primary recruiter selected</li>
             </ul>
             {JSON.stringify(f) !== initial ? <ButtonV2 kind="tertiary" size="sm" onClick={() => { setF(formFromJson(initial)); setErrs({}); }}>Reset form</ButtonV2> : null}
@@ -601,10 +691,10 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
         <div className="rf2-req__row">
           <InputV2 label="Seats" required type="number" min={1} value={f.seats} onChange={(e) => set('seats')(e.target.value)} error={errs.seats} disabled={ro} />
           <InputV2 label="Due date" required type="date" min={cairoToday()} value={f.dueDate} onChange={(e) => set('dueDate')(e.target.value)} error={errs.dueDate} disabled={ro}
-            hint={!f.dueDate && !ro ? 'Required — Save draft stays disabled while it is empty.' : undefined} id="req-due" />
+            hint={!f.dueDate && !ro ? 'Required before submitting or activating. Incomplete drafts can still be saved.' : undefined} id="req-due" />
         </div>
-        <span id="req-due-why" className="rf2-sr-only">Save is disabled until a due date is set.</span>
-        {/* Meeting notes 2026-11-25 (items 1–2): opening kind, replaced employee, hiring type, reason, nationality preference (soft signal). */}
+        <span id="req-due-why" className="rf2-sr-only">Activation is disabled until a due date is set.</span>
+        {/* Tickets 01–03: opening type (no replaced employee picker), employment type, reason, optional nationality preference. */}
         <div className="rf2-req__section-title">Opening type &amp; hiring details</div>
         <div className="rf2-req__row">
           <SelectV2 label="Opening type" value={f.openingType} onChange={(e) => set('openingType')(e.target.value)} error={errs.openingType} disabled={ro}
@@ -616,9 +706,6 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
             {EMPLOYMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </SelectV2>
         </div>
-        {f.openingType === 'Replacement' ? (
-          <PersonSelect people={people} label="Employee being replaced" value={f.replacedEmployeeId} onChange={set('replacedEmployeeId')} error={errs.replacedEmployeeId} disabled={ro} />
-        ) : null}
         <div className="rf2-req__row">
           {openingReasons ? (
             <SelectV2 label="Opening reason" value={f.reason} onChange={(e) => set('reason')(e.target.value)} error={errs.openingReason} disabled={ro}>
@@ -634,7 +721,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
         </div>
         {nationalities ? (
           <fieldset className="rf2-req__nationalities" disabled={ro}>
-            <legend className="rf2-field__label">Nationality preference <span className="rf2-jtable__sub">(soft signal — never excludes a candidate)</span></legend>
+            <legend className="rf2-field__label">Nationality preference <span className="rf2-jtable__sub">(optional soft signal — never enters automated scoring)</span></legend>
             <div className="rf2-req__nationalities-list">
               {nationalities.map((n) => (
                 <label key={n} className="rf2-req__nationality">
@@ -645,6 +732,21 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
             </div>
           </fieldset>
         ) : null}
+        <div className="rf2-req__section-title">Compensation (Salary Range)</div>
+        <div className="rf2-req__row">
+          <InputV2 label="Minimum salary" type="number" min={1} value={f.budgetMin} onChange={(e) => set('budgetMin')(e.target.value)} error={errs.budgetMin} disabled={ro}
+            hint={!ro ? 'Required on submission.' : undefined} />
+          <InputV2 label="Maximum salary" type="number" min={1} value={f.budgetMax} onChange={(e) => set('budgetMax')(e.target.value)} error={errs.budgetMax} disabled={ro}
+            hint={!ro ? 'Must be >= minimum salary.' : undefined} />
+        </div>
+        <div className="rf2-req__row">
+          <SelectV2 label="Currency" value={f.budgetCurrency} onChange={(e) => set('budgetCurrency')(e.target.value)} error={errs.budgetCurrency} disabled={ro}>
+            {SALARY_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </SelectV2>
+          <SelectV2 label="Salary period" value={f.budgetPeriod} onChange={(e) => set('budgetPeriod')(e.target.value)} error={errs.budgetPeriod} disabled={ro}>
+            {SALARY_PERIODS.map((p) => <option key={p} value={p}>{p}</option>)}
+          </SelectV2>
+        </div>
         <PersonSelect people={people} value={f.assignee} onChange={set('assignee')} error={errs.assignee} disabled={!(editable || approved)}
           hint={approved ? 'Activate job makes this person the owner.' : undefined} />
         <div className="rf2-req__section-title">Role Scope &amp; Justification</div>
@@ -653,14 +755,24 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
           <div className="rf2-row-between"><h3 id="req-status-h" className="rf2-field__label">Status</h3><StatusChip tone={STATUS_TONE[status]} label={STATUS_LABEL[status]} /></div>
           <p className="rf2-jtable__sub">{
             changesRequested ? 'Changes were requested. Save the updates, then resubmit. Activation waits until the requisition is approved.'
-            : pending ? (canDecide ? 'This requisition is waiting for your decision. Approve, request changes, or decline.' : 'Waiting on approval. Activate job is available once it is approved.')
-            : editable ? (f.dueDate ? 'Activate job creates the job, assigns the owner and shows it in their Open jobs. A draft with a due date and an eligible owner activates directly.' : 'Add a due date to activate it.')
+            : pending ? (
+              isOwnSubmission
+                ? 'Submitted by you — awaiting independent approval from your reporting manager.'
+                : canActOnPending
+                  ? 'This requisition is waiting for your decision. Approve, request changes, or decline.'
+                  : 'Waiting on approval. Activate job is available once it is approved.'
+            )
+            : editable ? (
+              !canActivate
+                ? 'Save draft anytime or submit for your manager’s approval once the due date and salary range are complete.'
+                : f.dueDate ? 'Activate job creates the job, assigns the owner and shows it in their Open jobs. A draft with a due date and an eligible owner activates directly.' : 'Add a due date to activate it, or save an incomplete draft.'
+            )
             : approved ? (canActivate ? 'Approved. Activate job creates the job and assigns the owner in one step.' : 'Approved. Activating needs job management access.')
             : status === 'Converted to Vacancy' ? `Job active${req?.activatedAt ? ` since ${formatDue(req.activatedAt)}` : ''}.`
             : status === 'Cancelled' ? `Cancelled${req?.cancelReason ? `: ${req.cancelReason}` : ''}. Nothing is deleted.`
             : 'Declined by the approver. Nothing is deleted.'
           }</p>
-          {pending && canDecide ? (
+          {canActOnPending ? (
             <div className="rf2-req__cancel">
               <TextareaV2 label="Decision note" rows={2} value={decisionNote} onChange={(e) => { setDecisionNote(e.target.value); setErrs((x) => ({ ...x, notes: undefined })); }} error={errs.notes}
                 hint="Required to request changes or decline (at least 3 characters). Approve can be without a note." />
@@ -694,6 +806,15 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
         </section>
       </div>
     </DrawerV2>
+    <DiscardChangesDialog
+      open={confirmDiscardOpen}
+      onKeepEditing={() => setConfirmDiscardOpen(false)}
+      onDiscard={() => {
+        setConfirmDiscardOpen(false);
+        onClose();
+      }}
+    />
+    </>
   );
 }
 

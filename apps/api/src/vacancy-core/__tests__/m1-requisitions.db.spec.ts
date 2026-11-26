@@ -23,7 +23,7 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     const id = randomUUID();
     await prisma.vacancyRequest.create({ data: {
       id, organizationId: ORG, branchId: branch.id, positionId: position.id, requesterId: requester,
-      requestCode: `M1-${tag}-${id.slice(0, 13)}`, status, requestedHeadcount: 2, ...extra,
+      requestCode: `M1-${tag}-${id.slice(0, 13)}`, status, requestedHeadcount: 2, budgetMin: 10000, budgetMax: 14000, budgetCurrency: 'EGP', ...extra,
     } });
     return id;
   }
@@ -46,6 +46,25 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     ids.grade = (await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'grades', code: `G-${tag}`, name: `Grade ${tag}` } })).id;
   });
   afterAll(async () => { await prisma?.$disconnect(); });
+
+  it('rolls the approval claim back when saving the requisition fails, allowing a retry', async () => {
+    const id = await makeRequest(ids.mgr, 'Pending Approval');
+    const otherId = await makeRequest(ids.mgr);
+    const other = await prisma.vacancyRequest.findUniqueOrThrow({ where: { id: otherId } });
+    const approval = await prisma.vacancyRequestApproval.create({
+      data: { vacancyRequestId: id, revision: 1, step: 1, roleCode: 'HIRING_MANAGER', assigneeUserId: ids.boss },
+    });
+    const repository = new PrismaVacancyCoreRepository(prisma);
+    const request = await repository.getRequest(ORG, id);
+    if (!request) throw new Error('Missing test requisition');
+    request.status = 'Approved';
+    request.approvals[0].status = 'Approved';
+
+    await expect(repository.saveRequest({ ...request, requestCode: other.requestCode }, approval.id)).rejects.toMatchObject({ code: 'P2002' });
+    expect(await prisma.vacancyRequestApproval.findUniqueOrThrow({ where: { id: approval.id } })).toMatchObject({ status: 'Pending' });
+    expect(await repository.saveRequest(request, approval.id)).toMatchObject({ status: 'Approved' });
+    await expect(repository.saveRequest(request, approval.id)).rejects.toMatchObject({ response: { code: 'APPROVAL_ALREADY_DECIDED' } });
+  });
 
   it('department comes from master data (departments) and is stored', async () => {
     const id = await makeRequest(ids.mgr);

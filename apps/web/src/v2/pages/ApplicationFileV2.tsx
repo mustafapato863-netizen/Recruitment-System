@@ -752,7 +752,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
           </div>
           <div className="rf2-file__identity-meta">
             <span className="rf2-file__code-pill">{app.applicationCode}</span>
-            {!manager && app.candidate?.phone ? <a href="#msgs-h" className="rf2-file__wa-pill">WhatsApp candidate</a> : null}
+            {!manager && (app.candidate?.phone || (messages.status === 'ready' && messages.data.whatsappReady)) ? <a href="#msgs-h" className="rf2-file__wa-pill">WhatsApp candidate</a> : null}
           </div>
         </div>
         <div className="rf2-file__stage">
@@ -822,7 +822,11 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
                       <ButtonV2 kind="secondary" size="md" icon={<Briefcase />} onClick={() => { setMoreOpen(false); setSuggestJobsOpen(true); }}>Suggest roles</ButtonV2>
                       {!closed ? (
                         <>
+                          <Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to={`/applications/${encodeURIComponent(app.id)}/screening`}>Screening page</Link>
                           <ButtonV2 kind="secondary" size="md" icon={<CalendarDays />} disabled={facts.unknown.interviews || ((app.stage === 'Applied' || app.stage === 'Screening') && facts.unknown.screening)} onClick={() => openDrawer('schedule')}>Schedule</ButtonV2>
+                          {app.stage === 'Pre-Hire' ? (
+                            <ButtonV2 kind="secondary" size="md" icon={<CalendarDays />} disabled={facts.unknown.interviews} onClick={() => openDrawer('schedule', { context: 'prehire' })}>Assessment interview</ButtonV2>
+                          ) : null}
                           <ButtonV2 kind="secondary" size="md" icon={<Star />} disabled={facts.unknown.interviews || facts.unknown.scorecards || scorecardFuture} data-future={scorecardFuture ? 'true' : undefined} aria-describedby={scorecardFuture ? 'file-later-hint' : undefined} onClick={() => openDrawer('scorecard')}>Scorecard</ButtonV2>
                           <ButtonV2 kind="secondary" size="md" icon={<Send />} disabled={facts.unknown.offer || (app.stage === 'Interview' && facts.unknown.scorecards) || offerFuture} data-future={offerFuture ? 'true' : undefined} aria-describedby={offerFuture ? 'file-later-hint' : undefined} onClick={() => openDrawer(offerDrawerFor(file))}>Offer</ButtonV2>
                           <ButtonV2 kind="secondary" size="md" icon={<CircleCheck />} disabled={facts.unknown.offer || facts.unknown.hiring || facts.unknown.joining || prehireFuture} data-future={prehireFuture ? 'true' : undefined} aria-describedby={prehireFuture ? 'file-later-hint' : undefined} onClick={() => openDrawer('prehire')}>Pre-hire</ButtonV2>
@@ -1145,7 +1149,12 @@ function Timeline({ file, messages = [], chatterKnown = true, interviewsKnown = 
                   {writable && open ? <button type="button" className="rf2-link" onClick={() => void markNoShow(i)}>Mark no-show</button> : null}
                   {writable && open && onReschedule ? <button type="button" className="rf2-link" onClick={() => onReschedule(i.id)}>Reschedule</button> : null}
                   {writable && i.status === 'No-show' && onReschedule ? <button type="button" className="rf2-link" onClick={() => onReschedule('')}>Schedule new interview</button> : null}
-                  {i.status !== 'Cancelled' && i.status !== 'No-show' && onScorecard ? <button type="button" className="rf2-link" onClick={() => onScorecard(i.id)}>Scorecards</button> : null}
+                  {i.status !== 'Cancelled' && i.status !== 'No-show' && onScorecard ? (
+                    <>
+                      <button type="button" className="rf2-link" onClick={() => onScorecard(i.id)}>Scorecards</button>
+                      <Link className="rf2-link" to={`/interviews/${encodeURIComponent(i.id)}/scorecard`}>SGH form</Link>
+                    </>
+                  ) : null}
                 </span>
               </li>
             );

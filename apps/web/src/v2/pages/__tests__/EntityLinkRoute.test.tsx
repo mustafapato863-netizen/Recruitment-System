@@ -74,9 +74,9 @@ describe('PR33-1 offer/hire deep links open the file', () => {
     expect(await where()).toBe('/applications/a1');
     expect(api.getApi).toHaveBeenCalledWith('/offers/o1');
   });
-  it('drops a candidates return for a manager, whose shell would leave that page', async () => {
+  it('keeps a candidates return for a manager with CANDIDATE_VIEW and drops it without CANDIDATE_VIEW', async () => {
     shell.value = { seat: 'manager' };
-    auth.user = { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW', 'CANDIDATE_VIEW'] };
+    auth.user = { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW'] };
     api.getApi.mockResolvedValue({ applicationId: 'a1' });
     at(`/offers/o1?returnTo=${encodeURIComponent('/candidates?stage=Interview')}`);
     expect(await where()).toBe('/applications/a1?decide=o1');

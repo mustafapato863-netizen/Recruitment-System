@@ -20,7 +20,12 @@ import { findExistingFile, isApplicationExists } from './applicationExists';
 export type ExtractedCv = ExtractedCandidate;
 export type MatchedBy = 'email' | 'phone';
 export interface DuplicateMatch { candidateId: string; candidateCode: string; name: string; status: string; matchedBy: MatchedBy[] }
-export interface DuplicateCheckResult { normalized: { email: string | null; phone: string | null }; isDuplicate: boolean; matches: DuplicateMatch[] }
+export interface DuplicateCheckResult {
+  normalized: { email: string | null; phone: string | null };
+  isDuplicate: boolean;
+  identityConflict?: boolean;
+  matches: DuplicateMatch[];
+}
 
 export const parseCv = (file: File) => {
   const fd = new FormData();

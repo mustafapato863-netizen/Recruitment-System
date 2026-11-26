@@ -54,6 +54,7 @@ export interface MyWorkJoiningDecisionFacts {
   acceptedOfferVersionId: string | null;
   hiringCaseStatus: string | null;
   approvalFingerprint: string | null;
+  assessmentInterviews: NonNullable<JoiningFacts['assessmentInterviews']>;
   approvals: JoiningFacts['approvals'];
   checks: JoiningCheckFact[];
   joinedHeadcount: number;
@@ -213,6 +214,7 @@ function readinessFromPolicy(row: MyWorkJoiningInput, now: Date): { readiness: M
     acceptedOfferVersionId: facts.acceptedOfferVersionId,
     hiringCaseStatus: facts.hiringCaseStatus,
     approvalFingerprint: facts.approvalFingerprint,
+    assessmentInterviews: facts.assessmentInterviews,
     approvals: facts.approvals,
     checks: facts.checks,
     joinedHeadcount: facts.joinedHeadcount,

@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import type { JdCriteriaDefinition } from '@recruitflow/contracts';
 import { calculateCandidateFitScore, detectClinicalDomain } from '@recruitflow/validation';
-import { ButtonV2, DrawerV2, InputV2, StatusChip, type StatusTone } from '../../components/v2';
+import { ButtonV2, DiscardChangesDialog, DrawerV2, InputV2, StatusChip, type StatusTone } from '../../components/v2';
 import {
   FIELD_LABEL,
   candidateExistsDetails,
@@ -124,14 +124,16 @@ function evaluateRoleFit(cv: ExtractedCv, job: JobDetail): RoleFitEvaluation {
   return { label: 'Review fit', tone: 'neutral', matched, missing, experienceNote };
 }
 
-/** E11 Import CVs: upload → parse (extract) → validate & edit → role fit & duplicate check (B6) → link or create → add to this job (Applied). */
-export function ImportCvsDrawer({
+/** E11 / Ticket 10: Shared CV upload workspace (used in full-page /vacancies/:id/upload-cv and legacy drawer). */
+export function CvUploadCore({
   job,
+  mode = 'page',
   onClose,
   onDone,
   onImported,
 }: {
   job: JobDetail;
+  mode?: 'page' | 'drawer';
   onClose: () => void;
   onDone: () => void;
   onImported?: () => void;
@@ -140,6 +142,7 @@ export function ImportCvsDrawer({
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   const patch = (key: string, p: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
@@ -176,9 +179,11 @@ export function ImportCvsDrawer({
       const stored = readStoredImportProgress(job.id, file);
       const decision: ImportDecision = stored?.candidateId
         ? { kind: 'link', candidateId: stored.candidateId }
-        : dup?.matches[0]
-          ? { kind: 'link', candidateId: dup.matches[0].candidateId }
-          : { kind: 'create' };
+        : dup?.identityConflict
+          ? { kind: 'link', candidateId: dup.matches[0]?.candidateId ?? '' }
+          : dup?.matches[0]
+            ? { kind: 'link', candidateId: dup.matches[0].candidateId }
+            : { kind: 'create' };
       patch(key, { status: 'ready', cv, dup, decision, ...(stored ? { partial: stored } : {}), problem: undefined });
     } catch (e) {
       const unreadable = e instanceof ApiError && e.code === 'FILE_INVALID';
@@ -233,8 +238,18 @@ export function ImportCvsDrawer({
 
   const ready = rows.filter((r) => r.status === 'ready');
   const parsing = rows.some((r) => r.status === 'parsing');
+  const doneCount = rows.filter((r) => r.status === 'done').length;
   const duplicateCount = ready.filter((r) => r.dup?.isDuplicate).length;
   const issueCount = rows.filter((r) => r.status === 'unreadable' || r.status === 'invalid' || r.status === 'failed').length;
+
+  const requestClose = () => {
+    if (busy) return;
+    if (ready.length === 0) {
+      onClose();
+      return;
+    }
+    setConfirmDiscardOpen(true);
+  };
 
   const run = async () => {
     setBusy(true);
@@ -311,146 +326,207 @@ export function ImportCvsDrawer({
     else if (ok) onImported?.();
   };
 
-  return (
-    <DrawerV2
-      open
-      onClose={onClose}
-      kicker={`Import CVs · ${jobTitle(job)}`}
-      title="Add candidates to Applied"
-      subtitle="Extract candidate details, validate skills against this role, and verify bank duplicates before importing."
-      confirmClose={() => (busy ? false : ready.length === 0 || window.confirm('Discard these CVs?'))}
-      primaryAction={
-        <ButtonV2 icon={<Upload />} loading={busy} disabled={!ready.length || parsing} onClick={() => void run()}>
-          {`Import ${ready.length} to Applied`}
-        </ButtonV2>
-      }
-      secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}
-    >
-      <div className="rf2-jimp">
-        {/* Target Role Criteria Card */}
-        <div className="rf2-jimp__criteria">
-          <div className="rf2-jimp__criteria-head">
-            <h3 className="rf2-jimp__criteria-title">
-              <Briefcase aria-hidden="true" />
-              <span>Matching Criteria · {jobTitle(job)}</span>
-            </h3>
-            <span className="rf2-jimp__criteria-meta">
-              {[job.vacancyCode, job.branch?.name, jobCriteria.minExperienceYears > 0 ? `${jobCriteria.minExperienceYears}+ yrs exp` : null].filter(Boolean).join(' · ')}
-            </span>
-          </div>
-          {jobCriteria.requiredSkills.length > 0 ? (
-            <div className="rf2-jimp__criteria-chips">
-              {jobCriteria.requiredSkills.slice(0, 8).map((skill) => (
-                <span key={skill} className="rf2-jimp__req-chip">{skill}</span>
-              ))}
-              {jobCriteria.requiredSkills.length > 8 ? (
-                <span className="rf2-jimp__criteria-meta">+{jobCriteria.requiredSkills.length - 8} more</span>
-              ) : null}
-            </div>
-          ) : (
-            <span className="rf2-jimp__criteria-meta">
-              CV engine evaluates extracted skills, clinical domain, experience, and contact identity for this role.
-            </span>
-          )}
+  const activeStep: 1 | 2 | 3 | 4 = rows.length === 0 || parsing
+    ? 1
+    : rows.some((r) => Boolean(r.dup?.identityConflict || r.dup?.matches?.length))
+      ? 2
+      : doneCount > 0 && ready.length === 0
+        ? 4
+        : 3;
+
+  const content = (
+    <div className="rf2-jimp">
+      {/* Ticket 10: Explicit 4-step CV intake pipeline bar */}
+      <div className="rf2-intake__engine-notes" role="region" aria-label="CV upload pipeline steps">
+        <div className="rf2-intake__engine-note" aria-current={activeStep === 1 ? 'step' : undefined}>
+          <strong>1. ATS extraction</strong>
+          <span>Extracts identity, experience, skills, and certifications automatically.</span>
         </div>
-
-        {/* Upgraded Drag & Drop CV Extraction Zone */}
-        <div
-          className="rf2-jimp__drop"
-          data-dragging={dragging ? 'true' : 'false'}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            add(e.dataTransfer.files);
-          }}
-        >
-          <span className="rf2-jimp__drop-icon" aria-hidden="true">
-            <Upload />
-          </span>
-          <label htmlFor="cv-files" className="rf2-jimp__drop-label">
-            Drop CVs or <span className="rf2-link">select files</span>
-          </label>
-          <input
-            id="cv-files"
-            ref={input}
-            className="rf2-sr-only"
-            type="file"
-            multiple
-            accept=".pdf,.doc,.docx"
-            onChange={(e) => {
-              add(e.target.files);
-              e.target.value = '';
-            }}
-          />
-          <p className="rf2-jtable__sub">
-            Select one or several PDF or Word files, up to 10 MB each. Each CV is extracted, checked for role skill fit, and verified against the bank by email and phone.
-          </p>
-          <div className="rf2-jimp__drop-formats" aria-hidden="true">
-            <span className="rf2-jimp__format-pill">PDF</span>
-            <span className="rf2-jimp__format-pill">DOCX</span>
-            <span className="rf2-jimp__format-pill">DOC</span>
-            <span className="rf2-jimp__format-pill">Multi-CV batch</span>
-          </div>
+        <div className="rf2-intake__engine-note" aria-current={activeStep === 2 ? 'step' : undefined}>
+          <strong>2. Duplicate check</strong>
+          <span>Matches normalized email and phone against the candidate bank.</span>
         </div>
-
-        {/* 3-Step Extraction Engine Guide (shown before files are queued) */}
-        {rows.length === 0 ? (
-          <div className="rf2-intake__engine-notes">
-            <div className="rf2-intake__engine-note">
-              <strong>1. Auto-Extract CV</strong>
-              <span>Detects name, contact, title, experience, domain, and skills automatically.</span>
-            </div>
-            <div className="rf2-intake__engine-note">
-              <strong>2. Validate &amp; Edit</strong>
-              <span>Review or edit any parsed field and add/remove skills before importing.</span>
-            </div>
-            <div className="rf2-intake__engine-note">
-              <strong>3. Role Fit &amp; Duplicates</strong>
-              <span>Flags bank matches by email/phone and checks skill alignment for this job.</span>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Queue Status Strip */}
-        {rows.length > 0 ? (
-          <div className="rf2-jimp__queue-bar">
-            <span>
-              {rows.length} {rows.length === 1 ? 'CV queued' : 'CVs queued'}
-              {ready.length ? ` · ${ready.length} ready` : ''}
-              {duplicateCount ? ` · ${duplicateCount} duplicate${duplicateCount > 1 ? 's' : ''}` : ''}
-              {issueCount ? ` · ${issueCount} need${issueCount === 1 ? 's' : ''} attention` : ''}
-            </span>
-            {parsing ? <StatusChip tone="info" label="Extracting CVs…" /> : null}
-          </div>
-        ) : null}
-
-        {rows.length ? (
-          <ul className="rf2-imports" aria-label="CVs">
-            {rows.map((r) => (
-              <ImportRow
-                key={r.key}
-                row={r}
-                job={job}
-                busy={busy}
-                onDecide={(d) => patch(r.key, { decision: d })}
-                onUpdateCv={(nextCv) => patch(r.key, { cv: nextCv })}
-                onRecheckDup={(nextCv) => void recheckDuplicate(r.key, nextCv)}
-                onRetry={() => retryRow(r.key)}
-                onRemove={() => removeRow(r.key)}
-              />
-            ))}
-          </ul>
-        ) : null}
-
-        {summary ? <p className="rf2-inline-note" role="status">{summary}</p> : null}
+        <div className="rf2-intake__engine-note" aria-current={activeStep === 3 ? 'step' : undefined}>
+          <strong>3. Skills match</strong>
+          <span>Evaluates extracted skills and certifications against this vacancy.</span>
+        </div>
+        <div className="rf2-intake__engine-note" aria-current={activeStep === 4 ? 'step' : undefined}>
+          <strong>4. Review &amp; add to Applied</strong>
+          <span>Edit detected fields, resolve duplicates, and commit ready CVs.</span>
+        </div>
       </div>
-    </DrawerV2>
+
+      {/* Target Role Criteria Card */}
+      <div className="rf2-jimp__criteria">
+        <div className="rf2-jimp__criteria-head">
+          <h3 className="rf2-jimp__criteria-title">
+            <Briefcase aria-hidden="true" />
+            <span>Matching Criteria · {jobTitle(job)}</span>
+          </h3>
+          <span className="rf2-jimp__criteria-meta">
+            {[job.vacancyCode, job.branch?.name, jobCriteria.minExperienceYears > 0 ? `${jobCriteria.minExperienceYears}+ yrs exp` : null].filter(Boolean).join(' · ')}
+          </span>
+        </div>
+        {jobCriteria.requiredSkills.length > 0 ? (
+          <div className="rf2-jimp__criteria-chips">
+            {jobCriteria.requiredSkills.slice(0, 8).map((skill) => (
+              <span key={skill} className="rf2-jimp__req-chip">{skill}</span>
+            ))}
+            {jobCriteria.requiredSkills.length > 8 ? (
+              <span className="rf2-jimp__criteria-meta">+{jobCriteria.requiredSkills.length - 8} more</span>
+            ) : null}
+          </div>
+        ) : (
+          <span className="rf2-jimp__criteria-meta">
+            CV engine evaluates extracted skills, certifications, clinical domain, experience, and contact identity for this role.
+          </span>
+        )}
+      </div>
+
+      {/* Upgraded Drag & Drop CV Extraction Zone */}
+      <div
+        className="rf2-jimp__drop"
+        data-dragging={dragging ? 'true' : 'false'}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          add(e.dataTransfer.files);
+        }}
+      >
+        <span className="rf2-jimp__drop-icon" aria-hidden="true">
+          <Upload />
+        </span>
+        <label htmlFor="cv-files" className="rf2-jimp__drop-label">
+          Drop CVs or <span className="rf2-link">select files</span>
+        </label>
+        <input
+          id="cv-files"
+          ref={input}
+          className="rf2-sr-only"
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx"
+          onChange={(e) => {
+            add(e.target.files);
+            e.target.value = '';
+          }}
+        />
+        <p className="rf2-jtable__sub">
+          Select one or several PDF or Word files, up to 10 MB each. Each CV runs ATS extraction, duplicate check, and skills match before saving.
+        </p>
+        <div className="rf2-jimp__drop-formats" aria-hidden="true">
+          <span className="rf2-jimp__format-pill">PDF</span>
+          <span className="rf2-jimp__format-pill">DOCX</span>
+          <span className="rf2-jimp__format-pill">DOC</span>
+          <span className="rf2-jimp__format-pill">Multi-CV batch</span>
+        </div>
+      </div>
+
+      {/* Queue Status Strip */}
+      {rows.length > 0 ? (
+        <div className="rf2-jimp__queue-bar">
+          <span>
+            {rows.length} {rows.length === 1 ? 'CV queued' : 'CVs queued'}
+            {ready.length ? ` · ${ready.length} ready` : ''}
+            {duplicateCount ? ` · ${duplicateCount} duplicate${duplicateCount > 1 ? 's' : ''}` : ''}
+            {issueCount ? ` · ${issueCount} need${issueCount === 1 ? 's' : ''} attention` : ''}
+          </span>
+          {parsing ? <StatusChip tone="info" label="Extracting CVs…" /> : null}
+        </div>
+      ) : null}
+
+      {rows.length ? (
+        <ul className="rf2-imports" aria-label="CVs">
+          {rows.map((r) => (
+            <ImportRow
+              key={r.key}
+              row={r}
+              job={job}
+              busy={busy}
+              onDecide={(d) => patch(r.key, { decision: d })}
+              onUpdateCv={(nextCv) => patch(r.key, { cv: nextCv })}
+              onRecheckDup={(nextCv) => void recheckDuplicate(r.key, nextCv)}
+              onRetry={() => retryRow(r.key)}
+              onRemove={() => removeRow(r.key)}
+            />
+          ))}
+        </ul>
+      ) : null}
+
+      {summary ? <p className="rf2-inline-note" role="status">{summary}</p> : null}
+
+      {mode === 'page' ? (
+        <div className="rf2-req__foot">
+          <ButtonV2 kind="secondary" disabled={busy} onClick={requestClose}>Cancel</ButtonV2>
+          <ButtonV2 icon={<Upload />} loading={busy} disabled={!ready.length || parsing} onClick={() => void run()}>
+            {`Import ${ready.length} to Applied`}
+          </ButtonV2>
+        </div>
+      ) : null}
+    </div>
   );
+
+  const discardDialog = (
+    <DiscardChangesDialog
+      open={confirmDiscardOpen}
+      body="You have parsed CVs ready to import. If you leave now, these unsaved items will be discarded."
+      onKeepEditing={() => setConfirmDiscardOpen(false)}
+      onDiscard={() => {
+        setConfirmDiscardOpen(false);
+        onClose();
+      }}
+    />
+  );
+
+  if (mode === 'page') {
+    return (
+      <>
+        {content}
+        {discardDialog}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <DrawerV2
+        open
+        onClose={requestClose}
+        kicker={`Import CVs · ${jobTitle(job)}`}
+        title="Add candidates to Applied"
+        subtitle="Extract candidate details, validate skills & certifications against this role, and verify bank duplicates before importing."
+        primaryAction={
+          <ButtonV2 icon={<Upload />} loading={busy} disabled={!ready.length || parsing} onClick={() => void run()}>
+            {`Import ${ready.length} to Applied`}
+          </ButtonV2>
+        }
+        secondaryAction={<ButtonV2 kind="secondary" onClick={requestClose}>Cancel</ButtonV2>}
+      >
+        {content}
+      </DrawerV2>
+      {discardDialog}
+    </>
+  );
+}
+
+/** E11 Import CVs drawer wrapper (preserved for deep links at ?drawer=import). */
+export function ImportCvsDrawer({
+  job,
+  onClose,
+  onDone,
+  onImported,
+}: {
+  job: JobDetail;
+  onClose: () => void;
+  onDone: () => void;
+  onImported?: () => void;
+}) {
+  return <CvUploadCore job={job} mode="drawer" onClose={onClose} onDone={onDone} onImported={onImported} />;
 }
 
 function ImportRow({
@@ -475,6 +551,7 @@ function ImportRow({
   const pageReturn = usePageReturn();
   const [editing, setEditing] = useState(false);
   const [newSkill, setNewSkill] = useState('');
+  const [newCert, setNewCert] = useState('');
 
   const chip = {
     parsing: <StatusChip tone="neutral" label="Reading…" />,
@@ -517,6 +594,22 @@ function ImportRow({
   const removeSkill = (skill: string) => {
     if (!row.cv) return;
     onUpdateCv({ ...row.cv, skills: (row.cv.skills ?? []).filter((s) => s !== skill) });
+  };
+
+  const addCertification = () => {
+    if (!row.cv) return;
+    const clean = newCert.trim();
+    if (!clean) return;
+    const current = row.cv.certifications ?? [];
+    if (!current.some((c) => c.toLowerCase() === clean.toLowerCase())) {
+      onUpdateCv({ ...row.cv, certifications: [...current, clean] });
+    }
+    setNewCert('');
+  };
+
+  const removeCertification = (cert: string) => {
+    if (!row.cv) return;
+    onUpdateCv({ ...row.cv, certifications: (row.cv.certifications ?? []).filter((c) => c !== cert) });
   };
 
   const clearAllSkills = () => {
@@ -634,6 +727,18 @@ function ImportRow({
                         +{row.cv.skills.length - 8} more
                       </span>
                     ) : null}
+                  </span>
+                </dd>
+              </div>
+            ) : null}
+            {row.cv.certifications?.length ? (
+              <div>
+                <dt>Certifications</dt>
+                <dd>
+                  <span className="rf2-jimp__skill-pills">
+                    {row.cv.certifications.map((cert) => (
+                      <span key={cert} className="rf2-jimp__skill-pill">{cert}</span>
+                    ))}
                   </span>
                 </dd>
               </div>
@@ -804,6 +909,53 @@ function ImportRow({
                 </p>
               </div>
 
+              {/* Ticket 10: Extracted certifications editor */}
+              <div className="rf2-skills-box">
+                <div className="rf2-skills-box__head">
+                  <span className="rf2-skills-box__title">
+                    <CircleCheck aria-hidden="true" />
+                    <span>Certifications</span>
+                    <span className="rf2-skills-box__count">{row.cv.certifications?.length ?? 0}</span>
+                  </span>
+                </div>
+                <div className="rf2-skills-box__well">
+                  {row.cv.certifications && row.cv.certifications.length > 0 ? (
+                    row.cv.certifications.map((cert) => (
+                      <span key={cert} className="rf2-intake__tag">
+                        <span>{cert}</span>
+                        <button
+                          type="button"
+                          className="rf2-intake__tag-remove"
+                          aria-label={`Remove certification ${cert}`}
+                          onClick={() => removeCertification(cert)}
+                        >
+                          <X size={12} aria-hidden="true" />
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <p className="rf2-skills-box__empty">No certifications detected yet — add licenses or certificates below.</p>
+                  )}
+                </div>
+                <div className="rf2-intake__tag-add">
+                  <InputV2
+                    label="Add certification"
+                    value={newCert}
+                    onChange={(e) => setNewCert(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addCertification();
+                      }
+                    }}
+                    placeholder="e.g. BLS — AHA (2025), SCFHS"
+                  />
+                  <ButtonV2 kind="secondary" size="sm" icon={<Plus />} onClick={addCertification}>
+                    Add certification
+                  </ButtonV2>
+                </div>
+              </div>
+
               <div className="rf2-jimp__row-tools">
                 <ButtonV2 kind="secondary" size="sm" icon={<RefreshCw />} onClick={() => onRecheckDup(row.cv!)}>
                   Re-check duplicate
@@ -836,7 +988,10 @@ function ImportRow({
       {row.status === 'ready' && row.dup?.isDuplicate ? (
         <fieldset className="rf2-dup">
           <legend className="rf2-dup__legend">
-            <TriangleAlert aria-hidden="true" /> Already in the bank. It will be linked to the existing person, not copied (a second person with the same email or phone is not allowed).
+            <TriangleAlert aria-hidden="true" />{' '}
+            {row.dup.identityConflict
+              ? 'Identity conflict: email and phone match two different people in the bank. Review carefully and pick the right person manually.'
+              : 'Already in the bank. It will be linked to the existing person, not copied (a second person with the same email or phone is not allowed).'}
           </legend>
           {row.dup.matches.map((m) => (
             <label key={m.candidateId} className="rf2-dup__opt">

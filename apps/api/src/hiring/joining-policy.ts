@@ -71,10 +71,17 @@ export interface JoiningFacts {
   joinedHeadcount: number;
   approvedHeadcount: number;
   /**
-   * Meeting notes 2026-11-25 (item 3): Assessment interviews scheduled for this
-   * application. Empty when none was ever scheduled — the gate then passes.
+   * Ticket 04 / Meeting notes 2026-11-25 (item 3): Pre-Hire Assessment interviews
+   * scheduled for this application. Completing a first-stage interview does NOT satisfy
+   * a scheduled Pre-Hire assessment; every assigned interviewer on an active assessment
+   * must submit their scorecard before completing hire/joining.
    */
-  assessmentInterviews?: Array<{ title: string; status: string }>;
+  assessmentInterviews?: Array<{
+    title: string;
+    status: string;
+    attendeeCount?: number;
+    submittedScorecardCount?: number;
+  }>;
 }
 
 export interface JoiningBlock {
@@ -182,6 +189,29 @@ export function caseFingerprint(input: {
   return `profile:${input.snapshot.profile}|offer:${input.acceptedOfferVersionId ?? ''}|${checks}`;
 }
 
+export const preHireAssessmentQuery = {
+  where: { interviewType: 'Assessment', stageContext: 'Pre-Hire' },
+  select: {
+    title: true,
+    status: true,
+    attendees: { select: { userId: true } },
+    scorecards: { where: { status: 'Submitted' }, select: { interviewerId: true } },
+  },
+} as const;
+
+export function panelAssessmentFacts(interviews: LoadedApplication['interviews']) {
+  return (interviews ?? []).map((interview) => {
+    const submitted = new Set(interview.scorecards?.map((card) => card.interviewerId));
+    const panel = interview.attendees ?? [];
+    return {
+      title: interview.title,
+      status: interview.status,
+      attendeeCount: panel.length,
+      submittedScorecardCount: panel.filter((member) => submitted.has(member.userId)).length,
+    };
+  });
+}
+
 export function decideJoining(facts: JoiningFacts): JoiningDecision {
   const missing = (code: string, message: string, items: string[] = [], httpStatus: JoiningBlock['httpStatus'] = 409, gate?: string): JoiningBlock =>
     ({ ok: false, httpStatus, code, message, missing: items, ...(gate ? { gate } : {}) });
@@ -244,15 +274,19 @@ export function decideJoining(facts: JoiningFacts): JoiningDecision {
   if (facts.joinedHeadcount >= facts.approvedHeadcount) {
     return missing('CAPACITY_FULL', 'Approved capacity is already filled.', ['available seat'], 409, 'capacity');
   }
-  // Meeting notes 2026-11-25 (item 3): a scheduled Assessment interview is a joining
-  // gate — it must be Completed before Joined. A cancelled assessment does not block.
-  // Applications that never had one scheduled are unaffected. This runs AFTER the
-  // fingerprint comparison, so completing an assessment never stales a final approval.
-  const pendingAssessments = (facts.assessmentInterviews ?? []).filter((i) => i.status !== 'Completed' && i.status !== 'Cancelled');
+  const activeAssessments = (facts.assessmentInterviews ?? []).filter(
+    (interview) => interview.status !== 'Cancelled' && interview.status !== 'No-show',
+  );
+  if (!activeAssessments.length) {
+    return missing('GATE_ASSESSMENT_INCOMPLETE', 'Schedule and complete a pre-hire assessment before recording joining.', ['pre-hire assessment'], 409, 'assessment');
+  }
+  const pendingAssessments = activeAssessments.filter((i) =>
+    i.status !== 'Completed' || !i.attendeeCount || i.submittedScorecardCount !== i.attendeeCount,
+  );
   if (pendingAssessments.length) {
     return missing(
       'GATE_ASSESSMENT_INCOMPLETE',
-      `Joined needs the pre-hire assessment interview completed. Pending: ${pendingAssessments.map((i) => i.title).join(', ')}.`,
+      `Joined needs the pre-hire assessment interview completed with all assigned scorecards submitted. Pending: ${pendingAssessments.map((i) => i.title).join(', ')}.`,
       pendingAssessments.map((i) => i.title),
       409,
       'assessment',
@@ -288,8 +322,13 @@ interface LoadedApplication {
     approvals: Array<{ id: string; status: string; roleCode: string; invalidatedAt: Date | null; decisionFingerprint: string | null }>;
   };
   joiningChecks: JoiningCheckFact[];
-  // Meeting notes 2026-11-25 (item 3): Assessment interviews for the joining gate.
-  interviews?: Array<{ title: string; status: string }>;
+  // Ticket 04: Pre-Hire Assessment interviews for the joining gate (including panel scorecards).
+  interviews?: Array<{
+    title: string;
+    status: string;
+    attendees?: Array<{ userId: string }>;
+    scorecards?: Array<{ interviewerId: string }>;
+  }>;
 }
 
 /** Prisma's promise type is invariant, so the loader accepts the client structurally and narrows the row itself. */
@@ -317,8 +356,8 @@ export async function assertCanMarkJoined(tx: JoiningReadTx, args: {
       offers: { include: { versions: { where: { status: 'Accepted' }, select: { id: true, status: true, versionNumber: true }, orderBy: { versionNumber: 'desc' } } } },
       hiringCase: { include: { approvals: true } },
       joiningChecks: { select: { type: true, verified: true, expiryDate: true, documentId: true } },
-      // Meeting notes 2026-11-25 (item 3): Assessment interviews gate joining.
-      interviews: { where: { interviewType: 'Assessment' }, select: { title: true, status: true } },
+      // Ticket 04: Pre-Hire Assessment interviews gate joining (independent of first-stage interviews).
+      interviews: preHireAssessmentQuery,
     },
   }) as LoadedApplication | null;
   if (!application) throw new NotFoundException({ code: 'WRONG_ORGANIZATION', message: 'Hiring case not found.' });
@@ -340,7 +379,7 @@ export async function assertCanMarkJoined(tx: JoiningReadTx, args: {
     checks: application.joiningChecks,
     joinedHeadcount: application.vacancy.joinedHeadcount,
     approvedHeadcount: application.vacancy.approvedHeadcount,
-    assessmentInterviews: application.interviews ?? [],
+    assessmentInterviews: panelAssessmentFacts(application.interviews),
   });
   throwJoiningDecision(decision);
   return decision;

@@ -12,7 +12,7 @@ export interface VacancyCoreRepository {
   getContext(organizationId?: string, requesterUserId?: string): Promise<VacancyCoreContext>;
   listRequests(organizationId: string): Promise<VacancyRequest[]>;
   getRequest(organizationId: string, id: string): Promise<VacancyRequest | null>;
-  saveRequest(request: VacancyRequest): Promise<VacancyRequest>;
+  saveRequest(request: VacancyRequest, pendingApprovalId?: string): Promise<VacancyRequest>;
   saveRequestAndVacancy(
     request: VacancyRequest,
     vacancy: Vacancy,
@@ -24,6 +24,6 @@ export interface VacancyCoreRepository {
   saveVacancy(vacancy: Vacancy): Promise<Vacancy>;
   ensureUserInOrganization(organizationId: string, userId: string): Promise<void>;
   nextVacancyCode(): Promise<string>;
-  getApproverInbox(organizationId: string, userRoleCodes: string[]): Promise<VacancyRequest[]>;
+  getApproverInbox(organizationId: string, userRoleCodes: string[], userId?: string): Promise<VacancyRequest[]>;
   getVacancyDetail(organizationId: string, id: string): Promise<VacancyDetailView | null>;
 }

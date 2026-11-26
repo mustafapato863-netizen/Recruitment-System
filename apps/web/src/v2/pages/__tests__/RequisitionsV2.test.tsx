@@ -224,13 +224,13 @@ describe('M1 requisitions list', () => {
 });
 
 describe('M03 requisition drawer', () => {
-  it('B2F-5 new: due date required (Save/Activate disabled), no Submit for approval; Activate creates then activates', async () => {
+  it('B2F-5 new: incomplete draft can be saved (Ticket 01), Activate requires due date and creates then activates', async () => {
     const u = userEvent.setup();
     api.postApi.mockImplementation(async (p: string) => (p === '/vacancy-requests' ? { ...fx.requisitions[3], id: 'r-new' } : { request: { id: 'r-new', status: 'Converted to Vacancy' } }));
     const { baseElement } = renderAt();
     await u.click(await screen.findByRole('button', { name: 'New requisition' }));
     const d = await screen.findByRole('dialog', { name: 'New requisition' });
-    expect(within(d).getByRole('button', { name: 'Save draft' })).toBeDisabled();
+    expect(within(d).getByRole('button', { name: 'Save draft' })).toBeEnabled();
     expect(within(d).getByRole('button', { name: 'Activate job' })).toBeDisabled();
     expect(within(d).queryByRole('button', { name: /Submit for approval/ })).toBeNull();
     await u.selectOptions(within(d).getByLabelText(/^Title/), 'p-payroll');
@@ -242,9 +242,15 @@ describe('M03 requisition drawer', () => {
     expect(within(d).queryByRole('option', { name: /Old Recruiter/ })).toBeNull();
     expect(await axeViolations(baseElement)).toEqual([]);
     await u.click(within(d).getByRole('button', { name: 'Activate job' }));
+    expect(within(d).getByText('Minimum salary is required before submitting.')).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalledWith('/vacancy-requests/r-new/activate', expect.anything());
+    await u.type(within(d).getByLabelText(/^Minimum salary/), '10000');
+    await u.type(within(d).getByLabelText(/^Maximum salary/), '15000');
+    await u.click(within(d).getByRole('button', { name: 'Activate job' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r-new/activate', { assignedEmployeeId: 'u-youssef' }));
-    // Meeting notes 2026-11-25 (item 1): the drawer now sends the opening details too.
-    expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests', { positionId: 'p-payroll', branchId: 'b-riyadh', requestedHeadcount: 1, dueDate: '2099-11-20', gradeId: 'g7', assignedEmployeeId: 'u-youssef', justification: null, openingType: 'New position', replacedEmployeeId: null, employmentType: null, reason: null, reasonNote: null, nationalityPreference: [] });
+    expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests', expect.objectContaining({
+      positionId: 'p-payroll', branchId: 'b-riyadh', requestedHeadcount: 1, dueDate: '2099-11-20', gradeId: 'g7', assignedEmployeeId: 'u-youssef', justification: null, openingType: 'New position', employmentType: null, reason: null, reasonNote: null, nationalityPreference: [],
+    }));
     expect(api.postApi).not.toHaveBeenCalledWith(expect.stringMatching(/\/submit$/), expect.anything());
     expect(await screen.findByRole('status')).toHaveTextContent('Job active — Payroll Systems Analyst is now in Youssef Ibrahim’s Open jobs.');
   });
@@ -441,16 +447,27 @@ describe('M1 CoS follow-ups', () => {
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r421/submit', {}));
     expect(api.postApi).not.toHaveBeenCalledWith(expect.stringMatching(/\/activate$/), expect.anything());
   });
-  it('pending approval is decided only with VACANCY_REQUEST_APPROVE', async () => {
+  it('pending approval is decided only with VACANCY_REQUEST_APPROVE and never by the requester (Ticket 16)', async () => {
     const u = userEvent.setup();
-    serve({ '/vacancy-requests': fx.requisitions.map((r) => (r.id === 'r421' ? { ...r, status: 'Pending Approval', dueDate: '2099-11-20', targetFillDate: '2099-11-20' } : r)) });
+    serve({ '/vacancy-requests': fx.requisitions.map((r) => (r.id === 'r421' ? { ...r, requesterId: 'u-youssef', status: 'Pending Approval', dueDate: '2099-11-20', targetFillDate: '2099-11-20' } : r)) });
     const { unmount } = renderAt('/vacancy-requests?req=r421');
     const waiting = await screen.findByRole('dialog');
     expect(waiting).toHaveTextContent('Waiting on approval');
     expect(within(waiting).queryByRole('button', { name: 'Approve' })).toBeNull();
     expect(within(waiting).queryByRole('button', { name: 'Activate job' })).toBeNull();
     unmount();
+
+    // Ticket 16: even with VACANCY_REQUEST_APPROVE, requester cannot approve own submission.
     auth.perms = ['VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE', 'VACANCY_MANAGE', 'VACANCY_REQUEST_APPROVE'];
+    serve({ '/vacancy-requests': fx.requisitions.map((r) => (r.id === 'r421' ? { ...r, requesterId: 'u-karim', status: 'Pending Approval', dueDate: '2099-11-20', targetFillDate: '2099-11-20' } : r)) });
+    const own = renderAt('/vacancy-requests?req=r421');
+    const ownDialog = await screen.findByRole('dialog');
+    expect(ownDialog).toHaveTextContent(/awaiting independent approval/i);
+    expect(within(ownDialog).queryByRole('button', { name: 'Approve' })).toBeNull();
+    own.unmount();
+
+    // Independent manager can decide a report's pending submission.
+    serve({ '/vacancy-requests': fx.requisitions.map((r) => (r.id === 'r421' ? { ...r, requesterId: 'u-youssef', status: 'Pending Approval', dueDate: '2099-11-20', targetFillDate: '2099-11-20' } : r)) });
     api.postApi.mockResolvedValue({ id: 'r421', status: 'Changes Requested' });
     renderAt('/vacancy-requests?req=r421');
     const d = await screen.findByRole('dialog');
@@ -600,33 +617,36 @@ describe('M05–M09 requisition cluster', () => {
     expect(screen.queryByRole('button', { name: 'Close / cancel requisition' })).toBeNull();
   });
 
-  it('saves an editable requisition and restores the last saved values', async () => {
+  it('saves an editable requisition and restores the last saved values via in-app dialog (Ticket 06)', async () => {
     const u = userEvent.setup();
     api.patchApi.mockResolvedValue({ id: 'r421' });
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirmSpy = vi.spyOn(window, 'confirm');
     try {
-    renderAt('/vacancy-requests?req=r421&drawer=edit');
-    const impact = await screen.findByRole('region', { name: 'Change impact' });
-    expect(impact).toHaveTextContent('No unsaved changes.');
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
-    await u.clear(screen.getByLabelText(/^Seats/));
-    await u.type(screen.getByLabelText(/^Seats/), '2');
-    await u.type(screen.getByLabelText(/^Due date/), '2099-11-20');
-    expect(impact).toHaveTextContent('Seats: 1 → 2');
-    await u.click(screen.getByRole('button', { name: 'Reset to last saved' }));
-    expect(confirm).toHaveBeenCalled();
-    expect(screen.getByLabelText(/^Seats/)).toHaveValue(1);
-    expect(screen.getByLabelText(/^Due date/)).toHaveValue('');
-    await u.clear(screen.getByLabelText(/^Seats/));
-    await u.type(screen.getByLabelText(/^Seats/), '2');
-    await u.type(screen.getByLabelText(/^Due date/), '2099-11-20');
-    await u.click(screen.getByRole('button', { name: 'Save changes' }));
-    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/vacancy-requests/r421', expect.objectContaining({
-      positionId: 'p-payroll', branchId: 'b-riyadh', requestedHeadcount: 2, dueDate: '2099-11-20', assignedEmployeeId: 'u-youssef',
-    })));
-    expect(await screen.findByRole('status')).toHaveTextContent('Payroll Systems Analyst changes saved.');
+      renderAt('/vacancy-requests?req=r421&drawer=edit');
+      const impact = await screen.findByRole('region', { name: 'Change impact' });
+      expect(impact).toHaveTextContent('No unsaved changes.');
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+      await u.clear(screen.getByLabelText(/^Seats/));
+      await u.type(screen.getByLabelText(/^Seats/), '2');
+      await u.type(screen.getByLabelText(/^Due date/), '2099-11-20');
+      expect(impact).toHaveTextContent('Seats: 1 → 2');
+      await u.click(screen.getByRole('button', { name: 'Reset to last saved' }));
+      expect(confirmSpy).not.toHaveBeenCalled();
+      const alertDialog = await screen.findByRole('alertdialog', { name: 'Discard unsaved changes?' });
+      expect(within(alertDialog).getByRole('button', { name: 'Keep editing' })).toHaveFocus();
+      await u.click(within(alertDialog).getByRole('button', { name: 'Discard changes' }));
+      expect(screen.getByLabelText(/^Seats/)).toHaveValue(1);
+      expect(screen.getByLabelText(/^Due date/)).toHaveValue('');
+      await u.clear(screen.getByLabelText(/^Seats/));
+      await u.type(screen.getByLabelText(/^Seats/), '2');
+      await u.type(screen.getByLabelText(/^Due date/), '2099-11-20');
+      await u.click(screen.getByRole('button', { name: 'Save changes' }));
+      await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/vacancy-requests/r421', expect.objectContaining({
+        positionId: 'p-payroll', branchId: 'b-riyadh', requestedHeadcount: 2, dueDate: '2099-11-20', assignedEmployeeId: 'u-youssef',
+      })));
+      expect(await screen.findByRole('status')).toHaveTextContent('Payroll Systems Analyst changes saved.');
     } finally {
-      confirm.mockRestore();
+      confirmSpy.mockRestore();
     }
   });
 
@@ -1038,5 +1058,56 @@ describe('Jobs and requisitions desk', () => {
     });
 
     expect(await axeViolations(baseElement)).toEqual([]);
+  });
+
+  it('Tickets 01, 03, 06, 16: salary range validation on submit, replacement without employee picker, in-app discard dialog, and missing manager link', async () => {
+    const u = userEvent.setup();
+    auth.perms = ['VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE'];
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    try {
+      renderAt('/vacancy-requests');
+      await u.click(await screen.findByRole('button', { name: 'New requisition' }));
+      const drawer = await screen.findByRole('dialog', { name: 'New requisition' });
+
+      // Ticket 03: selecting Replacement does not render an Employee being replaced picker.
+      await u.selectOptions(within(drawer).getByLabelText(/^Opening type/), 'Replacement');
+      expect(within(drawer).queryByLabelText(/Employee being replaced/i)).toBeNull();
+
+      // Ticket 06: dirty close opens in-app Discard unsaved changes? dialog with focus on Keep editing; Escape cancels.
+      await u.click(within(drawer).getByRole('button', { name: 'Close' }));
+      expect(confirmSpy).not.toHaveBeenCalled();
+      const alert = await screen.findByRole('alertdialog', { name: 'Discard unsaved changes?' });
+      expect(within(alert).getByRole('button', { name: 'Keep editing' })).toHaveFocus();
+      await u.keyboard('{Escape}');
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+      expect(screen.getByRole('dialog', { name: 'New requisition' })).toBeInTheDocument();
+
+      // Ticket 01: employee Submit for approval requires salary range and rejects max < min.
+      await u.selectOptions(within(drawer).getByLabelText(/^Title/), 'p-payroll');
+      await u.selectOptions(within(drawer).getByLabelText(/^Site/), 'b-riyadh');
+      await u.type(within(drawer).getByLabelText(/^Due date/), '2099-11-20');
+      await u.click(within(drawer).getByRole('button', { name: 'Submit for approval' }));
+      expect(await within(drawer).findByText(/Minimum salary is required/i)).toBeInTheDocument();
+      expect(within(drawer).getByText(/Maximum salary is required/i)).toBeInTheDocument();
+
+      await u.type(within(drawer).getByLabelText(/^Minimum salary/), '20000');
+      await u.type(within(drawer).getByLabelText(/^Maximum salary/), '15000');
+      await u.click(within(drawer).getByRole('button', { name: 'Submit for approval' }));
+      expect(await within(drawer).findByText(/greater than or equal to minimum/i)).toBeInTheDocument();
+
+      await u.clear(within(drawer).getByLabelText(/^Maximum salary/));
+      await u.type(within(drawer).getByLabelText(/^Maximum salary/), '25000');
+      await u.selectOptions(within(drawer).getByLabelText(/^Currency/), 'SAR');
+
+      // Ticket 16: missing reporting manager surfaces link to /users.
+      api.postApi.mockImplementation(async (p: string) => {
+        if (p === '/vacancy-requests') return { ...fx.requisitions[3], id: 'r-emp-1' };
+        throw new ApiError(409, 'No eligible approving manager is assigned to your account.', { code: 'APPROVAL_MANAGER_MISSING', message: 'No eligible approving manager is assigned to your account.' }, { code: 'APPROVAL_MANAGER_MISSING' });
+      });
+      await u.click(within(drawer).getByRole('button', { name: 'Submit for approval' }));
+      expect(await within(drawer).findByRole('link', { name: /Users & Access/i })).toHaveAttribute('href', '/users');
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 });

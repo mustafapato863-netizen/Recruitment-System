@@ -19,6 +19,8 @@ export { TabsV2, TabPanelV2 } from './Tabs';
 export type { TabV2Item } from './Tabs';
 export { DrawerV2 } from './Drawer';
 export type { DrawerV2Props, DrawerStatus } from './Drawer';
+export { DiscardChangesDialog } from './DiscardChangesDialog';
+export type { DiscardChangesDialogProps } from './DiscardChangesDialog';
 export { UserPicker, createUsersAdapter, assignableUsersAdapter, interviewersAdapter, toUserOption, initials } from './UserPicker';
 export type { UserPickerProps, UserPickerAdapter, UserOption } from './UserPicker';
 export * from './Task';

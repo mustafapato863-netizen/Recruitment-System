@@ -28,6 +28,7 @@ import '../pages/jobs.css';
 import '../pages/team.css';
 import './admin.css';
 import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
+import { OperationalReportsPanel } from '../components/OperationalReportsPanel';
 
 const shift = (m: string, n: number) => {
   const d = new Date(`${m}-15T12:00:00Z`);
@@ -710,6 +711,14 @@ export function AdminReportsV2() {
           Live cohort: measures reflect current state of records dated in {monthLabel(month)} (Africa/Cairo). Sample shows follow-up files, screening logs, and sent offer versions. No previous period — no comparison is shown. No call, message or CV-view counts.
         </p>
       </section>
+
+      <OperationalReportsPanel
+        defaultOpen={false}
+        filters={{
+          month,
+          branchId: site !== 'all' ? site : null,
+        }}
+      />
 
       {overriding ? (
         <OverrideDrawer

@@ -287,16 +287,105 @@ export class VacancyCoreService {
     return { request: saved, ...(job ? { vacancy: job } : {}), idempotent: changes.length === 0 };
   }
 
-  async getRequest(organizationId: string, id: string): Promise<VacancyRequest> {
+  /** Ticket 16: resolve the active, non-self reporting manager for a submitter/requester. */
+  private async resolveApprovingManager(
+    organizationId: string,
+    submitterId: string,
+    requesterId: string,
+  ): Promise<{ id: string } | null> {
+    if (typeof this.prisma.user?.findFirst !== 'function' && typeof this.prisma.user?.findUnique !== 'function') {
+      return null;
+    }
+    const loadManagerId = async (userId: string): Promise<string | null> => {
+      if (typeof this.prisma.user?.findFirst === 'function') {
+        const row = await this.prisma.user.findFirst({
+          where: { id: userId, organizationId },
+          select: { managerId: true },
+        });
+        return row?.managerId ?? null;
+      }
+      const row = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { managerId: true },
+      });
+      return row?.managerId ?? null;
+    };
+
+    const candidateId =
+      (await loadManagerId(submitterId))
+      ?? (requesterId !== submitterId ? await loadManagerId(requesterId) : null);
+    if (!candidateId || candidateId === submitterId || candidateId === requesterId) {
+      return null;
+    }
+    if (typeof this.prisma.user?.findFirst === 'function') {
+      const manager = await this.prisma.user.findFirst({
+        where: { id: candidateId, organizationId, status: 'Active' },
+        select: { id: true },
+      });
+      return manager ?? null;
+    }
+    const manager = await this.prisma.user.findUnique({
+      where: { id: candidateId },
+      select: { id: true, status: true, organizationId: true },
+    });
+    if (!manager || manager.status !== 'Active' || manager.organizationId !== organizationId) {
+      return null;
+    }
+    return { id: manager.id };
+  }
+
+  /** Ticket 16: check whether `targetUserId` reports (directly or transitively) to `managerId`. */
+  private async isInReportingTree(organizationId: string, managerId: string, targetUserId: string | null | undefined): Promise<boolean> {
+    if (!targetUserId || targetUserId === managerId) return false;
+    if (typeof this.prisma.user?.findFirst !== 'function') return false;
+    let current: string | null = targetUserId;
+    for (let hop = 0; hop < 4 && current; hop += 1) {
+      const row: { managerId: string | null } | null = await this.prisma.user.findFirst({
+        where: { id: current, organizationId },
+        select: { managerId: true },
+      });
+      current = row?.managerId ?? null;
+      if (current === managerId) return true;
+    }
+    return false;
+  }
+
+  async getRequest(organizationId: string, id: string, user?: AuthUser): Promise<VacancyRequest> {
     const request = await this.repository.getRequest(organizationId, id);
     if (!request) {
       throw new NotFoundException(`Vacancy request ${id} was not found.`);
     }
+    if (user && !user.roleCodes.includes('ADMINISTRATOR')) {
+      const isDirectParticipant =
+        request.requesterId === user.userId ||
+        request.submittedById === user.userId ||
+        request.assignedEmployeeId === user.userId;
+      const pendingStep = [...request.approvals]
+        .reverse()
+        .find((a) => a.revision === request.approvalRevision && a.status === 'Pending');
+      const isPendingApprover = Boolean(
+        pendingStep &&
+          (pendingStep.assigneeUserId === user.userId ||
+            (pendingStep.assigneeUserId === null && user.roleCodes.includes(pendingStep.roleCode))),
+      );
+      if (!isDirectParticipant && !isPendingApprover) {
+        const inRequesterTree = await this.isInReportingTree(organizationId, user.userId, request.requesterId);
+        const inAssigneeTree = await this.isInReportingTree(organizationId, user.userId, request.assignedEmployeeId);
+        if (!inRequesterTree && !inAssigneeTree) {
+          throw new ForbiddenException({
+            code: 'FORBIDDEN',
+            message: 'You are not authorized to view this vacancy request.',
+          });
+        }
+      }
+    }
     // B2-16: the drawer shows the primary recruiter (the job's owner once active, else the assigned employee).
-    const people = await this.prisma.vacancyRequest.findFirst({ where: { id, organizationId }, select: {
-      assignedEmployee: { select: { id: true, displayName: true } },
-      vacancy: { select: { assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, take: 1, select: { user: { select: { id: true, displayName: true } } } } } },
-    } });
+    const people = typeof this.prisma.vacancyRequest?.findFirst === 'function'
+      ? await this.prisma.vacancyRequest.findFirst({ where: { id, organizationId }, select: {
+          assignedEmployee: { select: { id: true, displayName: true } },
+          vacancy: { select: { assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, take: 1, select: { user: { select: { id: true, displayName: true } } } } } },
+        } })
+      : null;
     return { ...request, primaryRecruiter: people ? primaryRecruiterOf(people) : null } as VacancyRequest;
   }
 
@@ -485,10 +574,8 @@ export class VacancyCoreService {
     input: CreateVacancyRequestDto,
   ): Promise<VacancyRequest> {
     const openingType = input.openingType ?? 'New position';
+    // Ticket 03: replacement requests do not require selecting a replaced employee.
     const replacedEmployeeId = openingType === 'Replacement' ? (input.replacedEmployeeId ?? null) : null;
-    if (openingType === 'Replacement' && !replacedEmployeeId) {
-      throw new BadRequestException({ code: 'REPLACED_EMPLOYEE_REQUIRED', field: 'replacedEmployeeId', message: 'A replacement opening needs the employee being replaced.' });
-    }
     if (replacedEmployeeId) await this.assertReplacedEmployee(organizationId, replacedEmployeeId);
     const payload: CreateVacancyRequestInput = {
       organizationId,
@@ -505,6 +592,7 @@ export class VacancyCoreService {
       budgetMin: input.budgetMin ?? null,
       budgetMax: input.budgetMax ?? null,
       budgetCurrency: input.budgetCurrency ?? null,
+      budgetPeriod: input.budgetPeriod ?? null,
       criticality: input.criticality ?? null,
       targetStartDate: input.targetStartDate ?? null,
       targetFillDate: input.targetFillDate ?? null,
@@ -581,17 +669,30 @@ export class VacancyCoreService {
   }
 
   private validateRequestPlan(
-    request: Partial<Pick<VacancyRequest, 'budgetMin' | 'budgetMax' | 'budgetCurrency' | 'budgetStatus' | 'recruitmentTiming' | 'plannedOpenDate' | 'targetFillDate'>>,
+    request: Partial<Pick<VacancyRequest, 'budgetMin' | 'budgetMax' | 'budgetCurrency' | 'budgetPeriod' | 'budgetStatus' | 'recruitmentTiming' | 'plannedOpenDate' | 'targetFillDate'>>,
     required: boolean,
   ): void {
-    const hasAnyBudgetValue = request.budgetMin != null || request.budgetMax != null || Boolean(request.budgetCurrency);
-    // A declared budget (status or any amount) must be a complete range. A hiring plan
-    // that never recorded pay can still be submitted for approval.
-    const budgetDeclared = Boolean(request.budgetStatus) || hasAnyBudgetValue;
-    if (((required && budgetDeclared) || hasAnyBudgetValue) &&
-      (request.budgetMin == null || request.budgetMax == null || !request.budgetCurrency ||
-        request.budgetMin <= 0 || request.budgetMax < request.budgetMin)) {
-      throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'budgetMin', message: 'Enter a valid budget range from minimum to maximum and select AED or EGP.' });
+    // Ticket 01: incomplete drafts may omit salary bounds, but any provided value must be valid.
+    if (request.budgetMin != null && request.budgetMin <= 0) {
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'budgetMin', message: 'Minimum salary must be greater than zero (valid budget range required).' });
+    }
+    if (request.budgetMax != null && request.budgetMax <= 0) {
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'budgetMax', message: 'Maximum salary must be greater than zero (valid budget range required).' });
+    }
+    if (request.budgetMin != null && request.budgetMax != null && request.budgetMax < request.budgetMin) {
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'budgetMax', message: 'Enter a valid salary budget range where maximum is greater than or equal to minimum.' });
+    }
+    // Ticket 01: submission requires complete minimum salary, maximum salary, and currency.
+    if (required) {
+      if (request.budgetMin == null) {
+        throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'budgetMin', message: 'Enter a valid salary budget range from minimum to maximum and select a currency before submitting.' });
+      }
+      if (request.budgetMax == null) {
+        throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'budgetMax', message: 'Enter a valid salary budget range from minimum to maximum and select a currency before submitting.' });
+      }
+      if (!request.budgetCurrency) {
+        throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'budgetCurrency', message: 'Select a currency for the salary budget range before submitting.' });
+      }
     }
     if (required && !request.targetFillDate) {
       throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'targetFillDate', message: 'Choose when recruitment starts and a target fill date before submitting.' });
@@ -622,11 +723,8 @@ export class VacancyCoreService {
     if (input.positionId !== undefined) request.positionId = input.positionId;
     if (input.requestedHeadcount !== undefined) request.requestedHeadcount = input.requestedHeadcount;
     if (input.employmentType !== undefined) request.employmentType = input.employmentType;
-    // Meeting notes 2026-11-25 (item 1): opening type + replaced employee + nationality preference.
+    // Ticket 03: replacement requests no longer require replacedEmployeeId; preserve any historical value unless switching to New position.
     if (input.openingType !== undefined) request.openingType = input.openingType;
-    if (input.openingType === 'Replacement' && input.replacedEmployeeId === undefined && !request.replacedEmployeeId) {
-      throw new BadRequestException({ code: 'REPLACED_EMPLOYEE_REQUIRED', field: 'replacedEmployeeId', message: 'A replacement opening needs the employee being replaced.' });
-    }
     if (input.replacedEmployeeId !== undefined) {
       if (request.openingType === 'Replacement' && input.replacedEmployeeId) await this.assertReplacedEmployee(organizationId, input.replacedEmployeeId);
       request.replacedEmployeeId = request.openingType === 'Replacement' ? input.replacedEmployeeId : null;
@@ -641,6 +739,7 @@ export class VacancyCoreService {
     if (input.budgetMin !== undefined) request.budgetMin = input.budgetMin;
     if (input.budgetMax !== undefined) request.budgetMax = input.budgetMax;
     if (input.budgetCurrency !== undefined) request.budgetCurrency = input.budgetCurrency;
+    if (input.budgetPeriod !== undefined) request.budgetPeriod = input.budgetPeriod;
     if (input.criticality !== undefined) request.criticality = input.criticality;
     if (input.targetStartDate !== undefined) request.targetStartDate = input.targetStartDate;
     if (input.targetFillDate !== undefined) request.targetFillDate = input.targetFillDate;
@@ -693,16 +792,32 @@ export class VacancyCoreService {
         ? request.approvalRevision + 1
         : request.approvalRevision;
 
+    // Ticket 16: route Step 1 directly to the submitter/requester's active reporting manager.
+    const hasUserDirectory =
+      typeof this.prisma.user?.findFirst === 'function' ||
+      typeof this.prisma.user?.findUnique === 'function';
+    const approvingManager = hasUserDirectory
+      ? await this.resolveApprovingManager(organizationId, actorUserId, request.requesterId)
+      : null;
+    if (hasUserDirectory && !approvingManager) {
+      throw new ConflictException({
+        code: 'APPROVAL_MANAGER_MISSING',
+        message:
+          'No eligible approving manager is assigned to your account. Ask an administrator to assign your reporting manager in Users & Access (/users) before submitting.',
+      });
+    }
+
     request.status = 'Pending Approval';
     request.approvalRevision = revision;
     request.submittedAt = now;
+    request.submittedById = actorUserId;
     request.updatedAt = now;
     request.approvals.push({
       id: randomUUID(),
       revision,
       step: 1,
       roleCode: 'HIRING_MANAGER',
-      assigneeUserId: null,
+      assigneeUserId: approvingManager?.id ?? null,
       status: 'Pending',
       comment: action?.comment ?? null,
       decidedAt: null,
@@ -711,18 +826,30 @@ export class VacancyCoreService {
 
     const savedRequest = await this.repository.saveRequest(request);
 
-    const stepRoleUserIds = await this.findActiveRoleUserIds(organizationId, 'HIRING_MANAGER');
-    for (const recipientUserId of stepRoleUserIds) {
-      if (recipientUserId === actorUserId) continue;
+    if (approvingManager) {
       await this.notify({
         organizationId,
-        recipientUserId,
+        recipientUserId: approvingManager.id,
         type: 'VacancyRequestSubmitted',
         title: 'Vacancy request awaiting approval',
-        message: `Request ${request.requestCode} was submitted and is pending hiring-manager approval.`,
+        message: `Request ${request.requestCode} was submitted and is pending your approval.`,
         entityType: 'VacancyRequest',
         entityId: request.id,
       });
+    } else {
+      const stepRoleUserIds = await this.findActiveRoleUserIds(organizationId, 'HIRING_MANAGER');
+      for (const recipientUserId of stepRoleUserIds) {
+        if (recipientUserId === actorUserId || recipientUserId === request.requesterId) continue;
+        await this.notify({
+          organizationId,
+          recipientUserId,
+          type: 'VacancyRequestSubmitted',
+          title: 'Vacancy request awaiting approval',
+          message: `Request ${request.requestCode} was submitted and is pending hiring-manager approval.`,
+          entityType: 'VacancyRequest',
+          entityId: request.id,
+        });
+      }
     }
 
     return savedRequest;
@@ -934,6 +1061,7 @@ export class VacancyCoreService {
     if (!request.targetFillDate) {
       throw new BadRequestException({ code: 'DUE_DATE_REQUIRED', field: 'targetFillDate', message: `Request ${request.requestCode} needs a due date before activation.` });
     }
+    this.validateRequestPlan(request, true);
     const assigneeId = input.assignedEmployeeId ?? request.assignedEmployeeId ?? null;
     if (!assigneeId) {
       throw new BadRequestException({ code: 'ASSIGNEE_REQUIRED', field: 'assignedEmployeeId', message: `Request ${request.requestCode} needs an assigned employee before activation.` });
@@ -1050,16 +1178,49 @@ export class VacancyCoreService {
       );
     }
 
-    const isAuthorized =
-      actorRoleCodes.includes(approval.roleCode) ||
-      actorRoleCodes.includes('ADMINISTRATOR') ||
-      approval.assigneeUserId === actorUserId;
+    // Ticket 16: never allow self-approval — even for users with multiple roles or ADMINISTRATOR.
+    if (
+      actorUserId === request.requesterId ||
+      (request.submittedById && actorUserId === request.submittedById)
+    ) {
+      throw new ForbiddenException({
+        code: 'SELF_APPROVAL_FORBIDDEN',
+        message: 'You cannot approve, reject, or request changes on a requisition you created or submitted.',
+      });
+    }
+    const alreadyDecidedEarlierStep = request.approvals.some(
+      (candidate) =>
+        candidate.revision === request.approvalRevision &&
+        candidate.status !== 'Pending' &&
+        candidate.assigneeUserId === actorUserId,
+    );
+    if (alreadyDecidedEarlierStep) {
+      throw new ForbiddenException({
+        code: 'SELF_APPROVAL_FORBIDDEN',
+        message: 'You already decided an earlier approval step for this revision.',
+      });
+    }
+
+    const isAdmin = actorRoleCodes.includes('ADMINISTRATOR');
+    let isAuthorized: boolean;
+    if (approval.assigneeUserId) {
+      // Explicit manager assignment: only the assigned approver or an admin (never self) may decide.
+      isAuthorized = approval.assigneeUserId === actorUserId || isAdmin;
+    } else if (approval.roleCode === 'HIRING_MANAGER' && !isAdmin) {
+      // Legacy unassigned Step 1: must hold HIRING_MANAGER and be in the requester's reporting tree.
+      isAuthorized =
+        actorRoleCodes.includes('HIRING_MANAGER') &&
+        (await this.isInReportingTree(organizationId, actorUserId, request.requesterId));
+    } else {
+      isAuthorized = actorRoleCodes.includes(approval.roleCode) || isAdmin;
+    }
 
     if (!isAuthorized) {
       throw new ForbiddenException('You are not authorized for the current approval step.');
     }
 
     const now = new Date().toISOString();
+
     approval.status = outcome;
     approval.comment = action.comment ?? null;
     approval.decidedAt = now;
@@ -1090,7 +1251,7 @@ export class VacancyCoreService {
 
     request.updatedAt = now;
 
-    const savedRequest = await this.repository.saveRequest(request);
+    const savedRequest = await this.repository.saveRequest(request, approval.id);
 
     if (request.requesterId !== actorUserId) {
       const outcomeCopy =
@@ -1147,8 +1308,8 @@ export class VacancyCoreService {
     return request;
   }
 
-  async getApproverInbox(organizationId: string, userRoleCodes: string[]): Promise<VacancyRequest[]> {
-    return this.repository.getApproverInbox(organizationId, userRoleCodes);
+  async getApproverInbox(organizationId: string, userRoleCodes: string[], userId?: string): Promise<VacancyRequest[]> {
+    return this.repository.getApproverInbox(organizationId, userRoleCodes, userId);
   }
 
   async getVacancyDetail(organizationId: string, id: string, user?: AuthUser): Promise<VacancyDetailView | RedactedVacancy | null> {

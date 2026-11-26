@@ -88,7 +88,15 @@ export class ScreeningService {
     }
 
     const rawCurrency = dto.salaryCurrency?.trim().toUpperCase();
-    const normalizedCurrency = rawCurrency === 'EGP' || rawCurrency === 'EGY' ? 'EGP' : 'AED';
+    const normalizedCurrency =
+      rawCurrency === 'EGP' || rawCurrency === 'EGY'
+        ? 'EGP'
+        : rawCurrency === 'SAR'
+          ? 'SAR'
+          : rawCurrency === 'USD'
+            ? 'USD'
+            : 'AED';
+    const normalizedPeriod = dto.salaryPeriod === 'Annual' ? 'Annual' : 'Monthly';
 
     const created = await this.prisma.screeningLog.create({
       data: {
@@ -98,9 +106,12 @@ export class ScreeningService {
         outcome: dto.outcome,
         notes: dto.notes?.trim() ?? null,
         noticePeriodDays: dto.noticePeriodDays ?? null,
-        expectedSalary: options.viewSalary ? (dto.expectedSalary ?? null) : null,
+        // Ticket 11: expectedSalary is always stored when recorded during screening (required before Interview).
+        // currentSalary remains gated by VIEW_CURRENT_SALARY.
+        expectedSalary: dto.expectedSalary ?? null,
         currentSalary: options.viewSalary ? (dto.currentSalary ?? null) : null,
-        salaryCurrency: options.viewSalary ? normalizedCurrency : 'AED',
+        salaryCurrency: normalizedCurrency,
+        salaryPeriod: normalizedPeriod,
         method: blankToNull(dto.method),
         evidenceSource: blankToNull(dto.evidenceSource),
         nextStep: blankToNull(dto.nextStep),
@@ -170,6 +181,103 @@ export class ScreeningService {
       data: { outcome: DISCARDED_DRAFT },
     });
     return { deleted: result.count > 0 };
+  }
+
+  /**
+   * Ticket 11: Authorized Screening page context.
+   * Returns the vacancy's salary range (from its requisition) and the candidate's
+   * latest recorded expected salary + range-fit evaluation without exposing currentSalary
+   * or other candidates' offers.
+   */
+  async getScreeningContext(
+    organizationId: string,
+    applicationId: string,
+    user?: AuthUser,
+  ): Promise<{
+    applicationId: string;
+    stage: string;
+    version: number;
+    candidateName: string;
+    positionTitle: string;
+    vacancySalaryRange: { min: number; max: number; currency: string; period: 'Monthly' | 'Annual' } | null;
+    latestExpectedSalary: { amount: number; currency: string; period: 'Monthly' | 'Annual' } | null;
+    salaryFit: 'below' | 'within' | 'above' | 'incomparable' | 'range-missing' | 'not-recorded';
+  }> {
+    if (user) await this.accessControl.assertApplicationAccess(user, applicationId);
+    const visibility = user
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    const app = await this.prisma.application.findFirst({
+      where: { AND: [visibility, { id: applicationId, organizationId }] },
+      include: {
+        candidate: { select: { firstName: true, lastName: true } },
+        vacancy: {
+          select: {
+            position: { select: { title: true } },
+            vacancyRequest: {
+              select: { budgetMin: true, budgetMax: true, budgetCurrency: true, budgetPeriod: true },
+            },
+          },
+        },
+        screeningLogs: {
+          where: { expectedSalary: { not: null } },
+          orderBy: { screenedAt: 'desc' },
+          take: 1,
+          select: { expectedSalary: true, salaryCurrency: true, salaryPeriod: true },
+        },
+      },
+    });
+    if (!app) throw new NotFoundException(`Application ${applicationId} was not found.`);
+
+    const req = app.vacancy?.vacancyRequest;
+    const vacancySalaryRange =
+      req && req.budgetMin != null && req.budgetMax != null && req.budgetCurrency
+        ? {
+            min: Number(req.budgetMin),
+            max: Number(req.budgetMax),
+            currency: req.budgetCurrency,
+            period: (req.budgetPeriod === 'Annual' ? 'Annual' : 'Monthly') as 'Monthly' | 'Annual',
+          }
+        : null;
+
+    const latest = app.screeningLogs?.[0] ?? null;
+    const latestExpectedSalary =
+      latest && latest.expectedSalary != null
+        ? {
+            amount: Number(latest.expectedSalary),
+            currency: latest.salaryCurrency || 'AED',
+            period: (latest.salaryPeriod === 'Annual' ? 'Annual' : 'Monthly') as 'Monthly' | 'Annual',
+          }
+        : null;
+
+    let salaryFit: 'below' | 'within' | 'above' | 'incomparable' | 'range-missing' | 'not-recorded' = 'not-recorded';
+    if (latestExpectedSalary) {
+      if (!vacancySalaryRange) {
+        salaryFit = 'range-missing';
+      } else if (
+        latestExpectedSalary.currency.toUpperCase() !== vacancySalaryRange.currency.toUpperCase() ||
+        latestExpectedSalary.period !== vacancySalaryRange.period
+      ) {
+        salaryFit = 'incomparable';
+      } else if (latestExpectedSalary.amount < vacancySalaryRange.min) {
+        salaryFit = 'below';
+      } else if (latestExpectedSalary.amount > vacancySalaryRange.max) {
+        salaryFit = 'above';
+      } else {
+        salaryFit = 'within';
+      }
+    }
+
+    return {
+      applicationId: app.id,
+      stage: app.stage,
+      version: app.version,
+      candidateName: `${app.candidate?.firstName ?? ''} ${app.candidate?.lastName ?? ''}`.trim() || 'Candidate',
+      positionTitle: app.vacancy?.position?.title ?? 'Vacancy',
+      vacancySalaryRange,
+      latestExpectedSalary,
+      salaryFit,
+    };
   }
 
   private async requireApplication(organizationId: string, applicationId: string, user?: AuthUser): Promise<void> {

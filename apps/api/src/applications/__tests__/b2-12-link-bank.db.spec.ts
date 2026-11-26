@@ -44,10 +44,18 @@ describe.skipIf(!url)('B2-12 link a bank person (scratch Postgres)', () => {
     expect(await upload()).toBe('FILE_INVALID'); // past the candidate check: only the (empty) file is refused
   });
 
-  it('POST /applications with a bank person on my job creates Applied', async () => {
+  it('concurrent applications for a bank person create one Applied file and identify it on conflict', async () => {
     const apps = new ApplicationsService(prisma, { createForUser: async () => undefined } as never, {} as never, new AccessControlService(prisma));
-    const app = await apps.createApplication(ORG, { vacancyId: vac, candidateId: person, primaryRecruiterId: me } as never, auth());
-    expect(app).toMatchObject({ candidateId: person, vacancyId: vac, stage: 'Applied' });
+    const apply = () => apps.createApplication(ORG, { vacancyId: vac, candidateId: person, primaryRecruiterId: me }, auth());
+    const results = await Promise.allSettled([apply(), apply()]);
+    const saved = await prisma.application.findMany({ where: { organizationId: ORG, vacancyId: vac, candidateId: person } });
+    expect(saved).toHaveLength(1);
+    expect(results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: 'fulfilled', value: expect.objectContaining({ id: saved[0].id, stage: 'Applied' }) }),
+      expect.objectContaining({ status: 'rejected', reason: expect.objectContaining({
+        status: 409, response: expect.objectContaining({ code: 'APPLICATION_EXISTS', details: expect.objectContaining({ applicationId: saved[0].id }) }),
+      }) }),
+    ]));
   });
 
   it('POST /candidates with the same email: 409 CANDIDATE_EXISTS naming the person (id + code only)', async () => {

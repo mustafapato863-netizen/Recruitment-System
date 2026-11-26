@@ -20,10 +20,10 @@ describe('B5 room URL validation', () => {
     expect(code(() => validateInterviewRoom({ locationUrl: 'javascript:alert(1)' }))).toBe('ROOM_URL_NOT_HTTPS');
     expect(code(() => validateInterviewRoom({ locationUrl: 'not a url' }))).toBe('ROOM_URL_INVALID');
   });
-  it('a physical room is plain text; one of the two is required', () => {
+  it('allows omitting both room URL and physical room (Ticket 12) and trims physical room when provided', () => {
     expect(validateInterviewRoom({ roomName: ' HR 2.14 ' })).toEqual({ locationUrl: null, roomName: 'HR 2.14' });
-    expect(code(() => validateInterviewRoom({}))).toBe('ROOM_REQUIRED');
-    expect(code(() => validateInterviewRoom({ locationUrl: '  ', roomName: '' }))).toBe('ROOM_REQUIRED');
+    expect(validateInterviewRoom({})).toEqual({ locationUrl: null, roomName: null });
+    expect(validateInterviewRoom({ locationUrl: '  ', roomName: '' })).toEqual({ locationUrl: null, roomName: null });
   });
   it('allowlist comes from INTERVIEW_ROOM_HOSTS with a sensible default', () => {
     expect(roomHostsFromEnv({})).toEqual(DEFAULT_ROOM_HOSTS);

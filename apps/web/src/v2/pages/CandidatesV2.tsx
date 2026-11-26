@@ -5,6 +5,7 @@ import {
   RotateCw, Scale, Search, Sparkles,
 } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, type StatusTone } from '../../components/v2';
+import { useV2Shell } from '../../components/v2/shell/AppShellV2';
 import { fetchActiveApplications, fetchBank, OPEN_APPLICATION_STAGES, type ActiveRow, type BankRow } from '../api/matching';
 import { useCachedResource } from '../api/useCachedResource';
 import { loadCachedView, readViewCache } from '../api/viewCache';
@@ -65,6 +66,8 @@ function knownStage(value: string) {
 
 /** E23 Candidates: active applications (one row per file) and the bank. No contact details or pay. */
 export function CandidatesV2() {
+  const shell = useV2Shell();
+  const isManagerSeat = shell?.seat === 'manager';
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'bank' ? 'bank' : 'active';
   const q = params.get('search') ?? '';
@@ -295,7 +298,9 @@ export function CandidatesV2() {
         <div className="rf2-cand__hero-copy">
           <h1 className="rf2-jobs__title rf2-cand__visible-title">Candidates</h1>
           <p className="rf2-cand__subtitle">
-            View and manage all candidates across your jobs. Import CVs, review applications, and move candidates through the hiring process.
+            {isManagerSeat
+              ? 'View candidates linked to your team’s requisitions, jobs, and active hiring pipelines.'
+              : 'View and manage all candidates across your jobs. Import CVs, review applications, and move candidates through the hiring process.'}
           </p>
         </div>
       </div>
@@ -397,7 +402,7 @@ export function CandidatesV2() {
       {tab === 'active' && effectiveActive.kind === 'ready' ? (
         <section className="rf2-panel" aria-label="Active applications">
           {truncated ? <p className="rf2-cand__bound" role="status">{`This list is incomplete. Loaded ${effectiveActive.loaded} of ${effectiveActive.total ?? effectiveActive.loaded} applications; stage, job, source, and search apply only to that window.`}</p> : null}
-          {activeRows.length === 0 ? <EmptyStateV2 headingLevel={3} title={effectiveActive.rows.length === 0 && !truncated ? 'No active applications' : 'No people match these filters'} body={effectiveActive.rows.length === 0 && !truncated ? 'People you add to your jobs show here.' : 'Try another stage, job, source, or search.'} /> : viewMode === 'cards' ? (
+          {activeRows.length === 0 ? <EmptyStateV2 headingLevel={3} title={effectiveActive.rows.length === 0 && !truncated ? (isManagerSeat ? 'No candidates in your team yet' : 'No active applications') : 'No people match these filters'} body={effectiveActive.rows.length === 0 && !truncated ? (isManagerSeat ? 'Candidates on your team’s jobs and applications appear here once assigned.' : 'People you add to your jobs show here.') : 'Try another stage, job, source, or search.'} /> : viewMode === 'cards' ? (
             <>
               <div className="rf2-cand__grid">
                 {activePageRows.map((row) => {

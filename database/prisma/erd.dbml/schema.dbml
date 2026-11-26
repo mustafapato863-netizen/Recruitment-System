@@ -3,6 +3,7 @@
 //// ------------------------------------------------------
 
 Table organizations {
+  timezone String [not null, default: 'Africa/Cairo']
   id String [pk]
   code String [unique, not null]
   name String [not null]
@@ -43,9 +44,11 @@ Table organizations {
 }
 
 Table branches {
+  timezone String
   id String [pk]
   organizationId String [not null]
   organization organizations [not null]
+  users users [not null]
   code String [not null]
   name String [not null]
   country String [not null, default: 'EGY']
@@ -87,6 +90,8 @@ Table users {
   id String [pk]
   organizationId String [not null]
   organization organizations [not null]
+  branchId String
+  branch branches
   email String [not null]
   emailNormalized String [not null]
   passwordHash String
@@ -99,6 +104,8 @@ Table users {
   emailVerifiedAt DateTime
   invitationAcceptedAt DateTime
   tokenVersion Int [not null, default: 0]
+  mustChangePassword Boolean [not null, default: false]
+  passwordChangedAt DateTime
   lastLoginAt DateTime
   theme String [not null, default: 'light']
   timezone String [not null, default: 'UTC']
@@ -263,6 +270,7 @@ Table vacancy_requests {
   budgetMin Int
   budgetMax Int
   budgetCurrency String
+  budgetPeriod String
   criticality String
   targetStartDate DateTime
   targetFillDate DateTime
@@ -275,6 +283,7 @@ Table vacancy_requests {
   qualifications String
   benefits String
   submittedAt DateTime
+  submittedById String
   approvalRevision Int [not null, default: 1]
   gradeId String
   grade master_data_values
@@ -444,6 +453,8 @@ Table candidates {
 
   indexes {
     (organizationId, email) [unique]
+    (organizationId, emailNormalized) [unique]
+    (organizationId, phoneNormalized) [unique]
   }
 }
 
@@ -615,6 +626,7 @@ Table screening_logs {
   expectedSalary Decimal
   currentSalary Decimal
   salaryCurrency String [not null, default: 'SAR']
+  salaryPeriod String
   method String
   evidenceSource String
   nextStep String
@@ -654,6 +666,7 @@ Table interviews {
   application applications [not null]
   title String [not null]
   interviewType String [not null]
+  stageContext String
   scheduledStart DateTime [not null]
   scheduledEnd DateTime [not null]
   timezone String [not null, default: 'UTC']
@@ -703,6 +716,11 @@ Table interview_scorecards {
   revisedById String
   revisedBy users
   revisionReason String
+  evaluationTemplate String
+  nextStep String
+  nextStepOwnerId String
+  followUpAt DateTime
+  decisionSummary String
   submittedAt DateTime [default: `now()`]
   ratings interview_scorecard_ratings [not null]
   createdAt DateTime [default: `now()`, not null]
@@ -719,7 +737,8 @@ Table interview_scorecard_ratings {
   criterionKey String [not null]
   criterionName String [not null]
   category String [not null, default: 'SKILL']
-  rating Int [not null]
+  rating Int
+  notObserved Boolean [not null, default: false]
   comment String
   createdAt DateTime [default: `now()`, not null]
 
@@ -744,6 +763,7 @@ Table offers {
 }
 
 Table offer_versions {
+  sendDates DateTime[] [not null]
   id String [pk]
   offerId String [not null]
   offer offers [not null]
@@ -767,6 +787,7 @@ Table offer_versions {
   sentTemplateId String
   sentAt DateTime
   sentById String
+  submittedById String
 
   indexes {
     (offerId, versionNumber) [unique]
@@ -818,6 +839,7 @@ Table hiring_cases {
   approvalFingerprint String [note: 'Fingerprint of the case facts the current approval authorized. Null when no approval can authorize joining.']
   ownerUserId String
   owner users
+  submittedById String
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
   complianceRequirements compliance_requirements [not null]
@@ -1262,6 +1284,8 @@ Ref: branches.organizationId > organizations.id [delete: Restrict]
 Ref: positions.organizationId > organizations.id [delete: Restrict]
 
 Ref: users.organizationId > organizations.id [delete: Restrict]
+
+Ref: users.branchId > branches.id [delete: Set Null]
 
 Ref: users.managerId - users.id [delete: Set Null]
 

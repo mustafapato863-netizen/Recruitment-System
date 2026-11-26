@@ -500,18 +500,71 @@ export class HiringService {
       }
     }
 
-    const updated = await this.prisma.hiringCase.update({
-      where: { id: caseId },
-      data: { status: 'Pending Final Approval' }
-    });
-
-    const approvalStore = this.prisma.hiringCaseApproval;
-    if (approvalStore) {
-      const pending = await approvalStore.findFirst({ where: { hiringCaseId: caseId, status: 'Pending' } });
-      if (!pending) {
-        await approvalStore.create({ data: { hiringCaseId: caseId, roleCode: 'FINAL_HIRING_APPROVER', status: 'Pending' } });
+    // Ticket 16: resolve the submitter's active reporting manager when available and
+    // perform the status update + approval task creation atomically in one transaction.
+    let assignedManagerId: string | null = null;
+    if (typeof this.prisma.user?.findFirst === 'function') {
+      const submitter = await this.prisma.user.findFirst({
+        where: { id: user.userId, organizationId },
+        select: { managerId: true },
+      });
+      const candidateManagerId = submitter?.managerId ?? null;
+      if (candidateManagerId && candidateManagerId !== user.userId) {
+        const activeMgr = await this.prisma.user.findFirst({
+          where: { id: candidateManagerId, organizationId, status: 'Active' },
+          select: { id: true },
+        });
+        if (activeMgr) assignedManagerId = activeMgr.id;
       }
     }
+
+    const updated = typeof this.prisma.$transaction === 'function'
+      ? await this.prisma.$transaction(async (tx) => {
+          const row = await tx.hiringCase.update({
+            where: { id: caseId },
+            data: { status: 'Pending Final Approval', submittedById: user.userId },
+          });
+          if (tx.hiringCaseApproval) {
+            const pending = await tx.hiringCaseApproval.findFirst({ where: { hiringCaseId: caseId, status: 'Pending' } });
+            if (!pending) {
+              await tx.hiringCaseApproval.create({
+                data: {
+                  hiringCaseId: caseId,
+                  roleCode: 'FINAL_HIRING_APPROVER',
+                  status: 'Pending',
+                  ...(assignedManagerId ? { approverUserId: assignedManagerId } : {}),
+                },
+              });
+            } else if (assignedManagerId && !pending.approverUserId) {
+              await tx.hiringCaseApproval.update({
+                where: { id: pending.id },
+                data: { approverUserId: assignedManagerId },
+              });
+            }
+          }
+          return row;
+        })
+      : await (async () => {
+          const row = await this.prisma.hiringCase.update({
+            where: { id: caseId },
+            data: { status: 'Pending Final Approval', submittedById: user.userId },
+          });
+          const approvalStore = this.prisma.hiringCaseApproval;
+          if (approvalStore) {
+            const pending = await approvalStore.findFirst({ where: { hiringCaseId: caseId, status: 'Pending' } });
+            if (!pending) {
+              await approvalStore.create({
+                data: {
+                  hiringCaseId: caseId,
+                  roleCode: 'FINAL_HIRING_APPROVER',
+                  status: 'Pending',
+                  ...(assignedManagerId ? { approverUserId: assignedManagerId } : {}),
+                },
+              });
+            }
+          }
+          return row;
+        })();
 
     await this.findFinalApprovers(organizationId);
 
@@ -542,7 +595,17 @@ export class HiringService {
     const teamIds = teamScoped && user
       ? await reportingLineUserIds(this.prisma, organizationId, user.userId)
       : null;
-    const visible = teamIds === null ? cases : cases.filter((hiringCase) => {
+    const visible = cases.filter((hiringCase) => {
+      // Ticket 16: never show self-submitted or self-owned cases in the final approval inbox.
+      if (
+        user &&
+        (hiringCase.submittedById === user.userId ||
+          hiringCase.ownerUserId === user.userId ||
+          hiringCase.application.primaryRecruiterId === user.userId)
+      ) {
+        return false;
+      }
+      if (teamIds === null) return true;
       const named = hiringCase.approvals.some((approval) => approval.approverUserId === user?.userId);
       return named || (hiringCase.application.primaryRecruiterId !== null && teamIds.includes(hiringCase.application.primaryRecruiterId));
     });
@@ -576,6 +639,22 @@ export class HiringService {
     );
     if (!approval) throw new BadRequestException('No pending final approval found');
 
+    // Ticket 16: prevent self-approval even for multi-role users or ADMINISTRATOR.
+    const caseRecruiterId = await this.primaryRecruiterId(hiringCase as {
+      applicationId: string;
+      application?: { primaryRecruiterId?: string | null } | null;
+    });
+    if (
+      hiringCase.submittedById === user.userId ||
+      hiringCase.ownerUserId === user.userId ||
+      (caseRecruiterId && caseRecruiterId === user.userId)
+    ) {
+      throw new ForbiddenException({
+        code: 'SELF_APPROVAL_FORBIDDEN',
+        message: 'You cannot decide final hiring approval for a case you submitted or own.',
+      });
+    }
+
     let isAuthorized =
       approval.approverUserId === user.userId ||
       user.roleCodes.includes(approval.roleCode) ||
@@ -591,11 +670,7 @@ export class HiringService {
     if (approval.approverUserId !== user.userId && !user.roleCodes.includes('ADMINISTRATOR') && !holdsStepRole) {
       const teamIds = await reportingLineUserIds(this.prisma, organizationId, user.userId);
       if (teamIds !== null) {
-        const recruiterId = await this.primaryRecruiterId(hiringCase as {
-          applicationId: string;
-          application?: { primaryRecruiterId?: string | null } | null;
-        });
-        if (!recruiterId || !teamIds.includes(recruiterId)) {
+        if (!caseRecruiterId || !teamIds.includes(caseRecruiterId)) {
           throw new ForbiddenException('This approval is outside your reporting line');
         }
       }
@@ -607,17 +682,37 @@ export class HiringService {
       ? await currentCaseFingerprint(this.prisma, hiringCase.applicationId, organizationId)
       : null;
     await this.prisma.$transaction(async (tx) => {
-      await tx.hiringCaseApproval.update({
-        where: { id: approval.id },
-        data: {
-          status,
-          comment: dto.comment,
-          approverUserId: user.userId,
-          decidedAt: new Date(),
-          decisionFingerprint: fingerprint,
-          invalidatedAt: null,
-        },
-      });
+      if (typeof tx.hiringCaseApproval?.updateMany === 'function') {
+        const claimed = await tx.hiringCaseApproval.updateMany({
+          where: { id: approval.id, status: 'Pending' },
+          data: {
+            status,
+            comment: dto.comment,
+            approverUserId: user.userId,
+            decidedAt: new Date(),
+            decisionFingerprint: fingerprint,
+            invalidatedAt: null,
+          },
+        });
+        if (claimed.count !== 1) {
+          throw new ConflictException({
+            code: 'APPROVAL_ALREADY_DECIDED',
+            message: 'This final hiring approval has already been decided.',
+          });
+        }
+      } else {
+        await tx.hiringCaseApproval.update({
+          where: { id: approval.id },
+          data: {
+            status,
+            comment: dto.comment,
+            approverUserId: user.userId,
+            decidedAt: new Date(),
+            decisionFingerprint: fingerprint,
+            invalidatedAt: null,
+          },
+        });
+      }
 
       await tx.hiringCase.update({
         where: { id: caseId },
@@ -795,6 +890,234 @@ export class HiringService {
       data: { plannedJoiningDate: dto.plannedJoiningDate ? new Date(dto.plannedJoiningDate) : null },
     });
     return { success: true, plannedJoiningDate: updated.plannedJoiningDate?.toISOString() ?? null };
+  }
+
+  /**
+   * Ticket 05: Joining forecast for this month and next month in branch/org timezone
+   * (fallback Africa/Cairo). Deduplicates strictly once per applicationId, distinguishes
+   * verified signed contracts from pending signatures, and excludes actual joiners and
+   * withdrawn/declined/rejected applications.
+   */
+  async getJoiningForecast(
+    organizationId: string,
+    user: AuthUser,
+    opts: { branchId?: string; asOf?: string } = {},
+  ) {
+    const organization = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId }, select: { timezone: true },
+    });
+    const branch = opts.branchId ? await this.prisma.branch.findFirstOrThrow({
+      where: { id: opts.branchId, organizationId }, select: { timezone: true },
+    }) : null;
+    const timezone = branch?.timezone ?? organization.timezone;
+    const referenceDate = opts.asOf && !Number.isNaN(new Date(opts.asOf).getTime())
+      ? new Date(opts.asOf)
+      : new Date();
+
+    const formatYmdInTz = (date: Date, tz: string): string => {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(date);
+      const y = parts.find((p) => p.type === 'year')?.value ?? String(date.getUTCFullYear());
+      const m = parts.find((p) => p.type === 'month')?.value ?? String(date.getUTCMonth() + 1).padStart(2, '0');
+      const d = parts.find((p) => p.type === 'day')?.value ?? String(date.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    const refYmd = formatYmdInTz(referenceDate, timezone);
+    const [refYear = referenceDate.getUTCFullYear(), refMonth = referenceDate.getUTCMonth() + 1] = refYmd.split('-').map(Number);
+    const thisMonthKey = `${String(refYear).padStart(4, '0')}-${String(refMonth).padStart(2, '0')}`;
+    const nextYear = refMonth === 12 ? refYear + 1 : refYear;
+    const nextMonthNum = refMonth === 12 ? 1 : refMonth + 1;
+    const nextMonthKey = `${String(nextYear).padStart(4, '0')}-${String(nextMonthNum).padStart(2, '0')}`;
+
+    const visibility = await this.applicationVisibility(user);
+    const appScope: Prisma.ApplicationWhereInput = {
+      AND: [
+        { organizationId, stage: { notIn: ['Joined', 'Rejected', 'Withdrawn'] } },
+        ...(visibility ? [visibility] : []),
+        ...(opts.branchId ? [{ vacancy: { branchId: opts.branchId } }] : []),
+      ],
+    };
+
+    const [activeCases, activeOffers] = await Promise.all([
+      this.prisma.hiringCase.findMany({
+        where: {
+          organizationId,
+          status: { notIn: ['Joined', 'Cancelled', 'No-show', 'Withdrawn'] },
+          application: appScope,
+        },
+        include: {
+          complianceRequirements: {
+            select: { type: true, name: true, status: true },
+          },
+          offer: {
+            include: {
+              versions: {
+                orderBy: { versionNumber: 'desc' },
+                take: 1,
+                select: { proposedJoiningDate: true, status: true },
+              },
+            },
+          },
+          application: {
+            include: {
+              candidate: { select: { firstName: true, lastName: true } },
+              primaryRecruiter: { select: { displayName: true } },
+              joiningChecks: { select: { type: true, verified: true } },
+              vacancy: {
+                include: {
+                  position: { select: { title: true } },
+                  branch: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.offer.findMany({
+        where: {
+          organizationId,
+          status: { in: ['Sent', 'Accepted'] },
+          application: appScope,
+        },
+        include: {
+          versions: {
+            orderBy: { versionNumber: 'desc' },
+            take: 1,
+            select: { proposedJoiningDate: true, status: true },
+          },
+          application: {
+            include: {
+              candidate: { select: { firstName: true, lastName: true } },
+              primaryRecruiter: { select: { displayName: true } },
+              joiningChecks: { select: { type: true, verified: true } },
+              hiringCase: { select: { id: true, status: true, plannedJoiningDate: true } },
+              vacancy: {
+                include: {
+                  position: { select: { title: true } },
+                  branch: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    type ForecastItem = {
+      applicationId: string;
+      hiringCaseId: string | null;
+      offerId: string | null;
+      candidateName: string;
+      positionTitle: string;
+      branchId: string | null;
+      branchName: string;
+      expectedJoiningDate: string;
+      monthKey: string;
+      contractSigned: boolean;
+      stage: string;
+      offerStatus: string | null;
+      ownerName: string;
+    };
+
+    const byApplication = new Map<string, ForecastItem>();
+
+    // 1. Authoritative active hiring cases take precedence per applicationId
+    for (const hc of activeCases) {
+      const rawDate = hc.plannedJoiningDate ?? hc.offer?.versions?.[0]?.proposedJoiningDate ?? null;
+      if (!rawDate) continue;
+      const dateObj = rawDate instanceof Date ? rawDate : new Date(rawDate);
+      if (Number.isNaN(dateObj.getTime())) continue;
+      const ymd = formatYmdInTz(dateObj, timezone);
+      const monthKey = ymd.slice(0, 7);
+      if (monthKey !== thisMonthKey && monthKey !== nextMonthKey) continue;
+
+      const verifiedCheck = (hc.application.joiningChecks ?? []).some(
+        (chk) => chk.type === 'CONTRACT' && chk.verified === true,
+      );
+      const verifiedCompliance = (hc.complianceRequirements ?? []).some(
+        (req) => (req.type === 'Contract' || /contract/i.test(req.name)) && req.status === 'Verified',
+      );
+      const contractSigned = verifiedCheck || verifiedCompliance;
+
+      byApplication.set(hc.applicationId, {
+        applicationId: hc.applicationId,
+        hiringCaseId: hc.id,
+        offerId: hc.offerId,
+        candidateName: `${hc.application.candidate.firstName} ${hc.application.candidate.lastName}`.trim(),
+        positionTitle: hc.application.vacancy.position?.title ?? '',
+        branchId: hc.application.vacancy.branch?.id ?? null,
+        branchName: hc.application.vacancy.branch?.name ?? '',
+        expectedJoiningDate: ymd,
+        monthKey,
+        contractSigned,
+        stage: hc.application.stage,
+        offerStatus: hc.offer?.status ?? null,
+        ownerName: hc.application.primaryRecruiter?.displayName ?? 'Unassigned',
+      });
+    }
+
+    // 2. Sent/Accepted offers without an already-recorded hiring case entry
+    for (const offer of activeOffers) {
+      if (byApplication.has(offer.applicationId)) continue;
+      // If a hiringCase exists in a terminal/excluded state, never forecast from the offer
+      const hcStatus = offer.application.hiringCase?.status ?? null;
+      if (hcStatus && ['Joined', 'Cancelled', 'No-show', 'Withdrawn'].includes(hcStatus)) continue;
+
+      const rawDate = offer.application.hiringCase?.plannedJoiningDate ?? offer.versions?.[0]?.proposedJoiningDate ?? null;
+      if (!rawDate) continue;
+      const dateObj = rawDate instanceof Date ? rawDate : new Date(rawDate);
+      if (Number.isNaN(dateObj.getTime())) continue;
+      const ymd = formatYmdInTz(dateObj, timezone);
+      const monthKey = ymd.slice(0, 7);
+      if (monthKey !== thisMonthKey && monthKey !== nextMonthKey) continue;
+
+      const contractSigned = (offer.application.joiningChecks ?? []).some(
+        (chk) => chk.type === 'CONTRACT' && chk.verified === true,
+      );
+
+      byApplication.set(offer.applicationId, {
+        applicationId: offer.applicationId,
+        hiringCaseId: offer.application.hiringCase?.id ?? null,
+        offerId: offer.id,
+        candidateName: `${offer.application.candidate.firstName} ${offer.application.candidate.lastName}`.trim(),
+        positionTitle: offer.application.vacancy.position?.title ?? '',
+        branchId: offer.application.vacancy.branch?.id ?? null,
+        branchName: offer.application.vacancy.branch?.name ?? '',
+        expectedJoiningDate: ymd,
+        monthKey,
+        contractSigned,
+        stage: offer.application.stage,
+        offerStatus: offer.status,
+        ownerName: offer.application.primaryRecruiter?.displayName ?? 'Unassigned',
+      });
+    }
+
+    const sortRows = (rows: ForecastItem[]) =>
+      rows.sort((a, b) => a.expectedJoiningDate.localeCompare(b.expectedJoiningDate) || a.candidateName.localeCompare(b.candidateName));
+
+    const buildBucket = (month: string) => {
+      const items = sortRows([...byApplication.values()].filter((r) => r.monthKey === month));
+      const signed = items.filter((r) => r.contractSigned).length;
+      return {
+        month,
+        total: items.length,
+        signed,
+        pendingSignature: items.length - signed,
+        items,
+      };
+    };
+
+    return {
+      timezone,
+      asOf: refYmd,
+      thisMonth: buildBucket(thisMonthKey),
+      nextMonth: buildBucket(nextMonthKey),
+    };
   }
 }
 

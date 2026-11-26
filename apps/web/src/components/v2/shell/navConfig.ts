@@ -60,6 +60,7 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
       { key: 'requisitions', label: 'Requisitions', to: '/vacancy-requests', icon: 'requisitions', requires: ['VACANCY_REQUEST_VIEW'], notForRecruiter: true },
       { key: 'approvals', label: 'Approvals', to: '/approvals', icon: 'approvals', requires: ['APPLICATION_VIEW'] },
       { key: 'open-jobs', label: 'Open jobs', to: '/vacancies', icon: 'jobs', requires: ['VACANCY_VIEW'] },
+      { key: 'candidates', label: 'Candidates', to: '/candidates', icon: 'candidates', requires: ['CANDIDATE_VIEW'] },
       { key: 'joinings', label: 'Joining', to: '/joinings', icon: 'joinings', requires: ['APPLICATION_VIEW'] },
       { key: 'interviews', label: 'Interviews', to: '/team-interviews', icon: 'interviews', requires: ['VACANCY_VIEW'] },
       { key: 'my-interviews', label: 'My interviews', to: '/my-interviews', icon: 'my-interviews', requires: ['VACANCY_VIEW'], interviewerOnly: true },

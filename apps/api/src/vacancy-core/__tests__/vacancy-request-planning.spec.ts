@@ -37,13 +37,32 @@ function serviceFor(value: VacancyRequest) {
 }
 
 describe('vacancy request planning', () => {
-  it('requires budget and fill plan before submission', async () => {
-    const { service, repository } = serviceFor(request({ budgetMin: null, budgetMax: null, budgetCurrency: null }));
+  it('requires salary budget range and fill plan before submission even when budgetStatus is null (Ticket 01)', async () => {
+    const { service, repository } = serviceFor(request({ budgetStatus: null, budgetMin: null, budgetMax: null, budgetCurrency: null }));
     await expect(service.submitRequest('request-1', 'org-1', 'user-1')).rejects.toThrow(/budget range/i);
     expect(repository.saveRequest).not.toHaveBeenCalled();
   });
 
-  it('accepts either AED or EGP and rejects an inverted range', async () => {
+  it('requires both salary bounds before activating a draft', async () => {
+    const { service } = serviceFor(request({ budgetMax: null }));
+    await expect(service.activateRequest('request-1', 'org-1', 'user-1', {}))
+      .rejects.toMatchObject({ response: { field: 'budgetMax' } });
+  });
+
+  it('allows incomplete drafts without salary range and validates negative or inverted ranges', async () => {
+    const { service } = serviceFor(request({ budgetMin: null, budgetMax: null, budgetCurrency: null }));
+    const savedDraft = await service.updateRequest('request-1', 'org-1', { justification: 'Incomplete draft OK' });
+    expect(savedDraft.justification).toBe('Incomplete draft OK');
+    await expect(service.updateRequest('request-1', 'org-1', { budgetMin: -500 })).rejects.toThrow(/budget range/i);
+    await expect(service.updateRequest('request-1', 'org-1', { budgetMin: 16000, budgetMax: 15000 })).rejects.toThrow(/budget range/i);
+    const equalRange = await service.updateRequest('request-1', 'org-1', { budgetMin: 15000, budgetMax: 15000, budgetCurrency: 'SAR', budgetPeriod: 'Monthly' });
+    expect(equalRange.budgetMin).toBe(15000);
+    expect(equalRange.budgetMax).toBe(15000);
+    expect(equalRange.budgetCurrency).toBe('SAR');
+    expect(equalRange.budgetPeriod).toBe('Monthly');
+  });
+
+  it('accepts AED, EGP, SAR, USD and rejects an inverted range', async () => {
     const { service } = serviceFor(request());
     await expect(service.updateRequest('request-1', 'org-1', { budgetMin: 16000 })).rejects.toThrow(/budget range/i);
     const updated = await service.updateRequest('request-1', 'org-1', { budgetMin: 12000, budgetMax: 18000, budgetCurrency: 'AED' });

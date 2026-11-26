@@ -122,7 +122,6 @@ export function FinalApprovalInboxV2() {
                   <td>{row.positionTitle}</td>
                   <td>{row.branchName}</td>
                   <td>{row.plannedJoiningDate ? new Date(row.plannedJoiningDate).toLocaleDateString('en-GB') : 'Not set'}</td>
-                  <td>{row.branchName}</td>
                   <td><StatusChip tone="warning" label={row.status} /></td>
                   <td>
                     <div className="rf2-row-between" style={{ gap: '0.5rem', justifyContent: 'flex-start', flexWrap: 'wrap' }}>

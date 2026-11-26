@@ -74,6 +74,12 @@ export class CreateInterviewDto {
   @IsOptional()
   @IsBoolean()
   allowConflict?: boolean;
+
+  /** Ticket 04: stage context distinguishes regular Interview vs Pre-Hire assessment interview. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  stageContext?: 'Interview' | 'Pre-Hire' | null;
 }
 
 export class UpdateInterviewDto {
@@ -129,6 +135,12 @@ export class UpdateInterviewDto {
   @IsOptional()
   @IsBoolean()
   allowConflict?: boolean;
+
+  /** Ticket 04: stage context distinguishes regular Interview vs Pre-Hire assessment interview. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  stageContext?: 'Interview' | 'Pre-Hire' | null;
 }
 
 export class SubmitScorecardDto {
@@ -160,14 +172,39 @@ export class SubmitScorecardDto {
   @IsEnum(['Draft', 'Submitted'])
   status?: 'Draft' | 'Submitted';
 
-  /** Criteria ratings tied to locked JD criteria. */
+  /** Ticket 13: SGH evaluation template, decision summary, and follow-up plan. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  evaluationTemplate?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  decisionSummary?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  nextStep?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  nextStepOwnerId?: string | null;
+
+  @IsOptional()
+  @IsISO8601()
+  followUpAt?: string | null;
+
+  /** Criteria ratings tied to locked JD criteria or SGH competencies (supports Not observed). */
   @IsOptional()
   @IsArray()
   criteriaRatings?: Array<{
     criterionKey: string;
     criterionName: string;
-    category?: 'SKILL' | 'COMPETENCY' | 'REQUIREMENT';
-    rating: number;
+    category?: 'SKILL' | 'COMPETENCY' | 'REQUIREMENT' | 'HR_BEHAVIORAL' | 'TECHNICAL';
+    rating?: number | null;
+    notObserved?: boolean;
     comment?: string;
   }>;
 }

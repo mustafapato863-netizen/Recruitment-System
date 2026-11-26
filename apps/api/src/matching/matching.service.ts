@@ -42,6 +42,7 @@ export interface SuggestionsResponse {
 }
 export type CompareCell = { candidateId: string; status: 'evidence' | 'no-evidence' | 'missing'; evidence: EvidenceItem[] };
 export interface CompareResponse {
+  unmappedRequiredSkills: string[];
   vacancyId: string;
   /** Meeting notes 2026-11-25 (item 2): the job's nationality preference (soft signal; never a filter). */
   nationalityPreference: string[];
@@ -245,7 +246,7 @@ export class MatchingService {
     const ids = [...new Set(candidateIds.map((id) => id.trim()).filter(Boolean))];
     if (ids.length < 2 || ids.length > 4) throw new BadRequestException({ code: 'COMPARE_COUNT', message: 'Compare 2 to 4 candidates.' });
     const vacancy = await this.assertJobAccess(user, vacancyId);
-    const { required } = await this.resolveRequired(user.organizationId, vacancy.requiredSkills);
+    const { required, unmapped } = await this.resolveRequired(user.organizationId, vacancy.requiredSkills);
     const found = await this.prisma.candidate.findMany({
       where: { id: { in: ids }, organizationId: user.organizationId, status: ACTIVE_CANDIDATE },
       select: this.candidateSelect(required.map((r) => r.id)),
@@ -279,6 +280,7 @@ export class MatchingService {
     };
     return {
       vacancyId,
+      unmappedRequiredSkills: unmapped,
       nationalityPreference: vacancy.nationalityPreference ?? [],
       candidates: shaped.map((s) => s.candidate),
       rows: required.map((skill) => ({
@@ -422,13 +424,19 @@ export class MatchingService {
       orderBy: { createdAt: 'asc' },
       take: 20,
     });
+    const matches = rows.map((r) => ({
+      candidateId: r.id, candidateCode: r.candidateCode, name: `${r.firstName} ${r.lastName}`.trim(), status: r.status,
+      matchedBy: [...(email && r.emailNormalized === email ? ['email'] : []), ...(phone && r.phoneNormalized === phone ? ['phone'] : [])],
+    }));
+    const emailIds = new Set(matches.filter((m) => m.matchedBy.includes('email')).map((m) => m.candidateId));
+    const phoneIds = new Set(matches.filter((m) => m.matchedBy.includes('phone')).map((m) => m.candidateId));
+    // Ticket 09: email matching person A and phone matching person B requires manual review.
+    const identityConflict = emailIds.size > 0 && phoneIds.size > 0 && ![...emailIds].some((id) => phoneIds.has(id));
     return {
       normalized: { email, phone },
       isDuplicate: rows.length > 0,
-      matches: rows.map((r) => ({
-        candidateId: r.id, candidateCode: r.candidateCode, name: `${r.firstName} ${r.lastName}`.trim(), status: r.status,
-        matchedBy: [...(email && r.emailNormalized === email ? ['email'] : []), ...(phone && r.phoneNormalized === phone ? ['phone'] : [])],
-      })),
+      identityConflict,
+      matches,
     };
   }
 }

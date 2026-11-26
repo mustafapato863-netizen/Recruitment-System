@@ -23,6 +23,7 @@ import {
 } from '../../components/v2';
 import { cairoMonth, monthLabel } from '../api/myResult';
 import { withReturnTo } from '../returnTarget';
+import { OperationalReportsPanel } from '../components/OperationalReportsPanel';
 import './jobs.css';
 import './reports-v2.css';
 
@@ -523,6 +524,16 @@ export function RecruiterReportsV2() {
           }
           onClearDrilldown={clearDrilldown}
           returnHref={returnHref}
+        />
+      ) : null}
+
+      {state.kind === 'ready' ? (
+        <OperationalReportsPanel
+          defaultOpen={false}
+          filters={{
+            from: state.data.range?.from?.slice(0, 10) ?? null,
+            to: state.data.range?.to?.slice(0, 10) ?? null,
+          }}
         />
       ) : null}
     </div>

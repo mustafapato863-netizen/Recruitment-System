@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, CircleCheck, Clock, MessageSquare, Users } from 'lucide-react';
-import { useAuth } from '../../auth/AuthContext';
 import { ButtonV2 } from '../../components/v2/Button';
 import { DrawerV2 } from '../../components/v2/Drawer';
 import { InputV2, SelectV2, TextareaV2 } from '../../components/v2/Field';
@@ -98,7 +97,6 @@ export function InterviewScheduleDrawerV2({
   onClose,
   onSaved,
 }: InterviewScheduleDrawerV2Props) {
-  const { user } = useAuth();
   const [selectedAppId, setSelectedAppId] = useState(initialValues.applicationId ?? '');
   const [candidateName, setCandidateName] = useState(initialValues.candidateName);
   const [positionTitle, setPositionTitle] = useState(initialValues.positionTitle);
@@ -110,12 +108,10 @@ export function InterviewScheduleDrawerV2({
   const [duration, setDuration] = useState(initialValues.duration || '60');
   const [room, setRoom] = useState(initialValues.roomUrl || '');
   const [people, setPeople] = useState<UserOption[]>(initialValues.interviewers || []);
-  const [participate, setParticipate] = useState(false);
   const [reason, setReason] = useState('');
   const [errs, setErrs] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const includeSelf = Boolean(participate && user?.id && !people.some((person) => person.id === user.id));
-  const interviewerIds = [...new Set([...people.map((person) => person.id), ...(includeSelf && user?.id ? [user.id] : [])])];
+  const interviewerIds = [...new Set(people.map((person) => person.id))];
   const durationOptions = ['30', '45', '60', '90'].includes(duration) ? ['30', '45', '60', '90'] : [duration, '30', '45', '60', '90'];
 
   const adapter = useMemo(() => createResilientInterviewersAdapter(), []);
@@ -132,7 +128,6 @@ export function InterviewScheduleDrawerV2({
     setDuration(initialValues.duration || '60');
     setRoom(initialValues.roomUrl || '');
     setPeople(initialValues.interviewers || []);
-    setParticipate(false);
     setReason('');
     setErrs({});
   }, [open, initialValues]);
@@ -141,12 +136,14 @@ export function InterviewScheduleDrawerV2({
     const next: Record<string, string> = {};
     if (!date) next.date = 'Pick a date.';
     if (!/^\d{2}:\d{2}$/.test(time)) next.time = 'Pick a start time.';
-    try {
-      if (new URL(room).protocol !== 'https:') {
-        next.room = 'The room link must start with https://';
+    if (room.trim()) {
+      try {
+        if (new URL(room.trim()).protocol !== 'https:') {
+          next.room = 'The room link must start with https://';
+        }
+      } catch {
+        next.room = 'Paste a valid meeting room URL (https://…).';
       }
-    } catch {
-      next.room = 'Paste the meeting room URL (https://…).';
     }
     if (!interviewerIds.length) {
       next.people = 'Add at least one interviewer.';
@@ -164,7 +161,7 @@ export function InterviewScheduleDrawerV2({
           scheduledStart: start,
           scheduledEnd: end,
           rescheduleReason: reason.trim() || 'Updated from Interviews desk',
-          locationUrl: room.trim(),
+          ...(room.trim() ? { locationUrl: room.trim() } : { locationUrl: '' }),
           attendeeUserIds: interviewerIds,
           interviewType: type,
         });
@@ -176,7 +173,7 @@ export function InterviewScheduleDrawerV2({
           scheduledStart: start,
           scheduledEnd: end,
           timezone: 'Africa/Cairo',
-          locationUrl: room.trim(),
+          ...(room.trim() ? { locationUrl: room.trim() } : {}),
           attendeeUserIds: interviewerIds,
         });
       } else {
@@ -284,14 +281,13 @@ export function InterviewScheduleDrawerV2({
           </div>
 
           <InputV2
-            label="Room URL"
-            required
+            label="Room URL (optional)"
             type="url"
-            placeholder="https://"
+            placeholder="https:// (leave blank for in-person or TBD)"
             value={room}
             onChange={(e) => setRoom(e.target.value)}
             error={errs.room}
-            hint="The meeting room link. It must be on an approved meeting host."
+            hint="Optional meeting link. When provided, it must use https:// on an approved meeting host."
           />
         </StageFormSection>
 
@@ -305,17 +301,6 @@ export function InterviewScheduleDrawerV2({
             onChange={setPeople}
             error={errs.people}
           />
-          <label className="rf2-checklist__item">
-            <span>
-              <input
-                type="checkbox"
-                checked={participate}
-                disabled={!user?.id}
-                onChange={(event) => setParticipate(event.target.checked)}
-              />
-              Participate as interviewer (I will submit a scorecard)
-            </span>
-          </label>
         </StageFormSection>
         {errs.form ? <p className="rf2-drawer-form__error" role="alert">{errs.form}</p> : null}
 

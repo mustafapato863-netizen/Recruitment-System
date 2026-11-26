@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Calendar, Clock, AlertTriangle, Users, RotateCw, CheckCircle2, UserX } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { InputV2 } from '../../components/v2/Field';
@@ -35,9 +35,41 @@ const statusTone = (status: string): 'info' | 'success' | 'warning' | 'danger' =
   }
 };
 
+export interface JoiningForecastItem {
+  applicationId: string;
+  hiringCaseId: string | null;
+  offerId: string | null;
+  candidateName: string;
+  positionTitle: string;
+  branchId: string | null;
+  branchName: string;
+  expectedJoiningDate: string;
+  monthKey: string;
+  contractSigned: boolean;
+  stage: string;
+  offerStatus: string | null;
+  ownerName: string;
+}
+
+export interface JoiningForecastBucket {
+  month: string;
+  total: number;
+  signed: number;
+  pendingSignature: number;
+  items: JoiningForecastItem[];
+}
+
+export interface JoiningForecast {
+  timezone: string;
+  asOf: string;
+  thisMonth: JoiningForecastBucket;
+  nextMonth: JoiningForecastBucket;
+}
+
 export function JoiningV2() {
   const [params, setParams] = useSearchParams();
   const [attempt, setAttempt] = useState(0);
+  const [forecastBucket, setForecastBucket] = useState<'thisMonth' | 'nextMonth' | null>(null);
 
   const statusFilter = params.get('status') || '';
   const searchFilter = params.get('search') || '';
@@ -72,6 +104,26 @@ export function JoiningV2() {
         };
       }),
     ),
+  });
+
+  const forecastRes = useCachedResource<JoiningForecast | null>({
+    key: 'joining-forecast',
+    attempt,
+    fetcher: () => getApi<JoiningForecast>('/hiring/forecast').catch(() => null),
+  });
+  const forecast = forecastRes.kind === 'ready'
+    && forecastRes.data
+    && forecastRes.data.thisMonth
+    && forecastRes.data.nextMonth
+    ? forecastRes.data
+    : null;
+  const activeForecast = forecast && forecastBucket ? forecast[forecastBucket] : null;
+  const activeForecastItems = (activeForecast?.items ?? []).filter((item) => {
+    if (!searchFilter) return true;
+    const q = searchFilter.toLowerCase();
+    return item.candidateName.toLowerCase().includes(q)
+      || item.positionTitle.toLowerCase().includes(q)
+      || item.branchName.toLowerCase().includes(q);
   });
 
   const items = joiningRes.kind === 'ready' ? joiningRes.data : [];
@@ -148,6 +200,92 @@ export function JoiningV2() {
           </span>
         </li>
       </ul>
+
+      {forecast ? (
+        <section className="rf2-panel" aria-labelledby="forecast-h" style={{ marginBottom: '1rem' }}>
+          <div className="rf2-row-between" style={{ gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+            <div>
+              <h2 id="forecast-h" className="rf2-card__title">Expected joiners forecast</h2>
+              <p className="rf2-file__muted">
+                Each application counted once ({forecast.timezone}). Actual joiners and withdrawn offers are excluded.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem' }}>
+            {(['thisMonth', 'nextMonth'] as const).map((key) => {
+              const bucket = forecast[key];
+              const isSelected = forecastBucket === key;
+              return (
+                <div key={key} className="rf2-card" data-testid={`forecast-card-${key}`} style={{ padding: '1rem' }}>
+                  <div className="rf2-row-between" style={{ alignItems: 'center', gap: '0.5rem' }}>
+                    <strong>{key === 'thisMonth' ? `Expected this month (${bucket.month})` : `Expected next month (${bucket.month})`}</strong>
+                    <span className="rf2-team__sum-value" data-testid={`forecast-total-${key}`}>{bucket.total}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', margin: '0.5rem 0' }}>
+                    <StatusChip tone="success" label={`${bucket.signed} verified signed`} />
+                    <StatusChip tone="warning" label={`${bucket.pendingSignature} pending signature`} />
+                  </div>
+                  <ButtonV2
+                    kind="secondary"
+                    size="sm"
+                    aria-expanded={isSelected}
+                    onClick={() => setForecastBucket(isSelected ? null : key)}
+                  >
+                    {isSelected ? 'Hide drill-down' : `View ${key === 'thisMonth' ? 'this month' : 'next month'} list`}
+                  </ButtonV2>
+                </div>
+              );
+            })}
+          </div>
+
+          {activeForecast ? (
+            <div style={{ marginTop: '1rem' }} data-testid="forecast-drilldown">
+              <h3 className="rf2-card__title">
+                Expected joiners — {activeForecast.month} ({activeForecastItems.length})
+              </h3>
+              {activeForecastItems.length === 0 ? (
+                <p className="rf2-file__muted">No expected joiners match this month and search filter.</p>
+              ) : (
+                <div className="rf2-jscroll">
+                  <table className="rf2-jtable" aria-label={`Expected joiners for ${activeForecast.month}`}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Candidate</th>
+                        <th scope="col">Position & Site</th>
+                        <th scope="col">Expected Date</th>
+                        <th scope="col">Contract</th>
+                        <th scope="col">Stage</th>
+                        <th scope="col">Owner</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeForecastItems.map((row) => (
+                        <tr key={row.applicationId}>
+                          <td>
+                            <Link className="rf2-kcard__name" to={`/applications/${encodeURIComponent(row.applicationId)}`}>
+                              {row.candidateName}
+                            </Link>
+                          </td>
+                          <td>{[row.positionTitle, row.branchName].filter(Boolean).join(' · ')}</td>
+                          <td>{row.expectedJoiningDate}</td>
+                          <td>
+                            <StatusChip
+                              tone={row.contractSigned ? 'success' : 'warning'}
+                              label={row.contractSigned ? 'Verified signed' : 'Pending signature'}
+                            />
+                          </td>
+                          <td>{row.stage}</td>
+                          <td>{row.ownerName}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="rf2-team__toolbar">
         <div className="rf2-row-between" style={{ width: '100%', gap: '1rem', flexWrap: 'wrap' }}>

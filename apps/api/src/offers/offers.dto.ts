@@ -130,4 +130,12 @@ export class SendOfferDto {
   @IsOptional()
   @IsBoolean()
   prepareOnly?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  proposedJoiningDate?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  resend?: boolean;
 }

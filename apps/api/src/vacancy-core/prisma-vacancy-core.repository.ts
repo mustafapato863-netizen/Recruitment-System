@@ -1,6 +1,6 @@
 import { buildTargetChip, vacancyRequestStatusLabel } from '@recruitflow/contracts';
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 import { PrismaService } from '../database/prisma.service';
 import type {
@@ -120,11 +120,21 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     return request && request.organizationId === organizationId ? this.toVacancyRequest(request) : null;
   }
 
-  async saveRequest(request: VacancyRequest): Promise<VacancyRequest> {
+  async saveRequest(request: VacancyRequest, pendingApprovalId?: string): Promise<VacancyRequest> {
     await this.assertRequestReferences(request);
-    return this.prisma.$transaction((transaction) =>
-      this.saveRequestInTransaction(transaction, request),
-    );
+    return this.prisma.$transaction(async (transaction) => {
+      if (pendingApprovalId) {
+        const decision = request.approvals.find((approval) => approval.id === pendingApprovalId)!;
+        const claimed = await transaction.vacancyRequestApproval.updateMany({
+          where: { id: pendingApprovalId, vacancyRequestId: request.id, revision: request.approvalRevision, status: 'Pending' },
+          data: { status: decision.status },
+        });
+        if (claimed.count !== 1) {
+          throw new ConflictException({ code: 'APPROVAL_ALREADY_DECIDED', message: 'This approval has already been decided.' });
+        }
+      }
+      return this.saveRequestInTransaction(transaction, request);
+    });
   }
 
   async saveRequestAndVacancy(
@@ -185,6 +195,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         budgetMin: input.budgetMin ?? null,
         budgetMax: input.budgetMax ?? null,
         budgetCurrency: input.budgetCurrency ?? null,
+        budgetPeriod: input.budgetPeriod ?? null,
         criticality: input.criticality ?? null,
         targetStartDate: toDate(input.targetStartDate),
         targetFillDate: toDate(input.targetFillDate),
@@ -200,6 +211,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         departmentId: input.departmentId ?? null,
         assignedEmployeeId: input.assignedEmployeeId ?? null,
         submittedAt: null,
+        submittedById: null,
         approvalRevision: 1,
       },
       include: { approvals: true, ...replacedEmployeeInclude, vacancy: { select: { joinedHeadcount: true } } },
@@ -285,7 +297,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     return this.nextBusinessCode('VAC');
   }
 
-  async getApproverInbox(organizationId: string, userRoleCodes: string[]): Promise<VacancyRequest[]> {
+  async getApproverInbox(organizationId: string, userRoleCodes: string[], userId?: string): Promise<VacancyRequest[]> {
     const isAdmin = userRoleCodes.includes('ADMINISTRATOR');
     const requests = await this.prisma.vacancyRequest.findMany({
       where: {
@@ -297,23 +309,38 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
               approvals: {
                 some: {
                   status: 'Pending',
-                  roleCode: { in: userRoleCodes },
+                  OR: [
+                    ...(userId ? [{ assigneeUserId: userId }] : []),
+                    { assigneeUserId: null, roleCode: { in: userRoleCodes } },
+                  ],
                 },
               },
             }),
       },
       include: { approvals: true, ...replacedEmployeeInclude, vacancy: { select: { joinedHeadcount: true } } },
     });
-    // Filter to ensure the *current* step matches
+    // Ticket 16: never show a user their own submitted/requested requisition or one
+    // where they already decided an earlier step in the current revision.
     return requests
-      .filter((r) =>
-        r.approvals.some(
+      .filter((r) => {
+        if (userId && (r.requesterId === userId || r.submittedById === userId)) return false;
+        if (
+          userId &&
+          r.approvals.some(
+            (a) => a.revision === r.approvalRevision && a.status !== 'Pending' && a.assigneeUserId === userId,
+          )
+        ) {
+          return false;
+        }
+        return r.approvals.some(
           (a) =>
             a.revision === r.approvalRevision &&
             a.status === 'Pending' &&
-            (isAdmin || userRoleCodes.includes(a.roleCode)),
-        ),
-      )
+            (isAdmin ||
+              (userId && a.assigneeUserId === userId) ||
+              (a.assigneeUserId === null && userRoleCodes.includes(a.roleCode))),
+        );
+      })
       .map((r) => this.toVacancyRequest(r));
   }
 
@@ -374,6 +401,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         budgetMin: request.budgetMin,
         budgetMax: request.budgetMax,
         budgetCurrency: request.budgetCurrency,
+        budgetPeriod: request.budgetPeriod ?? null,
         criticality: request.criticality,
         targetStartDate: toDate(request.targetStartDate),
         targetFillDate: toDate(request.targetFillDate),
@@ -389,6 +417,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         ...(request.departmentId !== undefined ? { departmentId: request.departmentId } : {}),
         ...(request.assignedEmployeeId !== undefined ? { assignedEmployeeId: request.assignedEmployeeId } : {}),
         submittedAt: toDateTime(request.submittedAt),
+        ...(request.submittedById !== undefined ? { submittedById: request.submittedById } : {}),
         approvalRevision: request.approvalRevision,
         updatedAt: toDateTime(request.updatedAt) ?? new Date(),
       },
@@ -536,6 +565,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       budgetMin: request.budgetMin,
       budgetMax: request.budgetMax,
       budgetCurrency: request.budgetCurrency as VacancyRequest['budgetCurrency'],
+      budgetPeriod: (request.budgetPeriod as VacancyRequest['budgetPeriod']) ?? null,
       criticality: request.criticality,
       targetStartDate: toDateOnlyString(request.targetStartDate),
       targetFillDate: toDateOnlyString(request.targetFillDate),
@@ -555,6 +585,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       cancelledAt: toIsoString(request.cancelledAt),
       cancelReason: request.cancelReason,
       submittedAt: toIsoString(request.submittedAt),
+      submittedById: request.submittedById ?? null,
       approvalRevision: request.approvalRevision,
       approvals: request.approvals.map((approval) =>
         this.toApproval(approval),

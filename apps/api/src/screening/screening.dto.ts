@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import type { ScreeningOutcome } from '@recruitflow/contracts';
 
@@ -42,8 +42,12 @@ export class CreateScreeningLogDto {
   currentSalary?: number;
 
   @IsOptional()
-  @IsEnum(['AED', 'EGP', 'EGY'], { message: 'Currency must be either AED or EGP' })
+  @IsIn(['AED', 'EGP', 'EGY', 'SAR', 'USD'], { message: 'Currency must be AED, EGP, SAR, or USD' })
   salaryCurrency?: string;
+
+  @IsOptional()
+  @IsIn(['Monthly', 'Annual'])
+  salaryPeriod?: 'Monthly' | 'Annual' | null;
 
   @IsOptional()
   @Transform(({ value }) => blankToNull(value))

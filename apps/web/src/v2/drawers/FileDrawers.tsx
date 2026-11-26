@@ -325,7 +325,10 @@ export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
         </StageFormSection>
         <ButtonV2 kind="secondary" onClick={saveDraft} loading={draftBusy} disabled={s.busy || draftBlocked}>Save draft</ButtonV2>
         {draftSaved ? <Note>Draft saved. It stays private to you on this application.</Note> : null}
-        <Note>Pay is not recorded here.</Note>
+        <Note>
+          Need to record expected salary and compare against the vacancy range?{' '}
+          <Link className="rf2-link" to={`/applications/${encodeURIComponent(app.id)}/screening`}>Open full screening page</Link>.
+        </Note>
         <FormError text={s.error} />
       </form>
     </DrawerV2>
@@ -346,22 +349,20 @@ export { cairoIso };
 
 export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
   const app = file.workspace.application;
-  const { user: me } = useAuth();
   const openInterview = file.interviews.find((i) => i.id === params?.get('interview') && (i.status === 'Scheduled' || i.status === 'Rescheduled'));
-  const [type, setType] = useState('Technical');
+  const preHireContext = !openInterview && (params?.get('context') === 'prehire' || app.stage === 'Pre-Hire');
+  const [type, setType] = useState(preHireContext ? 'Assessment' : 'Technical');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('10:00');
   const [duration, setDuration] = useState('60');
   const [room, setRoom] = useState(openInterview?.locationUrl ?? '');
   const [reason, setReason] = useState('');
   const [people, setPeople] = useState<UserOption[]>([]);
-  const [participate, setParticipate] = useState(false);
   const [errs, setErrs] = useState<Record<string, string>>({});
   const [partialNotice, setPartialNotice] = useState<string | null>(null);
   const cursorRef = useRef<StageCursor>({ id: app.id, stage: app.stage as FileStage, version: app.version });
   const adapter = useMemo(() => interviewersAdapter(), []);
-  const includeSelf = Boolean(participate && me?.id && !people.some((person) => person.id === me.id));
-  const interviewerIds = [...new Set([...people.map((person) => person.id), ...(includeSelf && me?.id ? [me.id] : [])])];
+  const interviewerIds = [...new Set(people.map((person) => person.id))];
   const s = useSubmit(onDone, ['scheduledStart', 'scheduledEnd', 'locationUrl', 'attendeeUserIds', 'interviewType', 'title', 'rescheduleReason']);
   const gate = gateState(file);
   const needsMove = ['Applied', 'Screening'].includes(cursorRef.current.stage);
@@ -369,10 +370,12 @@ export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
     const next: Record<string, string> = {};
     if (!date) next.date = 'Pick a date.';
     if (!/^\d{2}:\d{2}$/.test(time)) next.time = 'Pick a start time.';
+    if (room.trim()) {
+      try { if (new URL(room.trim()).protocol !== 'https:') next.room = 'The room link must start with https://'; } catch { next.room = 'Paste a valid meeting room URL (https://…).'; }
+    }
     if (openInterview) {
       if (reason.trim().length < 3) next.reason = 'Say why this time changed.';
     } else {
-      try { if (new URL(room).protocol !== 'https:') next.room = 'The room link must start with https://'; } catch { next.room = 'Paste the meeting room URL (https://…).'; }
       if (!interviewerIds.length) next.people = 'Add at least one interviewer.';
     }
     setErrs(next);
@@ -389,7 +392,17 @@ export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
         await advanceTo(cursorRef, 'Interview');
       }
       try {
-        await scheduleInterview({ applicationId: app.id, title: `${type} interview: ${candidateName(app)}`, interviewType: type, scheduledStart: start, scheduledEnd: end, timezone: TZ, locationUrl: room.trim(), attendeeUserIds: interviewerIds });
+        await scheduleInterview({
+          applicationId: app.id,
+          title: `${type} interview: ${candidateName(app)}`,
+          interviewType: type,
+          ...(preHireContext || type === 'Assessment' ? { stageContext: 'Pre-Hire' as const } : {}),
+          scheduledStart: start,
+          scheduledEnd: end,
+          timezone: TZ,
+          ...(room.trim() ? { locationUrl: room.trim() } : {}),
+          attendeeUserIds: interviewerIds,
+        });
       } catch (err) {
         if (cursorRef.current.stage !== app.stage) {
           setPartialNotice(`File moved to ${cursorRef.current.stage}, but scheduling the interview did not finish. Fix any error and retry to schedule without moving the stage again.`);
@@ -410,7 +423,7 @@ export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
     } as Parameters<typeof updateInterview>[1]));
   };
   return (
-    <DrawerV2 open onClose={onClose} kicker="Interview" title={`${openInterview ? 'Reschedule interview' : 'Schedule interview'} — ${candidateName(app)}`} subtitle={app.positionTitle}
+    <DrawerV2 open onClose={onClose} kicker={preHireContext ? 'Pre-hire assessment' : 'Interview'} title={`${openInterview ? 'Reschedule interview' : preHireContext ? 'Schedule assessment interview' : 'Schedule interview'} — ${candidateName(app)}`} subtitle={app.positionTitle}
       primaryAction={<ButtonV2 onClick={submit} loading={s.busy} disabled={!openInterview && ((needsMove && (gate.unknown.screening || !gate.screenNote)) || gate.unknown.interviews)}>{openInterview ? 'Reschedule' : 'Schedule interview'}</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <div className="rf2-drawer-form rf2-stage-form">
@@ -423,7 +436,7 @@ export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
         <StageFormSection title="Time & location" icon={CalendarClock}>
           {openInterview ? null : (
             <SelectV2 label="Interview type" value={type} onChange={(e) => setType(e.target.value)}>
-              {['Screening', 'Technical', 'Behavioral', 'Managerial'].map((t) => <option key={t}>{t}</option>)}
+              {['Screening', 'Technical', 'Behavioral', 'Managerial', 'Assessment'].map((t) => <option key={t}>{t}</option>)}
             </SelectV2>
           )}
           <div className="rf2-drawer-form__row">
@@ -433,8 +446,8 @@ export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
               {['30', '45', '60', '90'].map((m) => <option key={m} value={m}>{m} min</option>)}
             </SelectV2>
           </div>
-          <InputV2 label="Room URL" required={!openInterview} type="url" placeholder="https://" value={room} onChange={(e) => setRoom(e.target.value)} error={errs.room ?? s.at('locationUrl')}
-            hint="The meeting room link. It must be on an approved meeting host." />
+          <InputV2 label="Room URL (optional)" type="url" placeholder="https:// (optional)" value={room} onChange={(e) => setRoom(e.target.value)} error={errs.room ?? s.at('locationUrl')}
+            hint="Optional meeting link. When provided, it must be on an approved meeting host." />
         </StageFormSection>
         {openInterview ? (
           <StageFormSection title="Schedule changes" icon={Clock} tone="warning">
@@ -445,17 +458,6 @@ export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
         ) : (
           <StageFormSection title="Interview panel" icon={Users} tone="success">
               <UserPicker label="Interviewers" required={interviewerIds.length === 0} multiple adapter={adapter} value={people} onChange={setPeople} error={errs.people ?? s.at('attendeeUserIds')} />
-              <label className="rf2-checklist__item">
-                <span>
-                  <input
-                    type="checkbox"
-                    checked={participate}
-                    disabled={!me?.id}
-                    onChange={(event) => setParticipate(event.target.checked)}
-                  />
-                  Participate as interviewer (I will submit a scorecard)
-                </span>
-              </label>
           </StageFormSection>
         )}
         <FormError text={s.error} />
@@ -548,6 +550,11 @@ export function ScorecardDrawer({ file, onClose, onDone, params }: DrawerProps) 
           </>
         ) : null}
         <ul className="rf2-gates" aria-label="Gate to Offer"><Gate ok={gate.scorecard} unknown={gate.unknown.scorecards || gate.unknown.interviews} label="A scorecard is submitted" hint="Offer is blocked until then" /></ul>
+        {iv ? (
+          <p className="rf2-file__muted">
+            <Link className="rf2-link" to={`/interviews/${encodeURIComponent(iv.id)}/scorecard`}>Open full SGH evaluation form</Link>
+          </p>
+        ) : null}
         {cards.filter((c) => c !== mine).map((c) => <ScorecardSummary key={c.id} card={c} />)}
         {submitted && !revising ? <ScorecardSummary card={mine} own /> : null}
         {editable && iv ? (
@@ -811,15 +818,20 @@ export function SendOfferDrawer({ file, onClose, onDone }: DrawerProps) {
   const app = file.workspace.application;
   const offer = file.offer;
   const approved = offer?.status === 'Approved';
+  const savedJoiningDate = (currentVersion(offer)?.proposedJoiningDate ?? '').slice(0, 10);
   const channel: SendChannel = 'whatsapp';
   const [templates, setTemplates] = useState<OfferTemplate[] | null>(null);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [templateReload, setTemplateReload] = useState(0);
   const [templateId, setTemplateId] = useState('');
+  const [expectedJoiningDate, setExpectedJoiningDate] = useState(savedJoiningDate);
   const [result, setResult] = useState<SendOfferResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setExpectedJoiningDate((currentVersion(offer)?.proposedJoiningDate ?? '').slice(0, 10));
+  }, [offer]);
   useEffect(() => {
     let alive = true;
     setTemplates(null);
@@ -847,9 +859,16 @@ export function SendOfferDrawer({ file, onClose, onDone }: DrawerProps) {
   const send = async (prepareOnly = false) => {
     if (!offer) return;
     if (!templateId) { setError('Pick a template.'); return; }
+    if (!expectedJoiningDate.trim()) { setError('Pick the expected joining date before sending the offer.'); return; }
     setBusy(true); setError(null);
     try {
-      const res = await sendOffer(offer.id, { channel, templateId, ...(prepareOnly ? { prepareOnly: true } : {}) });
+      const dateChanged = expectedJoiningDate.trim() !== savedJoiningDate;
+      const res = await sendOffer(offer.id, {
+        channel,
+        templateId,
+        ...(prepareOnly ? { prepareOnly: true } : {}),
+        ...(dateChanged ? { proposedJoiningDate: isoDate(expectedJoiningDate.trim()) } : {}),
+      });
       setResult(prepareOnly ? { ...res, prepared: true, status: 'Approved' } : { ...res, prepared: false });
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   };
@@ -902,6 +921,14 @@ export function SendOfferDrawer({ file, onClose, onDone }: DrawerProps) {
           {templatesError ? <option value="">Templates unavailable</option> : templates === null ? <option value="">Loading…</option> : templates.length === 0 ? <option value="">No active WhatsApp template</option>
             : templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.isDefault ? ' (default)' : ''}</option>)}
         </SelectV2>
+        <InputV2
+          label="Expected joining date"
+          type="date"
+          required
+          value={expectedJoiningDate}
+          onChange={(e) => setExpectedJoiningDate(e.target.value)}
+          hint="Required before sending the contract. Used for expected joiners forecast."
+        />
         {templatesError ? (
           <div className="rf2-drawer-form__error" role="alert" data-testid="templates-error">
             <span>{templatesError}</span>{' '}
@@ -1103,6 +1130,36 @@ export function PreHireDrawer({ file, onDone }: DrawerProps) {
         {awaiting && canRecord ? (
           <StageFormSection title="Actual joining" icon={CalendarClock} tone="success"><InputV2 label="Actual joining date" type="date" required value={actualJoiningDate} onChange={(e) => setActualJoiningDate(e.target.value)} /></StageFormSection>
         ) : null}
+        <StageFormSection title="Pre-hire assessment interview" icon={CalendarClock}>
+          {(() => {
+            const assessments = file.interviews.filter(
+              (i) => (i.stageContext === 'Pre-Hire' || i.interviewType === 'Assessment') && i.status !== 'Cancelled' && i.status !== 'No-show',
+            );
+            if (assessments.length === 0) {
+              return (
+                <p className="rf2-file__muted">
+                  No pre-hire assessment interview scheduled.{' '}
+                  <Link className="rf2-link" to={drawerSearch(undefined, 'schedule') + '&context=prehire'}>Schedule assessment interview</Link>
+                </p>
+              );
+            }
+            return (
+              <ul className="rf2-approvals" aria-label="Pre-hire assessment interviews">
+                {assessments.map((iv) => {
+                  const cards = (file.scorecards[iv.id] ?? []).filter(isScorecardSubmitted);
+                  const expected = iv.attendees?.length ?? 0;
+                  const done = expected > 0 ? cards.length >= expected : cards.length > 0;
+                  return (
+                    <li key={iv.id}>
+                      <strong>{iv.title}</strong> · {done ? 'Evaluation complete' : `${cards.length}/${expected || 1} scorecards submitted`}{' '}
+                      <Link className="rf2-link" to={`/interviews/${encodeURIComponent(iv.id)}/scorecard`}>Open SGH form</Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+          })()}
+        </StageFormSection>
         <StageFormSection title="Joining checks" icon={ShieldCheck}>
           <ul className="rf2-checklist" aria-label="Joining checks">
             {checks.map((row) => {

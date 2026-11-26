@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { AuthUser } from '@recruitflow/contracts';
 import type { Prisma } from '@recruitflow/database';
@@ -6,6 +6,7 @@ import { PrismaService } from '../database/prisma.service';
 import { AccessControlService } from '../access-control/access-control.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailOutboxService } from '../email/email-outbox.service';
+import { normalizePhoneKey } from '../candidates/contact-keys';
 import {
   LOCAL_TEST_DESTINATION,
   MESSAGE_ATTEMPT_ACTION,
@@ -39,7 +40,7 @@ export interface FilledMessageTemplate {
 
 const applicationForMessage = {
   stage: true,
-  candidate: { select: { firstName: true, lastName: true } },
+  candidate: { select: { firstName: true, lastName: true, phone: true, phoneNormalized: true } },
   vacancy: { select: { position: { select: { title: true } } } },
   organization: { select: { name: true } },
   primaryRecruiter: { select: { displayName: true } },
@@ -108,15 +109,96 @@ export class MessageAttemptsService {
         isDefault: t.isDefault,
       }))
       : undefined;
+    const rawAppPhone = await this.readRealCandidatePhone(user.organizationId, applicationId);
+    const whatsappDigits = this.toWhatsAppDigits(rawAppPhone);
     return {
       applicationId,
       followUpDate: app.followUpDate ? app.followUpDate.toISOString().slice(0, 10) : null,
       destination: LOCAL_TEST_DESTINATION,
       deliveryEnabled: mailDeliveryEnabled(),
+      whatsappReady: Boolean(whatsappDigits),
       templates: templates.map((template) => this.fill(template, vars)),
       attempts: rows.map((row) => this.toView(row)),
       ...(whatsappTemplates !== undefined ? { whatsappTemplates } : {}),
     };
+  }
+
+  /**
+   * Ticket 08: Server-authorized WhatsApp handoff link.
+   * Resolves the real international phone number server-side (even when the UI preview masks it),
+   * verifies caller access to the application, renders the template, and returns the wa.me URL
+   * WITHOUT incrementing sent-message counters or creating a Sent attempt.
+   */
+  async buildWhatsAppLink(
+    user: AuthUser,
+    applicationId: string,
+    input?: { templateId?: string; message?: string },
+  ): Promise<{ url: string; message: string }> {
+    const visibility = await this.access.getApplicationVisibilityWhere(user);
+    const authorized = await this.prisma.application.findFirst({
+      where: { AND: [visibility, { id: applicationId, organizationId: user.organizationId }] },
+      select: {
+        id: true,
+        candidate: { select: { phone: true, phoneNormalized: true } },
+      },
+    });
+    if (!authorized) {
+      throw new ForbiddenException({
+        code: 'WHATSAPP_NOT_AUTHORIZED',
+        message: 'You are not authorized to open WhatsApp for this application.',
+      });
+    }
+
+    const digits = this.toWhatsAppDigits(authorized.candidate?.phoneNormalized ?? authorized.candidate?.phone ?? null);
+    if (!digits) {
+      throw new BadRequestException({
+        code: 'PHONE_MISSING',
+        message: 'Add a valid international mobile number on the candidate profile before opening WhatsApp.',
+      });
+    }
+
+    let message = input?.message?.trim() ?? '';
+    if (input?.templateId && this.prisma.whatsAppTemplate?.findFirst) {
+      const template = await this.prisma.whatsAppTemplate.findFirst({
+        where: { id: input.templateId, organizationId: user.organizationId, status: 'Active' },
+      });
+      if (!template) {
+        throw new NotFoundException('WhatsApp template not found.');
+      }
+      const vars = await this.composition(user.organizationId, applicationId);
+      message = renderTemplate(template.bodyTemplate, vars).trim();
+    } else if (!message) {
+      const vars = await this.composition(user.organizationId, applicationId);
+      message = `Hello ${vars.candidateName}, regarding your application for ${vars.positionTitle}.`;
+    }
+
+    const unresolved = [...new Set(Array.from(message.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g), (m) => m[1]))];
+    if (unresolved.length > 0) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: `Complete missing template details before opening WhatsApp: ${unresolved.join(', ')}.`,
+      });
+    }
+
+    return {
+      url: `https://wa.me/${digits}?text=${encodeURIComponent(message)}`,
+      message,
+    };
+  }
+
+  private async readRealCandidatePhone(organizationId: string, applicationId: string): Promise<string | null> {
+    const row = await this.prisma.application.findFirst({
+      where: { id: applicationId, organizationId },
+      select: { candidate: { select: { phone: true, phoneNormalized: true } } },
+    });
+    return row?.candidate?.phoneNormalized ?? row?.candidate?.phone ?? null;
+  }
+
+  private toWhatsAppDigits(phone: string | null | undefined): string | null {
+    if (!phone) return null;
+    const normalized = normalizePhoneKey(phone);
+    const digits = (normalized ?? phone).replace(/[\s().-]/g, '').replace(/^(?:\+|00)/, '');
+    return /^[1-9]\d{7,14}$/.test(digits) ? digits : null;
   }
 
   async send(user: AuthUser, applicationId: string, templateId: string) {

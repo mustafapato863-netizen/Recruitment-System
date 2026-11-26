@@ -59,6 +59,10 @@ export const errorCodes = [
   'SINGLE_PIPELINE_TEMPLATE', 'OVERRIDE_REASON_REQUIRED', 'OVERRIDE_NOT_ALLOWED', 'USER_DELETE_NOT_ALLOWED',
   // User management + strong passwords
   'WEAK_PASSWORD', 'PASSWORD_CHANGE_REQUIRED', 'EMAIL_ALREADY_EXISTS',
+  // Recruitment workflow upgrade (v1.3)
+  'SELF_APPROVAL_FORBIDDEN', 'APPROVAL_MANAGER_MISSING', 'APPROVAL_ALREADY_DECIDED',
+  'EXPECTED_SALARY_REQUIRED', 'EXPECTED_JOINING_DATE_REQUIRED', 'PREHIRE_ASSESSMENT_REQUIRED',
+  'IDENTITY_CONFLICT', 'PHONE_MISSING', 'WHATSAPP_NOT_AUTHORIZED',
 ] as const;
 
 /**
@@ -229,7 +233,8 @@ export interface VacancyRequest {
   budgetStatus: string | null;
   budgetMin: number | null;
   budgetMax: number | null;
-  budgetCurrency: 'AED' | 'EGP' | null;
+  budgetCurrency: 'AED' | 'EGP' | 'SAR' | 'USD' | null;
+  budgetPeriod?: 'Monthly' | 'Annual' | null;
   criticality: string | null;
   targetStartDate: string | null;
   targetFillDate: string | null;
@@ -242,6 +247,7 @@ export interface VacancyRequest {
   qualifications: string | null;
   benefits: string | null;
   submittedAt: string | null;
+  submittedById?: string | null;
   approvalRevision: number;
   /** B3: v2 due date (same value as targetFillDate). */
   dueDate?: string | null;
@@ -387,7 +393,8 @@ export interface CreateVacancyRequestInput {
   budgetStatus?: string | null;
   budgetMin?: number | null;
   budgetMax?: number | null;
-  budgetCurrency?: 'AED' | 'EGP' | null;
+  budgetCurrency?: 'AED' | 'EGP' | 'SAR' | 'USD' | null;
+  budgetPeriod?: 'Monthly' | 'Annual' | null;
   criticality?: string | null;
   targetStartDate?: string | null;
   targetFillDate?: string | null;
@@ -434,7 +441,8 @@ export interface UpdateVacancyRequestInput {
   budgetStatus?: string | null;
   budgetMin?: number | null;
   budgetMax?: number | null;
-  budgetCurrency?: 'AED' | 'EGP' | null;
+  budgetCurrency?: 'AED' | 'EGP' | 'SAR' | 'USD' | null;
+  budgetPeriod?: 'Monthly' | 'Annual' | null;
   criticality?: string | null;
   targetStartDate?: string | null;
   targetFillDate?: string | null;

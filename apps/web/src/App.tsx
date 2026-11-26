@@ -19,7 +19,10 @@ import './styles/tokens-v2.css';
 // v1 URLs are redirected to their v2 equivalents by the shell (v2/destinations.ts), so only v2 routes exist here.
 const JobsListRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ default: m.JobsListRoute })));
 const JobDetailRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ default: m.JobDetailRoute })));
+const UploadCvPage = lazy(() => import('./v2/pages/UploadCvPageV2').then((m) => ({ default: m.UploadCvPageV2 })));
 const ApplicationRoute = lazy(() => import('./v2/pages/ApplicationRoute').then((m) => ({ default: m.ApplicationRoute })));
+const ScreeningPage = lazy(() => import('./v2/pages/ScreeningPageV2').then((m) => ({ default: m.ScreeningPageV2 })));
+const ScorecardPage = lazy(() => import('./v2/pages/ScorecardPageV2').then((m) => ({ default: m.ScorecardPageV2 })));
 const MyWorkRoute = lazy(() => import('./v2/pages/MyWorkRoute').then((m) => ({ default: m.MyWorkRoute })));
 const TeamWorkRoute = lazy(() => import('./v2/pages/TeamWorkV2').then((m) => ({ default: m.TeamWorkV2 })));
 const MyInterviewsGate = lazy(() => import('./v2/pages/MyInterviewsV2').then((m) => ({ default: m.MyInterviewsV2 })));
@@ -104,13 +107,16 @@ function App() {
 
                   {/* Employee */}
                   <Route path="/vacancies" element={<PermissionGate requiredPermission="VACANCY_VIEW"><JobsListRoute /></PermissionGate>} />
+                  <Route path="/vacancies/:id/upload-cv" element={<PermissionGate requiredPermission="VACANCY_VIEW"><UploadCvPage /></PermissionGate>} />
                   <Route path="/vacancies/:id" element={<PermissionGate requiredPermission="VACANCY_VIEW"><JobDetailRoute /></PermissionGate>} />
                   <Route path="/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesListRoute /></PermissionGate>} />
                   <Route path="/candidates/compare" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesCompareRoute /></PermissionGate>} />
                   <Route path="/talent-pools" element={<Navigate to="/sourcing-match" replace />} />
                   <Route path="/talent-pools/:id" element={<Navigate to="/sourcing-match" replace />} />
                   <Route path="/offers/:id" element={<EntityLinkRoute kind="offer" />} />
+                  <Route path="/applications/:id/screening" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><ScreeningPage /></PermissionGate>} />
                   <Route path="/applications/:id" element={<PermissionGate requiredAnyPermission={['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK']}><ApplicationRoute /></PermissionGate>} />
+                  <Route path="/interviews/:id/scorecard" element={<PermissionGate requiredPermission="VACANCY_VIEW"><ScorecardPage /></PermissionGate>} />
 
                   {/* Manager */}
                   <Route path="/vacancy-requests" element={<RequisitionsGate><PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><RequisitionsRoute /></PermissionGate></RequisitionsGate>} />

@@ -48,6 +48,20 @@ export class HiringController {
     return this.hiringService.getMetrics(user.organizationId, user);
   }
 
+  /** Ticket 05: Expected joiners forecast for this month and next month with drill-down items. */
+  @Get('forecast')
+  @RequirePermissions('APPLICATION_VIEW')
+  getForecast(
+    @CurrentUser() user: AuthUser,
+    @Query('branchId') branchId?: string,
+    @Query('asOf') asOf?: string,
+  ) {
+    return this.hiringService.getJoiningForecast(user.organizationId, user, {
+      ...(branchId?.trim() ? { branchId: branchId.trim() } : {}),
+      ...(asOf?.trim() ? { asOf: asOf.trim() } : {}),
+    });
+  }
+
   @Get('final-approvals')
   @RequireAnyPermissions('FINAL_HIRING_APPROVAL', 'VACANCY_APPROVE', 'OFFER_APPROVE')
   getFinalApprovalInbox(@CurrentUser() user: AuthUser) {

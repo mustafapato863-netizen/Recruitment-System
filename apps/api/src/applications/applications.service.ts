@@ -585,43 +585,72 @@ export class ApplicationsService {
       throw new ConflictException({
         code: 'APPLICATION_EXISTS',
         message: `Candidate ${candidate.firstName} ${candidate.lastName} has already applied to vacancy ${vacancy.vacancyCode}.`,
+        details: {
+          applicationId: existing.id,
+          applicationCode: existing.applicationCode,
+          stage: existing.stage,
+        },
       });
     }
 
     const applicationCode = await this.nextApplicationCode();
 
-    const created = await this.prisma.$transaction(async (tx) => {
-      const app = await tx.application.create({
-        data: {
-          organizationId,
-          applicationCode,
-          vacancyId: dto.vacancyId,
-          candidateId: dto.candidateId,
-          stage: 'Applied',
-          source: dto.source?.trim() ?? candidate.source ?? null,
-          // Default the file owner to the job owner (B1); never an admin.
-          primaryRecruiterId: dto.primaryRecruiterId ?? vacancy.primaryRecruiterId ?? null,
-          taskOwnerId: dto.taskOwnerId ?? null,
-        },
-        include: {
-          candidate: true,
-          vacancy: { include: { position: true, branch: true } },
-          primaryRecruiter: true,
-          taskOwner: true,
-        },
-      });
+    let created;
+    try {
+      created = await this.prisma.$transaction(async (tx) => {
+        const app = await tx.application.create({
+          data: {
+            organizationId,
+            applicationCode,
+            vacancyId: dto.vacancyId,
+            candidateId: dto.candidateId,
+            stage: 'Applied',
+            source: dto.source?.trim() ?? candidate.source ?? null,
+            // Default the file owner to the job owner (B1); never an admin.
+            primaryRecruiterId: dto.primaryRecruiterId ?? vacancy.primaryRecruiterId ?? null,
+            taskOwnerId: dto.taskOwnerId ?? null,
+          },
+          include: {
+            candidate: true,
+            vacancy: { include: { position: true, branch: true } },
+            primaryRecruiter: true,
+            taskOwner: true,
+          },
+        });
 
-      await tx.applicationStatusHistory.create({
-        data: {
-          applicationId: app.id,
-          fromStage: null,
-          toStage: 'Applied',
-          reason: 'Initial application submitted',
-        },
-      });
+        await tx.applicationStatusHistory.create({
+          data: {
+            applicationId: app.id,
+            fromStage: null,
+            toStage: 'Applied',
+            reason: 'Initial application submitted',
+          },
+        });
 
-      return app;
-    });
+        return app;
+      });
+    } catch (error) {
+      // Ticket 09: concurrent uploads racing on unique (vacancyId, candidateId) map cleanly to 409 APPLICATION_EXISTS.
+      const code = (error as { code?: string } | null)?.code;
+      if (code === 'P2002') {
+        const raced = await this.prisma.application.findUnique({
+          where: {
+            vacancyId_candidateId: {
+              vacancyId: dto.vacancyId,
+              candidateId: dto.candidateId,
+            },
+          },
+        });
+        throw new ConflictException({
+          code: 'APPLICATION_EXISTS',
+          message: `Candidate ${candidate.firstName} ${candidate.lastName} has already applied to vacancy ${vacancy.vacancyCode}.`,
+          ...(raced
+            ? { details: { applicationId: raced.id, applicationCode: raced.applicationCode, stage: raced.stage } }
+            : {}),
+        });
+      }
+      throw error;
+    }
 
     return this.toApplication(created);
   }

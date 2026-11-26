@@ -106,6 +106,8 @@ describe('classic staff URLs land on a v2 surface', () => {
     ...Object.fromEntries(Object.keys(employee).map((path) => [path, path.startsWith('/interviews') ? '/my-interviews' : '/team-work'])),
     '/joinings': null,
     '/vacancies/v1/analytics': null,
+    '/candidates/c1': null,
+    '/candidates/c1/documents': null,
     '/import': '/team-work',
     '/import/candidates/j1': '/team-work',
     '/hires': null, '/hires/h1': null, '/offers': null,

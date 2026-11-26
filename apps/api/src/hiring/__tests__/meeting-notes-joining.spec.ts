@@ -30,7 +30,7 @@ function loadedApplication() {
       approvals: [{ status: 'Approved', roleCode: 'FINAL_HIRING_APPROVER', invalidatedAt: null, decisionFingerprint: FINGERPRINT }],
     },
     joiningChecks: CHECKS,
-    interviews: [],
+    interviews: [{ title: 'Second assessment', status: 'Completed', attendees: [{ userId: 'panel' }], scorecards: [{ interviewerId: 'panel' }] }],
   };
 }
 

@@ -654,7 +654,7 @@ describe('B2F-6 job Hold/Close for the owner’s manager', () => {
 
 const pendingReq = {
   id: 'req-1', requestCode: 'REQ-1', status: 'Pending Approval' as const,
-  branchId: 'b1', positionId: 'p1', requesterId: 'u-karim', requesterName: 'Karim Hassan',
+  branchId: 'b1', positionId: 'p1', requesterId: 'u-mariam', requesterName: 'Mariam Farag',
   positionTitle: 'Ward Nurse', branchName: 'SGH Jeddah', departmentName: 'Nursing',
   requestedHeadcount: 2, dueDate: '2026-12-01', justification: 'Cover a leaver',
   primaryRecruiter: { id: 'u-mariam', name: 'Mariam Farag' },

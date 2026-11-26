@@ -355,3 +355,76 @@
 /* E2: textarea */
 [data-ui='v2'] .rf2-field__box--area { height: auto; align-items: stretch; padding-block: var(--rf2-space-2, 8px); }
 [data-ui='v2'] .rf2-field__control--area { resize: vertical; min-height: 72px; line-height: var(--rf2-leading-body, 20px); }
+
+/* Ticket 06: in-app discard confirmation modal */
+[data-ui='v2'] .rf2-confirm-root {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: var(--rf2-space-2);
+}
+[data-ui='v2'] .rf2-confirm__scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--rf2-ink) 42%, transparent);
+  animation: rf2-fade var(--rf2-motion-fast) var(--rf2-ease);
+}
+[data-ui='v2'] .rf2-confirm {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--rf2-space-2);
+  padding: var(--rf2-space-3);
+  border-radius: var(--rf2-radius-card);
+  border: 1px solid var(--rf2-border);
+  background: var(--rf2-card);
+  color: var(--rf2-ink);
+  box-shadow: var(--rf2-card-shadow-hover);
+}
+[data-ui='v2'] .rf2-confirm__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--rf2-space-1-5);
+}
+[data-ui='v2'] .rf2-confirm__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-warning-tint);
+  color: var(--rf2-warning);
+}
+[data-ui='v2'] .rf2-confirm__copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rf2-space-0-5);
+  min-width: 0;
+}
+[data-ui='v2'] .rf2-confirm__title {
+  margin: 0;
+  font-size: var(--rf2-text-drawer-title);
+  line-height: var(--rf2-leading-drawer-title);
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+[data-ui='v2'] .rf2-confirm__body {
+  margin: 0;
+  font-size: var(--rf2-text-body);
+  line-height: var(--rf2-leading-body);
+  color: var(--rf2-ink-2);
+}
+[data-ui='v2'] .rf2-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--rf2-space-1);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='v2'] .rf2-confirm__scrim { animation: none; }
+}

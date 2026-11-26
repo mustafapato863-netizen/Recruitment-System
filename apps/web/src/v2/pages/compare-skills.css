@@ -68,7 +68,7 @@
 /* Control Bar Card (Job Selector + Comparison View + Add Candidates) */
 [data-ui='v2'] .rf2-cstudio__controls-card {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(240px, 0.85fr) auto;
+  grid-template-columns: minmax(0, 1.45fr) minmax(240px, 0.85fr);
   align-items: start;
   gap: 16px;
   padding: 16px 18px;
@@ -261,40 +261,6 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-[data-ui='v2'] .rf2-cstudio__add-col {
-  display: flex;
-  align-items: center;
-  padding-top: 22px;
-  position: relative;
-}
-
-[data-ui='v2'] .rf2-cstudio__add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 15px;
-  border: 1px solid #1d4ed8;
-  border-radius: 10px;
-  background: #2563eb;
-  color: #ffffff;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.22);
-}
-
-[data-ui='v2'] .rf2-cstudio__add-btn:hover {
-  background: #1d4ed8;
-}
-
-[data-ui='v2'] .rf2-cstudio__add-btn svg {
-  width: 15px;
-  height: 15px;
 }
 
 /* Selected Candidates Chip Strip */
@@ -1112,9 +1078,5 @@
 
   [data-ui='v2'] .rf2-cstudio__job-meta {
     padding-left: 0;
-  }
-
-  [data-ui='v2'] .rf2-cstudio__add-col {
-    padding-top: 0;
   }
 }

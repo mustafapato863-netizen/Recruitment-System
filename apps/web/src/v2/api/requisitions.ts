@@ -36,9 +36,15 @@ export interface TargetChip { title: string; filled: number; target: number; lab
 export interface Requisition {
   id: string; requestCode: string; status: ReqStatus; statusLabel?: string;
   branchId: string; positionId: string; requesterId: string;
+  submittedById?: string | null;
   position?: { title: string; specialty?: string | null } | null;
   requestedHeadcount: number; targetFillDate: string | null; dueDate?: string | null;
   gradeId?: string | null; assignedEmployeeId?: string | null; justification: string | null;
+  /** Ticket 01: requisition salary range (shown on requisition form/details; omitted from list rows). */
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  budgetCurrency?: 'AED' | 'EGP' | 'SAR' | 'USD' | null;
+  budgetPeriod?: 'Monthly' | 'Annual' | null;
   /** Meeting notes 2026-11-25 (items 1–2): opening kind, replaced employee, hiring type, reason, nationality preference. */
   employmentType?: string | null;
   openingType?: string | null;
@@ -71,8 +77,19 @@ export const STATUS_TONE: Record<ReqStatus, 'neutral' | 'info' | 'warning' | 'su
 export const isEditable = (s: ReqStatus) => s === 'Draft' || s === 'Changes Requested';
 export const isClosed = (s: ReqStatus) => s === 'Cancelled' || s === 'Rejected' || s === 'Converted to Vacancy';
 
-export const fetchRequisitions = async () => list(stripPay(await getApi<Requisition[] | { data: Requisition[] }>('/vacancy-requests')));
-export const fetchRequisition = async (id: string) => stripPay(await getApi<Requisition>(`/vacancy-requests/${enc(id)}`));
+function sanitizeRequisition(raw: Requisition): Requisition {
+  const cleaned = stripPay(raw);
+  return {
+    ...cleaned,
+    budgetMin: raw.budgetMin ?? null,
+    budgetMax: raw.budgetMax ?? null,
+    budgetCurrency: raw.budgetCurrency ?? null,
+    budgetPeriod: raw.budgetPeriod ?? null,
+  };
+}
+
+export const fetchRequisitions = async () => list(await getApi<Requisition[] | { data: Requisition[] }>('/vacancy-requests')).map(sanitizeRequisition);
+export const fetchRequisition = async (id: string) => sanitizeRequisition(await getApi<Requisition>(`/vacancy-requests/${enc(id)}`));
 export async function fetchContext(): Promise<ReqContext | null> {
   try {
     const c = await getApi<Partial<ReqContext>>('/vacancy-requests/context');
@@ -99,13 +116,18 @@ export async function fetchPeople(): Promise<Person[] | null> {
   } catch { return null; }
 }
 
-/** The fields M1 edits. Never budget, never pay. */
+/** The fields M1 edits, including the requisition salary range (Ticket 01). */
 export interface ReqFields {
   departmentId?: string | null; positionId: string; branchId: string; requestedHeadcount: number; dueDate: string | null; gradeId: string | null; assignedEmployeeId: string | null; justification: string | null;
+  /** Ticket 01: minimum/maximum salary, currency, and period. */
+  budgetMin?: number | null; budgetMax?: number | null; budgetCurrency?: 'AED' | 'EGP' | 'SAR' | 'USD' | null; budgetPeriod?: 'Monthly' | 'Annual' | null;
   /** Meeting notes 2026-11-25 (items 1–2). */
   employmentType?: string | null; openingType?: string | null; replacedEmployeeId?: string | null;
   nationalityPreference?: string[] | null; reason?: string | null; reasonNote?: string | null;
 }
+
+export const SALARY_CURRENCIES = ['EGP', 'AED', 'SAR', 'USD'] as const;
+export const SALARY_PERIODS = ['Monthly', 'Annual'] as const;
 
 /** Meeting notes 2026-11-25 (item 1): fixed employment-type list. */
 export const EMPLOYMENT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Temporary'] as const;
@@ -192,7 +214,7 @@ export function mineOrTeam(rows: Requisition[], meId: string | undefined, people
   return rows.filter((r) => { const o = ownerIdOf(r); return r.requesterId === meId || (!!o && (team.has(o) || o === meId)); });
 }
 
-const CODE_TEXT: Record<string, { field?: 'dueDate' | 'assignee' | 'reason' | 'grade' | 'seats'; text: string }> = {
+const CODE_TEXT: Record<string, { field?: 'dueDate' | 'assignee' | 'reason' | 'grade' | 'seats' | 'budgetMin' | 'budgetMax' | 'budgetCurrency'; text: string }> = {
   DUE_DATE_REQUIRED: { field: 'dueDate', text: 'A due date is required.' },
   ASSIGNEE_REQUIRED: { field: 'assignee', text: 'Pick the primary recruiter who will own the job.' },
   ASSIGNEE_NOT_ELIGIBLE: { field: 'assignee', text: 'That person cannot own a job (inactive or an administrator).' },
@@ -204,15 +226,19 @@ const CODE_TEXT: Record<string, { field?: 'dueDate' | 'assignee' | 'reason' | 'g
   REASON_REQUIRED: { field: 'reason', text: 'A reason is required.' },
   COMMITMENTS_UNRESOLVED: { text: 'Resolve interviews, sent offers, and joining commitments before this job can close. Joined hires and history stay.' },
   SEATS_BELOW_JOINED: { field: 'seats', text: 'Approved capacity cannot drop below the number of people who have already joined.' },
+  SELF_APPROVAL_FORBIDDEN: { text: 'You cannot approve your own requisition. An independent manager must decide it.' },
+  APPROVAL_MANAGER_MISSING: { text: 'No approving manager is assigned to your account. Ask an administrator to assign your reporting manager in Users & Access.' },
+  APPROVAL_ALREADY_DECIDED: { text: 'This approval step has already been decided.' },
 };
-export type ReqField = 'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId';
+export type ReqField = 'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId' | 'budgetMin' | 'budgetMax' | 'budgetCurrency' | 'budgetPeriod';
 /** API body path → the drawer input that shows it (#23: 400 field/fields go inline). */
 const API_FIELD: Record<string, ReqField> = {
   positionId: 'positionId', branchId: 'branchId', requestedHeadcount: 'seats', dueDate: 'dueDate', targetFillDate: 'dueDate', gradeId: 'grade',
   assignedEmployeeId: 'assignee', reason: 'reason', justification: 'notes', departmentId: 'departmentId',
+  budgetMin: 'budgetMin', budgetMax: 'budgetMax', budgetCurrency: 'budgetCurrency', budgetPeriod: 'budgetPeriod',
 };
 /** Codes first; then 400 field/fields inline (`inline`, the banner keeps the rest); otherwise the server's message. */
-export function reqError(e: unknown): { field?: 'dueDate' | 'assignee' | 'reason' | 'grade' | 'seats'; text: string; inline?: Partial<Record<ReqField, string>> } {
+export function reqError(e: unknown): { field?: 'dueDate' | 'assignee' | 'reason' | 'grade' | 'seats' | 'budgetMin' | 'budgetMax' | 'budgetCurrency'; text: string; inline?: Partial<Record<ReqField, string>> } {
   const f = serverFormErrors(e);
   const keys = Object.keys(f.byField);
   if (keys.length) {

@@ -37,6 +37,7 @@ import {
   type TeamRow,
 } from '../api/teamResult';
 import { returnFromLocation } from '../returnTarget';
+import { OperationalReportsPanel } from '../components/OperationalReportsPanel';
 import './jobs.css';
 import './team.css';
 import './team-result.css';
@@ -946,6 +947,14 @@ export function TeamResultV2() {
               periodLabel={periodDisplayLabel}
               previous={previousData}
             />
+
+          <OperationalReportsPanel
+            defaultOpen={false}
+            filters={{
+              month,
+              branchId: site || null,
+            }}
+          />
 
           <details className="rf2-tres__method">
             <summary>How these measures are counted</summary>

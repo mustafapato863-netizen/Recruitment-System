@@ -43,6 +43,9 @@ export class CandidatesService {
     if (!user || !this.accessControl || user.roleCodes.includes('ADMINISTRATOR')) {
       return { organizationId };
     }
+    const isManagerSeat = user.roleCodes.some((code) =>
+      code === 'HIRING_MANAGER' || code === 'TALENT_MANAGER' || code === 'HR_MANAGER',
+    );
     const scopeReader = this.accessControl as {
       getUserEffectiveScope?: (
         organizationId: string,
@@ -53,8 +56,9 @@ export class CandidatesService {
     const scope = typeof scopeReader.getUserEffectiveScope === 'function'
       ? await scopeReader.getUserEffectiveScope(organizationId, user.userId, user.roleCodes)
       : undefined;
-    // ALL sees the whole organization bank, including a person who is not on a job yet.
-    if (scope?.dataScope === 'ALL') {
+    // Ticket 14: non-admin managers are always scoped to their team / reporting-tree applications
+    // and candidates they created, never the whole organization bank.
+    if (!isManagerSeat && scope?.dataScope === 'ALL') {
       return { organizationId: user.organizationId };
     }
     const applicationVisibility = await this.accessControl.getApplicationVisibilityWhere(user);
@@ -333,7 +337,8 @@ export class CandidatesService {
   ): Promise<Prisma.CandidateGetPayload<{}>> {
     const email = dto.email?.trim().toLowerCase() || null;
     const phone = normalizePhone(dto.phone);
-    if (!email && !phone) {
+    const keys = contactKeys(email, phone);
+    if (!keys.emailNormalized && !keys.phoneNormalized) {
       throw new BadRequestException('Provide at least one valid contact method: email or phone.');
     }
     const existing = await this.findExistingByContact(organizationId, email, phone);
@@ -344,34 +349,50 @@ export class CandidatesService {
     }
 
     const candidateCode = await this.nextCandidateCode();
-    const created = await this.prisma.candidate.create({
-      data: {
-        organizationId,
-        createdById: createdById ?? null,
-        candidateCode,
-        firstName: dto.firstName.trim(),
-        lastName: dto.lastName.trim(),
-        email,
-        phone,
-        ...contactKeys(email, phone),
-        currentTitle: dto.currentTitle?.trim() ?? null,
-        currentCompany: dto.currentCompany?.trim() ?? null,
-        summary: dto.summary?.trim() ?? null,
-        source: dto.source?.trim() ?? null,
-        status: 'Active',
-        skills: dto.skills ?? [],
-        experienceYears: dto.experienceYears ?? null,
-        location: dto.location?.trim() ?? null,
-        // Meeting notes 2026-11-25 (item 2): nationality must be an active master-data value.
-        nationality: dto.nationality ? await this.resolveNationality(organizationId, dto.nationality) : null,
-        certifications: dto.certifications ?? [],
-        languages: dto.languages ?? [],
-        availability: dto.availability?.trim() ?? null,
-        ...(dto.metadata !== undefined && dto.metadata !== null
-          ? { metadata: dto.metadata as Prisma.InputJsonValue }
-          : {}),
-      },
-    });
+    let created: Prisma.CandidateGetPayload<{}>;
+    try {
+      created = await this.prisma.candidate.create({
+        data: {
+          organizationId,
+          createdById: createdById ?? null,
+          candidateCode,
+          firstName: dto.firstName.trim(),
+          lastName: dto.lastName.trim(),
+          email,
+          phone,
+          ...keys,
+          currentTitle: dto.currentTitle?.trim() ?? null,
+          currentCompany: dto.currentCompany?.trim() ?? null,
+          summary: dto.summary?.trim() ?? null,
+          source: dto.source?.trim() ?? null,
+          status: 'Active',
+          skills: dto.skills ?? [],
+          experienceYears: dto.experienceYears ?? null,
+          location: dto.location?.trim() ?? null,
+          // Meeting notes 2026-11-25 (item 2): nationality must be an active master-data value.
+          nationality: dto.nationality ? await this.resolveNationality(organizationId, dto.nationality) : null,
+          certifications: dto.certifications ?? [],
+          languages: dto.languages ?? [],
+          availability: dto.availability?.trim() ?? null,
+          ...(dto.metadata !== undefined && dto.metadata !== null
+            ? { metadata: dto.metadata as Prisma.InputJsonValue }
+            : {}),
+        },
+      });
+    } catch (error) {
+      // Ticket 09: simultaneous uploads creating the same normalized contact map cleanly to 409 CANDIDATE_EXISTS.
+      const errCode = (error as { code?: string } | null)?.code;
+      if (errCode === 'P2002') {
+        const raced = await this.findExistingByContact(organizationId, email, phone);
+        if (!raced) throw error;
+        throw new ConflictException({
+          code: 'CANDIDATE_EXISTS',
+          message: 'A candidate with the same email or phone already exists in your organization. Link that person instead.',
+          details: { candidateId: raced.id, candidateCode: raced.candidateCode },
+        });
+      }
+      throw error;
+    }
     if (created.skills.length > 0) await linkCandidateSkills(this.prisma, organizationId, created.id, created.skills);
 
     return created;
@@ -391,7 +412,8 @@ export class CandidatesService {
 
     const nextEmail = dto.email === undefined ? candidate.email : dto.email?.trim().toLowerCase() || null;
     const nextPhone = dto.phone === undefined ? normalizePhone(candidate.phone) : normalizePhone(dto.phone);
-    if (!nextEmail && !nextPhone) {
+    const keys = contactKeys(nextEmail, nextPhone);
+    if (!keys.emailNormalized && !keys.phoneNormalized && (dto.phone !== undefined || dto.email !== undefined)) {
       throw new BadRequestException('Provide at least one valid contact method: email or phone.');
     }
     if (dto.email !== undefined || dto.phone !== undefined) {
@@ -406,7 +428,7 @@ export class CandidatesService {
     if (dto.lastName) dataToUpdate.lastName = dto.lastName.trim();
     if (dto.email !== undefined) dataToUpdate.email = nextEmail;
     if (dto.phone !== undefined) dataToUpdate.phone = nextPhone;
-    if (dto.email !== undefined || dto.phone !== undefined) Object.assign(dataToUpdate, contactKeys(nextEmail, nextPhone));
+    if (dto.email !== undefined || dto.phone !== undefined) Object.assign(dataToUpdate, keys);
     if (dto.currentTitle !== undefined) dataToUpdate.currentTitle = dto.currentTitle?.trim() ?? null;
     if (dto.currentCompany !== undefined) dataToUpdate.currentCompany = dto.currentCompany?.trim() ?? null;
     if (dto.summary !== undefined) dataToUpdate.summary = dto.summary?.trim() ?? null;
@@ -678,16 +700,48 @@ export class CandidatesService {
       organizationId,
       ...(excludeId ? { id: { not: excludeId } } : {}),
     };
+    const keys = contactKeys(email, phone);
+    let emailMatch: Prisma.CandidateGetPayload<{}> | null = null;
     if (email) {
-      const emailMatch = await this.prisma.candidate.findFirst({ where: { ...baseWhere, email } });
-      if (emailMatch) return emailMatch;
+      emailMatch = await this.prisma.candidate.findFirst({
+        where: {
+          ...baseWhere,
+          OR: [
+            { email },
+            ...(keys.emailNormalized ? [{ emailNormalized: keys.emailNormalized }] : []),
+          ],
+        },
+      });
     }
-    if (!phone) return null;
-    const phoneCandidates = await this.prisma.candidate.findMany({
-      where: { ...baseWhere, phone: { not: null } },
-      take: 1000,
-    });
-    return phoneCandidates.find((item) => normalizePhone(item.phone) === phone) ?? null;
+    let phoneMatch: Prisma.CandidateGetPayload<{}> | null = null;
+    if (phone) {
+      if (keys.phoneNormalized) {
+        phoneMatch = await this.prisma.candidate.findFirst({
+          where: { ...baseWhere, phoneNormalized: keys.phoneNormalized },
+        });
+      }
+      if (!phoneMatch && typeof this.prisma.candidate.findMany === 'function') {
+        const phoneCandidates = await this.prisma.candidate.findMany({
+          where: { ...baseWhere, phone: { not: null } },
+          take: 1000,
+        });
+        phoneMatch = phoneCandidates.find((item) => normalizePhone(item.phone) === phone) ?? null;
+      }
+    }
+    // Ticket 09: email matching person A while phone matches person B must trigger manual review (no auto-merge).
+    if (emailMatch && phoneMatch && emailMatch.id !== phoneMatch.id) {
+      throw new ConflictException({
+        code: 'IDENTITY_CONFLICT',
+        message: 'Email and phone match two different candidates in your organization. Manual review is required before linking.',
+        details: {
+          emailCandidateId: emailMatch.id,
+          emailCandidateCode: emailMatch.candidateCode,
+          phoneCandidateId: phoneMatch.id,
+          phoneCandidateCode: phoneMatch.candidateCode,
+        },
+      });
+    }
+    return emailMatch ?? phoneMatch ?? null;
   }
 
   private toCandidate(

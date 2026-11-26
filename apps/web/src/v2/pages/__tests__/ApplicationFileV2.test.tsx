@@ -726,8 +726,9 @@ describe('E15 Schedule', () => {
     expect(within(d).getByRole('region', { name: 'Interview panel' })).toContainElement(within(d).getByRole('combobox', { name: /Interviewers/ }));
     await u.click(within(d).getByRole('button', { name: 'Schedule interview' }));
     expect(within(d).getByText('Pick a date.')).toBeInTheDocument();
-    expect(within(d).getByText('Paste the meeting room URL (https://…).')).toBeInTheDocument();
+    expect(within(d).queryByText('Paste the meeting room URL (https://…).')).not.toBeInTheDocument();
     expect(within(d).getByText('Add at least one interviewer.')).toBeInTheDocument();
+    expect(within(d).queryByRole('checkbox', { name: /Participate as interviewer/i })).not.toBeInTheDocument();
     await u.type(within(d).getByLabelText(/^Date/), '2026-10-13');
     await u.type(within(d).getByLabelText(/Room URL/), 'https://teams.microsoft.com/l/x');
     await u.click(within(d).getByRole('combobox', { name: /Interviewers/ }));

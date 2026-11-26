@@ -29,7 +29,7 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
     const id = randomUUID();
     await prisma.vacancyRequest.create({ data: {
       id, organizationId: ORG, branchId: branch.id, positionId: position.id, requesterId: ids.manager,
-      requestCode: `B3-${tag}-${id.slice(0, 13)}`, status, requestedHeadcount: 2, targetFillDate: new Date('2026-10-19'),
+      requestCode: `B3-${tag}-${id.slice(0, 13)}`, status, requestedHeadcount: 2, budgetMin: 10000, budgetMax: 14000, budgetCurrency: 'EGP', targetFillDate: new Date('2026-10-19'),
       jobSummary: 'HRIS developer', ...extra,
     } });
     return id;

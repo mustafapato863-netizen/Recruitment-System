@@ -31,6 +31,7 @@ function facts(overrides: Partial<JoiningFacts> = {}): JoiningFacts {
     hiringCaseStatus: 'Awaiting Joining',
     approvalFingerprint: null,
     approvals: [{ status: 'Approved', roleCode: 'FINAL_HIRING_APPROVER', invalidatedAt: null, decisionFingerprint: null }],
+    assessmentInterviews: [{ title: 'Assessment', status: 'Completed', attendeeCount: 1, submittedScorecardCount: 1 }],
     joinedHeadcount: 0,
     approvedHeadcount: 1,
     ...overrides,
@@ -108,20 +109,21 @@ describe('joining policy', () => {
 
   // Meeting notes 2026-11-25 (item 3): a scheduled Assessment interview is a joining
   // gate — it must be Completed before Joined — but only when one was scheduled.
-  it('blocks joining on a scheduled assessment interview, and only then', () => {
+  it('requires a completed pre-hire assessment with submitted panel scorecards', () => {
     const ready = facts({ enforceActor: false, enforceRecord: false });
     const fingerprint = allowFingerprint(ready);
     ready.approvalFingerprint = fingerprint;
     ready.approvals[0]!.decisionFingerprint = fingerprint;
+    expect(decideJoining({ ...ready, assessmentInterviews: [] }).code).toBe('GATE_ASSESSMENT_INCOMPLETE');
     expect(decideJoining(ready).ok).toBe(true);
     expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Scheduled' }] }))
       .toMatchObject({ ok: false, code: 'GATE_ASSESSMENT_INCOMPLETE', httpStatus: 409, gate: 'assessment' });
-    expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Completed' }] }).ok).toBe(true);
-    expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Cancelled' }] }).ok).toBe(true);
+    expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Completed', attendeeCount: 1, submittedScorecardCount: 1 }] }).ok).toBe(true);
+    expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Cancelled' }] }).ok).toBe(false);
     // Completing the assessment after final approval does not stale the approval:
     // the fingerprint covers snapshot/offer/checks only, so the same approved case
     // still passes once the assessment is completed.
-    expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Completed' }] }).ok).toBe(true);
+    expect(decideJoining({ ...ready, assessmentInterviews: [{ title: 'Assessment — clinical skills', status: 'Completed', attendeeCount: 1, submittedScorecardCount: 1 }] }).ok).toBe(true);
   });
 
   it('limits licence and final-approval responses, and an interviewer view, to the assigned slice', () => {

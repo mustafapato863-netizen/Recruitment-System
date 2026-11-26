@@ -74,14 +74,77 @@ export async function resolveRejectionReason(tx: Tx, organizationId: string, rea
 export async function assertStageGate(tx: Tx, application: { id: string; stage: string }, to: string): Promise<void> {
   const from = application.stage;
   if (to === 'Interview' && (from === 'Applied' || from === 'Screening')) {
-    const note = await tx.screeningLog.findFirst({ where: { applicationId: application.id, notes: { not: null } }, select: { notes: true }, orderBy: { createdAt: 'desc' } });
+    const note = await tx.screeningLog.findFirst({
+      where: { applicationId: application.id, notes: { not: null } },
+      select: { notes: true, expectedSalary: true },
+      orderBy: { createdAt: 'desc' },
+    });
     if (!note?.notes?.trim()) throw blocked(GATE_CODES.screenNote, 'screen-note', 'Interview needs a saved screen note.', ['screen note']);
+    // Ticket 11: require Expected Salary recorded during Screening before moving to Interview.
+    if (from === 'Screening' && 'expectedSalary' in note) {
+      const hasExpectedSalary =
+        (note.expectedSalary !== null && Number(note.expectedSalary) > 0) ||
+        Boolean(
+          await tx.screeningLog.findFirst({
+            where: { applicationId: application.id, expectedSalary: { not: null } },
+            select: { expectedSalary: true },
+            orderBy: { createdAt: 'desc' },
+          }),
+        );
+      if (!hasExpectedSalary) {
+        throw blocked(
+          'EXPECTED_SALARY_REQUIRED',
+          'expected-salary',
+          'Record the candidate’s Expected Salary during screening before moving to Interview.',
+          ['expected salary'],
+        );
+      }
+    }
   }
   if (to === 'Offer') {
-    const submitted = await tx.interviewScorecard.count({
-      where: { status: 'Submitted', interview: { applicationId: application.id, status: { not: 'Cancelled' } } },
-    });
-    if (submitted === 0) throw blocked(GATE_CODES.scorecard, 'scorecard', 'Offer needs a submitted interview scorecard.', ['submitted scorecard']);
+    // Ticket 13: require submitted scorecards from EVERY assigned interviewer on active interviews (Draft never counts).
+    if (typeof tx.interview?.findMany === 'function') {
+      const activeInterviews = await tx.interview.findMany({
+        where: { applicationId: application.id, status: { notIn: ['Cancelled', 'No-show'] } },
+        select: {
+          id: true,
+          title: true,
+          attendees: { select: { userId: true, user: { select: { displayName: true } } } },
+          scorecards: { where: { status: 'Submitted' }, select: { interviewerId: true } },
+        },
+      });
+      if (activeInterviews.length === 0) {
+        throw blocked(GATE_CODES.scorecard, 'scorecard', 'Offer needs a submitted interview scorecard.', ['submitted scorecard']);
+      }
+      const pending: string[] = [];
+      let totalSubmitted = 0;
+      for (const interview of activeInterviews) {
+        const submittedIds = new Set(interview.scorecards.map((s) => s.interviewerId));
+        totalSubmitted += submittedIds.size;
+        for (const att of interview.attendees) {
+          if (!submittedIds.has(att.userId)) {
+            const label = att.user?.displayName || att.userId;
+            pending.push(`${label} (${interview.title})`);
+          }
+        }
+      }
+      if (pending.length > 0) {
+        throw blocked(
+          GATE_CODES.scorecard,
+          'scorecard',
+          `All assigned interviewers must submit their scorecards before advancing to Offer. Pending: ${pending.join(', ')}.`,
+          pending,
+        );
+      }
+      if (totalSubmitted === 0) {
+        throw blocked(GATE_CODES.scorecard, 'scorecard', 'Offer needs a submitted interview scorecard.', ['submitted scorecard']);
+      }
+    } else {
+      const submitted = await tx.interviewScorecard.count({
+        where: { status: 'Submitted', interview: { applicationId: application.id, status: { not: 'Cancelled' } } },
+      });
+      if (submitted === 0) throw blocked(GATE_CODES.scorecard, 'scorecard', 'Offer needs a submitted interview scorecard.', ['submitted scorecard']);
+    }
   }
   if (to === 'Pre-Hire') {
     const accepted = await tx.offerVersion.count({ where: { status: 'Accepted', offer: { applicationId: application.id } } });

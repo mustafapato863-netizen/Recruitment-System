@@ -29,11 +29,19 @@ export class ReportOverviewQueryDto {
 
   @IsOptional()
   @IsUUID()
+  departmentId?: string;
+
+  @IsOptional()
+  @IsUUID()
   positionId?: string;
 
   @IsOptional()
   @IsUUID()
   recruiterId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  ownerId?: string;
 
   @IsOptional()
   @IsUUID()

@@ -31,7 +31,7 @@ describe.skipIf(!url)('B4 My Work, target chip and reminders (scratch Postgres)'
     const id = randomUUID();
     await prisma.vacancyRequest.create({ data: {
       id, organizationId: ORG, branchId: branch.id, positionId: position.id, requesterId: ids.manager!, requestCode: `B4-${tag}-${id.slice(0, 4)}`,
-      status: 'Approved', requestedHeadcount: 3, targetFillDate: new Date(`${due}T00:00:00Z`), assignedEmployeeId: owner, ...extra,
+      status: 'Approved', requestedHeadcount: 3, budgetMin: 10000, budgetMax: 14000, budgetCurrency: 'EGP', targetFillDate: new Date(`${due}T00:00:00Z`), assignedEmployeeId: owner, ...extra,
     } });
     const result = await vacancies.activateRequest(id, ORG, ids.manager!, {});
     return { requestId: id, job: result.vacancy! };

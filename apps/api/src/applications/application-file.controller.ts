@@ -29,6 +29,10 @@ export class RequestDocumentDto {
 export class DocumentPortalLinkDto {
   @IsOptional() @IsString() action?: 'issue' | 'revoke';
 }
+export class WhatsAppLinkDto {
+  @IsOptional() @IsUUID() templateId?: string;
+  @IsOptional() @IsString() @MaxLength(2000) message?: string;
+}
 
 @UseGuards(JwtAuthGuard)
 @Controller('applications')
@@ -88,6 +92,17 @@ export class ApplicationFileController {
   @RequirePermissions('APPLICATION_VIEW')
   messagesList(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.messages.list(user, id);
+  }
+
+  /** Ticket 08: Server-resolved WhatsApp link for assigned recruiter/authorized user (no sent counter increment). */
+  @Post(':id/whatsapp-link')
+  @RequirePermissions('APPLICATION_VIEW')
+  buildWhatsAppLink(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto?: WhatsAppLinkDto,
+  ) {
+    return this.messages.buildWhatsAppLink(user, id, dto);
   }
 
   @Post(':id/messages')

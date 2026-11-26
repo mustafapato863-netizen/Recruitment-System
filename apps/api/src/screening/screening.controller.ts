@@ -35,6 +35,17 @@ export class ScreeningController {
     private readonly userPermissions: UserPermissionsService,
   ) {}
 
+  @Get('application/:applicationId/context')
+  @RequirePermissions('APPLICATION_VIEW')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'application', param: 'applicationId' })
+  getScreeningContext(
+    @CurrentUser() user: AuthUser,
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+  ) {
+    return this.screeningService.getScreeningContext(user.organizationId, applicationId, user);
+  }
+
   @Get('application/:applicationId')
   @RequirePermissions('APPLICATION_VIEW')
   @UseGuards(TenantScopedGuard)

@@ -93,8 +93,13 @@ export class CreateVacancyRequestDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['AED', 'EGP'])
-  budgetCurrency?: 'AED' | 'EGP' | null;
+  @IsIn(['AED', 'EGP', 'SAR', 'USD'])
+  budgetCurrency?: 'AED' | 'EGP' | 'SAR' | 'USD' | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['Monthly', 'Annual'])
+  budgetPeriod?: 'Monthly' | 'Annual' | null;
 
   @IsOptional()
   @IsString()
@@ -243,8 +248,13 @@ export class UpdateVacancyRequestDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['AED', 'EGP'])
-  budgetCurrency?: 'AED' | 'EGP' | null;
+  @IsIn(['AED', 'EGP', 'SAR', 'USD'])
+  budgetCurrency?: 'AED' | 'EGP' | 'SAR' | 'USD' | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['Monthly', 'Annual'])
+  budgetPeriod?: 'Monthly' | 'Annual' | null;
 
   @IsOptional()
   @IsString()

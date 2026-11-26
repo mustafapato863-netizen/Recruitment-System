@@ -70,8 +70,15 @@ export class OfferDecisionService {
     if (!version) throw new NotFoundException('Offer version not found.');
     const app = version.offer.application;
 
-    if (isAdmin(user.roleCodes)) throw new ForbiddenException({ code: 'OFFER_DECISION_NOT_MANAGER', message: 'Only the file owner\'s manager can decide; administrators cannot.' });
     const owners = await fileOwnerIds(this.prisma, app);
+    // Ticket 16: never allow self-approval by the submitter or file owner.
+    if (version.submittedById === user.userId || owners.includes(user.userId)) {
+      throw new ForbiddenException({
+        code: 'SELF_APPROVAL_FORBIDDEN',
+        message: 'You cannot approve or decide on an offer you submitted or own.',
+      });
+    }
+    if (isAdmin(user.roleCodes)) throw new ForbiddenException({ code: 'OFFER_DECISION_NOT_MANAGER', message: 'Only the file owner\'s manager can decide; administrators cannot.' });
     if (!(await isManagerOfFile(this.prisma, owners, user.userId))) {
       throw new ForbiddenException({ code: 'OFFER_DECISION_NOT_MANAGER', message: 'Only the manager of this file\'s owner can decide on its offer.' });
     }

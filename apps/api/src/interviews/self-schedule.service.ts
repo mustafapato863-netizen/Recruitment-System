@@ -296,6 +296,7 @@ export class SelfScheduleService {
           applicationId: payload.applicationId,
           title: payload.title,
           interviewType: payload.interviewType,
+          stageContext: app.stage === 'Pre-Hire' ? 'Pre-Hire' : 'Interview',
           scheduledStart: proposedStart,
           scheduledEnd: proposedEnd,
           timezone: input.timezone || 'Asia/Riyadh',

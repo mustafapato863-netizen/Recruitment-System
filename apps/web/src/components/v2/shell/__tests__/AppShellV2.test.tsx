@@ -74,7 +74,7 @@ describe('nav per seat', () => {
 
   it.each([
     ['employee', ['My Work', 'Open jobs', 'Candidates', 'Match Skills', 'Interviews', 'Reports']],
-    ['manager', ['Team work', 'My Work', 'Requisitions', 'Approvals', 'Open jobs', 'Joining', 'Interviews', 'Team result']],
+    ['manager', ['Team work', 'My Work', 'Requisitions', 'Approvals', 'Open jobs', 'Candidates', 'Joining', 'Interviews', 'Team result']],
     ['admin', ['Users & Access', 'Pipeline template', 'Master data', 'WhatsApp templates', 'Reports', 'Audit', 'Integrations']],
   ] as const)('%s lists its seat destinations', (seat, labels) => {
     const profile = user(ALL, [seat === 'manager' ? 'HIRING_MANAGER' : seat === 'admin' ? 'ADMINISTRATOR' : 'RECRUITER']);

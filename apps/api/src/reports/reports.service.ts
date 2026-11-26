@@ -1871,4 +1871,450 @@ export class ReportsService {
   private branchScopedVisibility(query: ReportOverviewQueryDto, visibility: Prisma.ApplicationWhereInput): Prisma.ApplicationWhereInput {
     return query.branchId ? { AND: [visibility, { vacancy: { branchId: query.branchId } }] } : visibility;
   }
+
+  /**
+   * Ticket 07: Vacancy Tracker report.
+   * - Enforces role/team visibility scope alongside identical filters (from/to/branch/department/owner).
+   * - Separates open requests count from requested/filled/remaining seats.
+   * - Omits any replaced-employee column (Ticket 03).
+   * - Vacant Days starts from vacancy activation (`activatedAt`), returning null when not yet activated.
+   */
+  async getVacancyTracker(organizationId: string, query: ReportOverviewQueryDto, user?: AuthUser) {
+    const range = this.resolveRange(query);
+    const ownerFilter = query.ownerId ?? query.recruiterId;
+    const isAdmin = !user || (user.roleCodes ?? []).includes('ADMINISTRATOR');
+
+    let allowedOwnerIds: string[] | null = null;
+    if (!isAdmin && user) {
+      const isManager = (user.roleCodes ?? []).some((code) => ['HIRING_MANAGER', 'TALENT_MANAGER', 'HR_MANAGER'].includes(code));
+      if (isManager && typeof this.prisma.user?.findMany === 'function') {
+        const directAndOrg = await this.prisma.user.findMany({
+          where: { organizationId, status: 'Active' },
+          select: { id: true, managerId: true },
+        });
+        const team = new Set<string>([user.userId]);
+        let added = true;
+        while (added) {
+          added = false;
+          for (const u of directAndOrg) {
+            if (u.managerId && team.has(u.managerId) && !team.has(u.id)) {
+              team.add(u.id);
+              added = true;
+            }
+          }
+        }
+        allowedOwnerIds = [...team];
+      } else {
+        allowedOwnerIds = [user.userId];
+      }
+    }
+
+    const where: Prisma.VacancyRequestWhereInput = {
+      organizationId,
+      createdAt: { gte: range.from, lt: range.to },
+      ...(query.branchId ? { branchId: query.branchId } : {}),
+      ...(query.departmentId ? { departmentId: query.departmentId } : {}),
+      ...(query.positionId ? { positionId: query.positionId } : {}),
+      ...(ownerFilter ? {
+        OR: [
+          { requesterId: ownerFilter },
+          { assignedEmployeeId: ownerFilter },
+          { vacancy: { primaryRecruiterId: ownerFilter } },
+        ],
+      } : {}),
+      ...(allowedOwnerIds ? {
+        AND: [{
+          OR: [
+            { requesterId: { in: allowedOwnerIds } },
+            { assignedEmployeeId: { in: allowedOwnerIds } },
+            { vacancy: { primaryRecruiterId: { in: allowedOwnerIds } } },
+          ],
+        }],
+      } : {}),
+    };
+
+    const requests = await this.prisma.vacancyRequest.findMany({
+      where,
+      include: {
+        branch: { select: { id: true, name: true } },
+        department: { select: { id: true, name: true } },
+        position: { select: { id: true, title: true } },
+        requester: { select: { id: true, displayName: true } },
+        assignedEmployee: { select: { id: true, displayName: true } },
+        approvals: {
+          where: { status: 'Approved' },
+          orderBy: { decidedAt: 'desc' },
+          take: 1,
+          select: { decidedAt: true },
+        },
+        vacancy: {
+          select: {
+            id: true,
+            vacancyCode: true,
+            status: true,
+            approvedHeadcount: true,
+            joinedHeadcount: true,
+            openedAt: true,
+            updatedAt: true,
+            primaryRecruiter: { select: { id: true, displayName: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const now = new Date();
+    const CLOSED_REQUEST_STATUSES = new Set(['Rejected', 'Cancelled', 'Closed', 'Filled']);
+    const CLOSED_VACANCY_STATUSES = new Set(['Filled', 'Closed', 'Cancelled']);
+
+    const rows = requests.map((req) => {
+      const vac = req.vacancy;
+      const requestedSeats = vac?.approvedHeadcount ?? req.requestedHeadcount ?? 1;
+      const filledSeats = vac?.joinedHeadcount ?? 0;
+      const remainingSeats = Math.max(0, requestedSeats - filledSeats);
+      const effectiveStatus = vac?.status ?? req.status;
+      const isOpen = !CLOSED_REQUEST_STATUSES.has(req.status) && (!vac || !CLOSED_VACANCY_STATUSES.has(vac.status));
+      const activatedAt = vac?.openedAt ?? req.activatedAt ?? null;
+      const endRef = vac && CLOSED_VACANCY_STATUSES.has(vac.status) ? vac.updatedAt : now;
+      const vacantDays = activatedAt
+        ? Math.max(0, Math.floor((endRef.getTime() - activatedAt.getTime()) / DAY_MS))
+        : null;
+      const approvedAt = req.approvals?.[0]?.decidedAt ?? null;
+
+      return {
+        requestId: req.id,
+        requestCode: req.requestCode,
+        vacancyId: vac?.id ?? null,
+        vacancyCode: vac?.vacancyCode ?? null,
+        positionTitle: req.position?.title ?? 'Untitled position',
+        branchId: req.branchId,
+        branchName: req.branch?.name ?? '',
+        departmentId: req.departmentId,
+        departmentName: req.department?.name ?? '',
+        openingType: req.openingType,
+        ownerName: vac?.primaryRecruiter?.displayName ?? req.assignedEmployee?.displayName ?? req.requester?.displayName ?? 'Unassigned',
+        status: effectiveStatus,
+        isOpen,
+        approvedAt: approvedAt ? approvedAt.toISOString() : null,
+        activatedAt: activatedAt ? activatedAt.toISOString() : null,
+        requestedSeats,
+        filledSeats,
+        remainingSeats,
+        vacantDays,
+      };
+    });
+
+    const openRequestsCount = rows.filter((r) => r.isOpen).length;
+    const totalRequestedSeats = rows.reduce((sum, r) => sum + r.requestedSeats, 0);
+    const totalFilledSeats = rows.reduce((sum, r) => sum + r.filledSeats, 0);
+    const totalRemainingSeats = rows.reduce((sum, r) => sum + r.remainingSeats, 0);
+
+    return {
+      range: { from: range.from.toISOString(), to: range.to.toISOString() },
+      summary: {
+        totalRequestsCount: rows.length,
+        openRequestsCount,
+        totalRequestedSeats,
+        totalFilledSeats,
+        totalRemainingSeats,
+      },
+      rows,
+    };
+  }
+
+  async exportVacancyTrackerExcel(organizationId: string, query: ReportOverviewQueryDto, user?: AuthUser): Promise<Buffer> {
+    try {
+      const tracker = await this.getVacancyTracker(organizationId, query, user);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+        ['Vacancy Tracker Summary'],
+        ['From', tracker.range.from],
+        ['To', tracker.range.to],
+        [],
+        ['Total requests', tracker.summary.totalRequestsCount],
+        ['Open requests', tracker.summary.openRequestsCount],
+        ['Requested seats', tracker.summary.totalRequestedSeats],
+        ['Filled seats', tracker.summary.totalFilledSeats],
+        ['Remaining seats', tracker.summary.totalRemainingSeats],
+      ]), 'Summary');
+
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+        [
+          'Request Code',
+          'Vacancy Code',
+          'Position',
+          'Branch',
+          'Department',
+          'Opening Type',
+          'Owner',
+          'Status',
+          'Approved Date',
+          'Activated Date',
+          'Requested Seats',
+          'Filled Seats',
+          'Remaining Seats',
+          'Vacant Days',
+        ],
+        ...tracker.rows.map((r) => [
+          r.requestCode,
+          r.vacancyCode ?? '',
+          r.positionTitle,
+          r.branchName,
+          r.departmentName,
+          r.openingType,
+          r.ownerName,
+          r.status,
+          r.approvedAt ? r.approvedAt.slice(0, 10) : '',
+          r.activatedAt ? r.activatedAt.slice(0, 10) : '',
+          r.requestedSeats,
+          r.filledSeats,
+          r.remainingSeats,
+          r.vacantDays ?? '',
+        ]),
+      ]), 'Vacancy Tracker');
+      return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw exportFailed('Could not export Vacancy Tracker report.');
+    }
+  }
+
+  /**
+   * Ticket 07: Candidate Activity report.
+   * - Unit = application; each application is counted AT MOST ONCE per stage reached in [from, to).
+   * - Rescheduled interviews and resent offers never double-count the same application.
+   * - Same filters and role visibility scope apply to totals, source breakdown, drill-down rows, and Excel export.
+   */
+  async getCandidateActivity(organizationId: string, query: ReportOverviewQueryDto, user?: AuthUser) {
+    const range = this.resolveRange(query);
+    const visibility = user && this.accessControl
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+
+    const effectiveRecruiterId = query.ownerId ?? query.recruiterId;
+    const effectiveQuery: ReportOverviewQueryDto = {
+      ...query,
+      ...(effectiveRecruiterId ? { recruiterId: effectiveRecruiterId } : {}),
+    };
+
+    const relationFilters: Prisma.ApplicationWhereInput[] = [this.applicationRelationFilter(effectiveQuery, visibility)];
+    if (query.departmentId) {
+      relationFilters.push({ vacancy: { vacancyRequest: { departmentId: query.departmentId } } });
+    }
+
+    const applications = await this.prisma.application.findMany({
+      where: {
+        AND: [{ organizationId }, ...relationFilters],
+      },
+      include: {
+        candidate: { select: { firstName: true, lastName: true } },
+        primaryRecruiter: { select: { displayName: true } },
+        vacancy: {
+          include: {
+            position: { select: { title: true } },
+            branch: { select: { id: true, name: true } },
+            vacancyRequest: { select: { department: { select: { name: true } } } },
+          },
+        },
+        statusHistory: { select: { toStage: true, createdAt: true } },
+        screeningLogs: { select: { screenedAt: true } },
+        interviews: {
+          where: { status: { not: 'Cancelled' } },
+          select: { interviewType: true, stageContext: true, scheduledStart: true, createdAt: true },
+        },
+        offers: {
+          select: {
+            status: true,
+            updatedAt: true,
+            versions: { select: { sentAt: true, sendDates: true } },
+          },
+        },
+        hiringCase: { select: { status: true, actualJoiningDate: true } },
+      },
+      orderBy: { appliedAt: 'desc' },
+    });
+
+    const inRange = (d?: Date | string | null): boolean => {
+      if (!d) return false;
+      const dt = d instanceof Date ? d : new Date(d);
+      if (Number.isNaN(dt.getTime())) return false;
+      return dt >= range.from && dt < range.to;
+    };
+
+    const rows = [];
+    const bySourceMap = new Map<string, { source: string; applied: number; screening: number; interviews: number; offerSent: number; joined: number }>();
+    const declineReasonsMap = new Map<string, number>();
+
+    for (const app of applications) {
+      const applied = inRange(app.appliedAt ?? app.createdAt);
+      const screening = (app.screeningLogs ?? []).some((s) => inRange(s.screenedAt))
+        || (app.statusHistory ?? []).some((h) => h.toStage === 'Screening' && inRange(h.createdAt));
+
+      const hrInterview = (app.interviews ?? []).some(
+        (iv) => (iv.interviewType === 'HR' || iv.interviewType === 'Behavioral' || iv.interviewType === 'Screening')
+          && iv.stageContext !== 'Pre-Hire'
+          && (inRange(iv.scheduledStart) || inRange(iv.createdAt)),
+      );
+      const technicalInterview = (app.interviews ?? []).some(
+        (iv) => (iv.interviewType === 'Technical' || iv.interviewType === 'Managerial')
+          && iv.stageContext !== 'Pre-Hire'
+          && (inRange(iv.scheduledStart) || inRange(iv.createdAt)),
+      );
+      const assessmentInterview = (app.interviews ?? []).some(
+        (iv) => (iv.stageContext === 'Pre-Hire' || iv.interviewType === 'Assessment')
+          && (inRange(iv.scheduledStart) || inRange(iv.createdAt)),
+      );
+      const anyInterview = hrInterview || technicalInterview || assessmentInterview
+        || (app.statusHistory ?? []).some((h) => h.toStage === 'Interview' && inRange(h.createdAt));
+
+      const offerSent = (app.offers ?? []).some((o) => (o.versions ?? []).some((v) => inRange(v.sentAt) || v.sendDates?.some(inRange)));
+
+      const declinedOffer = (app.offers ?? []).find((o) => o.status === 'Declined' && inRange(o.updatedAt));
+      const offerDeclined = Boolean(declinedOffer);
+      const declineReason = offerDeclined ? (app.rejectionReason?.trim() || 'Declined offer') : null;
+
+      const joined = Boolean(
+        (app.hiringCase?.status === 'Joined' && inRange(app.hiringCase.actualJoiningDate))
+        || (app.statusHistory ?? []).some((h) => h.toStage === 'Joined' && inRange(h.createdAt)),
+      );
+
+      if (!applied && !screening && !anyInterview && !offerSent && !offerDeclined && !joined) {
+        continue;
+      }
+
+      const source = normalizeReportSource(app.source);
+      const bucket = bySourceMap.get(source) ?? { source, applied: 0, screening: 0, interviews: 0, offerSent: 0, joined: 0 };
+      if (applied) bucket.applied += 1;
+      if (screening) bucket.screening += 1;
+      if (anyInterview) bucket.interviews += 1;
+      if (offerSent) bucket.offerSent += 1;
+      if (joined) bucket.joined += 1;
+      bySourceMap.set(source, bucket);
+
+      if (offerDeclined && declineReason) {
+        declineReasonsMap.set(declineReason, (declineReasonsMap.get(declineReason) ?? 0) + 1);
+      }
+
+      rows.push({
+        applicationId: app.id,
+        applicationCode: app.applicationCode,
+        candidateName: `${app.candidate.firstName} ${app.candidate.lastName}`.trim(),
+        positionTitle: app.vacancy.position?.title ?? '',
+        branchName: app.vacancy.branch?.name ?? '',
+        departmentName: app.vacancy.vacancyRequest?.department?.name ?? app.vacancy.department ?? '',
+        source,
+        ownerName: app.primaryRecruiter?.displayName ?? 'Unassigned',
+        currentStage: app.stage,
+        appliedAt: (app.appliedAt ?? app.createdAt).toISOString(),
+        applied,
+        reachedScreening: screening,
+        reachedHrInterview: hrInterview,
+        reachedTechnicalInterview: technicalInterview,
+        reachedAssessmentInterview: assessmentInterview,
+        offerSent,
+        offerDeclined,
+        declineReason,
+        joined,
+        joinedAt: app.hiringCase?.actualJoiningDate ? app.hiringCase.actualJoiningDate.toISOString() : null,
+      });
+    }
+
+    const totals = {
+      applications: rows.length,
+      applied: rows.filter((r) => r.applied).length,
+      screening: rows.filter((r) => r.reachedScreening).length,
+      hrInterview: rows.filter((r) => r.reachedHrInterview).length,
+      technicalInterview: rows.filter((r) => r.reachedTechnicalInterview).length,
+      assessmentInterview: rows.filter((r) => r.reachedAssessmentInterview).length,
+      offerSent: rows.filter((r) => r.offerSent).length,
+      offerDeclined: rows.filter((r) => r.offerDeclined).length,
+      joined: rows.filter((r) => r.joined).length,
+    };
+
+    const bySource = [...bySourceMap.values()].sort((a, b) => b.applied - a.applied || a.source.localeCompare(b.source));
+    const declineReasons = [...declineReasonsMap.entries()]
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
+
+    return {
+      range: { from: range.from.toISOString(), to: range.to.toISOString() },
+      totals,
+      bySource,
+      declineReasons,
+      rows,
+    };
+  }
+
+  async exportCandidateActivityExcel(organizationId: string, query: ReportOverviewQueryDto, user?: AuthUser): Promise<Buffer> {
+    try {
+      const activity = await this.getCandidateActivity(organizationId, query, user);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+        ['Candidate Activity Summary'],
+        ['From', activity.range.from],
+        ['To', activity.range.to],
+        [],
+        ['Metric', 'Unique Applications'],
+        ['Active Applications in Period', activity.totals.applications],
+        ['Applied', activity.totals.applied],
+        ['Screening', activity.totals.screening],
+        ['HR / Behavioral Interview', activity.totals.hrInterview],
+        ['Technical / Managerial Interview', activity.totals.technicalInterview],
+        ['Pre-Hire Assessment Interview', activity.totals.assessmentInterview],
+        ['Offer Sent', activity.totals.offerSent],
+        ['Offer Declined', activity.totals.offerDeclined],
+        ['Joined', activity.totals.joined],
+      ]), 'Summary');
+
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+        ['Source', 'Applied', 'Screening', 'Interviews', 'Offer Sent', 'Joined'],
+        ...activity.bySource.map((s) => [s.source, s.applied, s.screening, s.interviews, s.offerSent, s.joined]),
+      ]), 'By Source');
+
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+        [
+          'Application Code',
+          'Candidate',
+          'Position',
+          'Branch',
+          'Department',
+          'Source',
+          'Owner',
+          'Current Stage',
+          'Applied',
+          'Screening',
+          'HR Interview',
+          'Technical Interview',
+          'Assessment Interview',
+          'Offer Sent',
+          'Offer Declined',
+          'Decline Reason',
+          'Joined',
+        ],
+        ...activity.rows.map((r) => [
+          r.applicationCode,
+          r.candidateName,
+          r.positionTitle,
+          r.branchName,
+          r.departmentName,
+          r.source,
+          r.ownerName,
+          r.currentStage,
+          r.applied ? 'Yes' : 'No',
+          r.reachedScreening ? 'Yes' : 'No',
+          r.reachedHrInterview ? 'Yes' : 'No',
+          r.reachedTechnicalInterview ? 'Yes' : 'No',
+          r.reachedAssessmentInterview ? 'Yes' : 'No',
+          r.offerSent ? 'Yes' : 'No',
+          r.offerDeclined ? 'Yes' : 'No',
+          r.declineReason ?? '',
+          r.joined ? 'Yes' : 'No',
+        ]),
+      ]), 'Candidate Activity');
+      return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw exportFailed('Could not export Candidate Activity report.');
+    }
+  }
 }

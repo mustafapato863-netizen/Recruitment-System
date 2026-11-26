@@ -223,7 +223,7 @@ export function JobPipelineV2() {
             {actions.includes('reopen') ? <ButtonV2 kind="tertiary" icon={<Play />} onClick={() => setDrawer('status')}>Reopen job</ButtonV2>
               : actions.length ? <ButtonV2 kind="tertiary" icon={<Pause />} onClick={() => setDrawer('status')}>Hold job</ButtonV2> : null}
             <ButtonV2 kind="secondary" icon={<Sparkles />} onClick={() => setDrawer('suggest')}>Suggest from bank</ButtonV2>
-            <ButtonV2 icon={<Upload />} onClick={() => setDrawer('import')} disabled={!accepting} aria-describedby={accepting ? undefined : 'import-why'}>Import CVs</ButtonV2>
+            <ButtonV2 icon={<Upload />} onClick={() => navigate(`/vacancies/${encodeURIComponent(job.id)}/upload-cv`)} disabled={!accepting} aria-describedby={accepting ? undefined : 'import-why'}>Import CVs</ButtonV2>
             {!accepting ? <span id="import-why" className="rf2-sr-only">{job.status === 'On Hold' ? 'A held job takes no new applications.' : `A ${STATUS_LABEL[job.status].toLowerCase()} job takes no new applications.`}</span> : null}
           </div>
         </div>

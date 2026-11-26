@@ -70,4 +70,50 @@ export class ReportsController {
   ) {
     return this.reportsService.getByEntity(user.organizationId, query, user);
   }
+
+  /** Ticket 07: Vacancy Tracker report (open requests separate from remaining seats, no replaced employee column). */
+  @Get('vacancy-tracker')
+  @RequirePermissions('APPLICATION_VIEW')
+  async getVacancyTracker(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ReportOverviewQueryDto,
+  ) {
+    return this.reportsService.getVacancyTracker(user.organizationId, query, user);
+  }
+
+  @Get('vacancy-tracker/export.xlsx')
+  @RequirePermissions('APPLICATION_VIEW')
+  async exportVacancyTrackerExcel(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ReportOverviewQueryDto,
+  ) {
+    const workbook = await this.reportsService.exportVacancyTrackerExcel(user.organizationId, query, user);
+    return new StreamableFile(workbook, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="vacancy-tracker.xlsx"',
+    });
+  }
+
+  /** Ticket 07: Candidate Activity report (application counted once per stage reached, with drill-down). */
+  @Get('candidate-activity')
+  @RequirePermissions('APPLICATION_VIEW')
+  async getCandidateActivity(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ReportOverviewQueryDto,
+  ) {
+    return this.reportsService.getCandidateActivity(user.organizationId, query, user);
+  }
+
+  @Get('candidate-activity/export.xlsx')
+  @RequirePermissions('APPLICATION_VIEW')
+  async exportCandidateActivityExcel(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ReportOverviewQueryDto,
+  ) {
+    const workbook = await this.reportsService.exportCandidateActivityExcel(user.organizationId, query, user);
+    return new StreamableFile(workbook, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="candidate-activity.xlsx"',
+    });
+  }
 }

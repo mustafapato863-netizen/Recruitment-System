@@ -3,7 +3,7 @@ import type { TeamWorkResponse, AuthUser } from '@recruitflow/contracts';
 // Runtime service imports must remain value imports for Nest DI metadata reflection.
 import { PrismaService } from '../database/prisma.service';
 import type { MyWorkDay } from '@recruitflow/contracts';
-import { joiningTypeForRequirement, resolveSnapshot } from '../hiring/joining-policy';
+import { panelAssessmentFacts, preHireAssessmentQuery, joiningTypeForRequirement, resolveSnapshot } from '../hiring/joining-policy';
 import { ownedVacancyWhere } from '../vacancy-core/job-ownership';
 import { buildMyWork, UPCOMING_WINDOW_DAYS, type MyWorkJoiningDecisionFacts, type MyWorkJoiningInput, type MyWorkResponse } from './my-work.buckets';
 import { normalizeUserIdentity } from '../common/user-name-normalization';
@@ -42,6 +42,7 @@ type JoiningCaseRow = {
       joinedHeadcount: number;
       position: { title: string; metadata: unknown } | null;
     };
+    interviews: Parameters<typeof panelAssessmentFacts>[0];
     joiningChecks: Array<{ type: string; verified: boolean; expiryDate: Date | null; documentId: string | null }>;
   };
   offer: { versions: Array<{ id: string; status: string; versionNumber: number }> } | null;
@@ -75,6 +76,7 @@ function joiningDecisionFacts(row: JoiningCaseRow): MyWorkJoiningDecisionFacts |
       expiryDate: check.expiryDate,
       documentId: check.documentId,
     })),
+    assessmentInterviews: panelAssessmentFacts(row.application.interviews),
     joinedHeadcount: vacancy.joinedHeadcount,
     approvedHeadcount: vacancy.approvedHeadcount,
   };
@@ -269,6 +271,7 @@ export class MyWorkService {
               stage: true,
               candidate: { select: { id: true, firstName: true, lastName: true } },
               vacancy: { select: { status: true, vacancyCode: true, approvedHeadcount: true, joinedHeadcount: true, position: { select: { title: true, metadata: true } } } },
+              interviews: preHireAssessmentQuery,
               joiningChecks: { select: { type: true, verified: true, expiryDate: true, documentId: true } },
             },
           },

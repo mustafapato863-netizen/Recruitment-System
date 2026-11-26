@@ -1,18 +1,18 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Copy } from 'lucide-react';
-import { ButtonV2, InputV2, SelectV2, StatusChip, TabsV2, TextareaV2 } from '../../components/v2';
+import { ButtonV2, DiscardChangesDialog, InputV2, SelectV2, StatusChip, TabsV2, TextareaV2 } from '../../components/v2';
 import {
-  deptOf, dueOf, formatDue, isEditable, ownerIdOf, ownerOf, reqError, siteOf, STATUS_LABEL, STATUS_TONE, titleOf, updateRequisition,
+  deptOf, dueOf, formatDue, isEditable, ownerIdOf, ownerOf, reqError, SALARY_CURRENCIES, SALARY_PERIODS, siteOf, STATUS_LABEL, STATUS_TONE, titleOf, updateRequisition,
   type Person, type ReqContext, type ReqFields, type ReqStatus, type Requisition,
 } from '../api/requisitions';
 
-const FIELDS = ['Title', 'Site', 'Seats', 'Due date', 'Primary recruiter', 'Notes'] as const;
+const FIELDS = ['Title', 'Site', 'Seats', 'Due date', 'Salary range', 'Primary recruiter', 'Notes'] as const;
 const STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-hire', 'Joined'] as const;
 const OWNERSHIP_WARNING = 'Editing primary recruiter on a requisition changes job ownership only. Open candidate application files remain with their current primary recruiter until reassigned in Team work (M04).';
 type DetailTab = 'overview' | 'progress' | 'ownership' | 'activity';
-type EditForm = { positionId: string; branchId: string; seats: string; dueDate: string; assignee: string; notes: string };
-type EditErrs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'notes' | 'form', string>>;
+type EditForm = { positionId: string; branchId: string; seats: string; dueDate: string; budgetMin: string; budgetMax: string; budgetCurrency: string; budgetPeriod: string; assignee: string; notes: string };
+type EditErrs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'budgetMin' | 'budgetMax' | 'budgetCurrency' | 'assignee' | 'notes' | 'form', string>>;
 
 const cairoToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const isTab = (key: string): key is DetailTab => key === 'overview' || key === 'progress' || key === 'ownership' || key === 'activity';
@@ -34,9 +34,26 @@ function draftFrom(req: Requisition): EditForm {
     branchId: req.branchId,
     seats: String(req.requestedHeadcount ?? 1),
     dueDate: dueOf(req) ?? '',
+    budgetMin: req.budgetMin != null ? String(req.budgetMin) : '',
+    budgetMax: req.budgetMax != null ? String(req.budgetMax) : '',
+    budgetCurrency: req.budgetCurrency ?? 'EGP',
+    budgetPeriod: req.budgetPeriod ?? 'Monthly',
     assignee: req.assignedEmployeeId ?? req.primaryRecruiter?.id ?? '',
     notes: req.justification ?? '',
   };
+}
+
+function formatSalaryRange(req: Requisition): string {
+  if (req.budgetMin == null && req.budgetMax == null) return 'Not set';
+  const fmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+  const range = req.budgetMin != null && req.budgetMax != null
+    ? `${fmt.format(req.budgetMin)} – ${fmt.format(req.budgetMax)}`
+    : req.budgetMin != null
+      ? `From ${fmt.format(req.budgetMin)}`
+      : `Up to ${fmt.format(req.budgetMax!)}`;
+  const currency = req.budgetCurrency ?? '';
+  const period = req.budgetPeriod ? ` / ${req.budgetPeriod}` : '';
+  return `${range}${currency ? ` ${currency}` : ''}${period}`.trim();
 }
 
 function lockCopy(status: ReqStatus): string {
@@ -66,12 +83,20 @@ export function EditRequisitionView({ current, ctx, people, go, onDone }: Requis
   const [f, setF] = useState(() => draftFrom(current));
   const [errs, setErrs] = useState<EditErrs>({});
   const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState<null | { kind: 'restore' } | { kind: 'leave'; req: string | null; drawer?: string }>(null);
   const dirty = JSON.stringify(f) !== JSON.stringify(saved);
   const title = titleOf(current, ctx);
   const set = (key: keyof EditForm) => (value: string) => {
     setF((form) => ({ ...form, [key]: value }));
-    const errKey = key === 'assignee' ? 'assignee' : key === 'seats' ? 'seats' : key === 'dueDate' ? 'dueDate' : key === 'notes' ? 'notes' : key;
+    const errKey = key === 'assignee' ? 'assignee' : key === 'seats' ? 'seats' : key === 'dueDate' ? 'dueDate' : key === 'notes' ? 'notes' : key === 'budgetPeriod' ? 'form' : key;
     setErrs((prev) => ({ ...prev, [errKey]: undefined, form: undefined }));
+  };
+  const guardedGo = (reqId: string | null, drawer?: string) => {
+    if (!editable || !dirty) {
+      go(reqId, drawer);
+      return;
+    }
+    setPendingAction({ kind: 'leave', req: reqId, drawer });
   };
 
   const nameFor = (id: string) => {
@@ -120,17 +145,30 @@ export function EditRequisitionView({ current, ctx, people, go, onDone }: Requis
     if (!f.positionId) next.positionId = 'Pick a title.';
     if (!f.branchId) next.branchId = 'Pick a site.';
     if (!Number.isInteger(seats) || seats < 1) next.seats = 'At least 1 seat.';
-    if (!f.dueDate) next.dueDate = 'Required — a requisition needs a due date.';
-    else if (f.dueDate < cairoToday()) next.dueDate = 'Pick today or a later day.';
+    if (f.dueDate && f.dueDate < cairoToday()) next.dueDate = 'Pick today or a later day.';
+    const rawMin = f.budgetMin.trim();
+    const rawMax = f.budgetMax.trim();
+    const minVal = rawMin ? Number(rawMin) : null;
+    const maxVal = rawMax ? Number(rawMax) : null;
+    if (rawMin && (minVal === null || !Number.isFinite(minVal) || minVal <= 0)) next.budgetMin = 'Enter a minimum salary greater than 0.';
+    if (rawMax && (maxVal === null || !Number.isFinite(maxVal) || maxVal <= 0)) next.budgetMax = 'Enter a maximum salary greater than 0.';
+    if (minVal !== null && maxVal !== null && maxVal < minVal) next.budgetMax = 'Maximum salary must be greater than or equal to minimum salary.';
     setErrs(next);
     if (Object.keys(next).length) return;
+    const hasSalary = minVal !== null || maxVal !== null;
     const body: Partial<ReqFields> = {
       positionId: f.positionId,
       branchId: f.branchId,
       requestedHeadcount: seats,
-      dueDate: f.dueDate,
+      dueDate: f.dueDate || null,
       assignedEmployeeId: f.assignee || null,
       justification: f.notes.trim() || null,
+      ...(hasSalary ? {
+        budgetMin: minVal !== null ? Math.round(minVal) : null,
+        budgetMax: maxVal !== null ? Math.round(maxVal) : null,
+        budgetCurrency: (f.budgetCurrency as ReqFields['budgetCurrency']) || null,
+        budgetPeriod: (f.budgetPeriod as ReqFields['budgetPeriod']) || 'Monthly',
+      } : {}),
     };
     setBusy(true);
     try {
@@ -144,9 +182,12 @@ export function EditRequisitionView({ current, ctx, people, go, onDone }: Requis
       if (inline.branchId) next.branchId = inline.branchId;
       if (inline.seats) next.seats = inline.seats;
       if (inline.dueDate) next.dueDate = inline.dueDate;
+      if (inline.budgetMin) next.budgetMin = inline.budgetMin;
+      if (inline.budgetMax) next.budgetMax = inline.budgetMax;
+      if (inline.budgetCurrency) next.budgetCurrency = inline.budgetCurrency;
       if (inline.assignee) next.assignee = inline.assignee;
       if (inline.notes) next.notes = inline.notes;
-      if (parsed.field === 'seats' || parsed.field === 'dueDate' || parsed.field === 'assignee') next[parsed.field] = parsed.text;
+      if (parsed.field === 'seats' || parsed.field === 'dueDate' || parsed.field === 'assignee' || parsed.field === 'budgetMin' || parsed.field === 'budgetMax' || parsed.field === 'budgetCurrency') next[parsed.field] = parsed.text;
       else if (parsed.text) next.form = parsed.text;
       setErrs(next);
     } finally {
@@ -156,23 +197,21 @@ export function EditRequisitionView({ current, ctx, people, go, onDone }: Requis
 
   const restore = () => {
     if (!dirty) return;
-    if (!window.confirm('Restore the last saved values for this requisition?')) return;
-    setF({ ...saved });
-    setErrs({});
+    setPendingAction({ kind: 'restore' });
   };
 
   return (
     <section className="rf2-req__view" aria-label={`Edit requisition ${current.requestCode}`}>
       <p className="rf2-crumbs">
-        <button type="button" className="rf2-link" onClick={() => go(null)}>Requisitions</button>
+        <button type="button" className="rf2-link" onClick={() => guardedGo(null)}>Requisitions</button>
         {' / '}
-        <button type="button" className="rf2-link" onClick={() => go(current.id, 'detail')}>{current.requestCode}</button>
+        <button type="button" className="rf2-link" onClick={() => guardedGo(current.id, 'detail')}>{current.requestCode}</button>
         {' / '}
         <span aria-current="page">Edit</span>
       </p>
       <div className="rf2-req__actions">
-        <ButtonV2 kind="secondary" icon={<ArrowLeft />} onClick={() => go(current.id, 'detail')}>Back to requisition</ButtonV2>
-        <ButtonV2 kind="tertiary" onClick={() => go(null)}>Cancel</ButtonV2>
+        <ButtonV2 kind="secondary" icon={<ArrowLeft />} onClick={() => guardedGo(current.id, 'detail')}>Back to requisition</ButtonV2>
+        <ButtonV2 kind="tertiary" onClick={() => guardedGo(null)}>Cancel</ButtonV2>
       </div>
       <div className="rf2-req__who">
         <h2>Edit {title}</h2>
@@ -199,7 +238,19 @@ export function EditRequisitionView({ current, ctx, people, go, onDone }: Requis
               ) : null}
               <div className="rf2-req__row">
                 <InputV2 label="Seats" required type="number" min={1} value={f.seats} onChange={(event) => set('seats')(event.target.value)} error={errs.seats} />
-                <InputV2 label="Due date" required type="date" min={cairoToday()} value={f.dueDate} onChange={(event) => set('dueDate')(event.target.value)} error={errs.dueDate} />
+                <InputV2 label="Due date" type="date" min={cairoToday()} value={f.dueDate} onChange={(event) => set('dueDate')(event.target.value)} error={errs.dueDate} />
+              </div>
+              <div className="rf2-req__row">
+                <InputV2 label="Minimum salary" type="number" min={1} value={f.budgetMin} onChange={(event) => set('budgetMin')(event.target.value)} error={errs.budgetMin} />
+                <InputV2 label="Maximum salary" type="number" min={1} value={f.budgetMax} onChange={(event) => set('budgetMax')(event.target.value)} error={errs.budgetMax} />
+              </div>
+              <div className="rf2-req__row">
+                <SelectV2 label="Currency" value={f.budgetCurrency} onChange={(event) => set('budgetCurrency')(event.target.value)} error={errs.budgetCurrency}>
+                  {SALARY_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </SelectV2>
+                <SelectV2 label="Salary period" value={f.budgetPeriod} onChange={(event) => set('budgetPeriod')(event.target.value)}>
+                  {SALARY_PERIODS.map((p) => <option key={p} value={p}>{p}</option>)}
+                </SelectV2>
               </div>
               {roster ? (
                 <SelectV2 label="Primary recruiter" value={f.assignee} onChange={(event) => set('assignee')(event.target.value)} error={errs.assignee}>
@@ -251,10 +302,24 @@ export function EditRequisitionView({ current, ctx, people, go, onDone }: Requis
         </section>
       </div>
       <div className="rf2-req__foot">
-        <ButtonV2 kind="secondary" onClick={() => go(null)}>Cancel</ButtonV2>
+        <ButtonV2 kind="secondary" onClick={() => guardedGo(null)}>Cancel</ButtonV2>
         <ButtonV2 kind="tertiary" disabled={!editable || !dirty || busy} onClick={restore}>Reset to last saved</ButtonV2>
         <ButtonV2 loading={busy} disabled={!editable || !dirty || busy} onClick={() => void save()}>Save changes</ButtonV2>
       </div>
+      <DiscardChangesDialog
+        open={pendingAction !== null}
+        onKeepEditing={() => setPendingAction(null)}
+        onDiscard={() => {
+          const action = pendingAction;
+          setPendingAction(null);
+          if (action?.kind === 'restore') {
+            setF({ ...saved });
+            setErrs({});
+          } else if (action?.kind === 'leave') {
+            go(action.req, action.drawer);
+          }
+        }}
+      />
     </section>
   );
 }
@@ -328,11 +393,14 @@ export function RequisitionDetailView({ current, ctx, people, me = null, go }: R
             {current.openingType === 'Replacement' && current.replacedEmployee ? <div><dt>Replaces</dt><dd>{current.replacedEmployee.name}</dd></div> : null}
             <div><dt>Employment type</dt><dd>{current.employmentType ?? '—'}</dd></div>
             <div><dt>Opening reason</dt><dd>{current.reason ?? '—'}</dd></div>
+            <div><dt>Salary range</dt><dd>{formatSalaryRange(current)}</dd></div>
             <div><dt>Nationality preference</dt><dd>{(current.nationalityPreference ?? []).length ? current.nationalityPreference!.join(', ') : 'None — soft preference only'}</dd></div>
           </dl>
         </div>
         <div className="rf2-req__actions">
-          {current.status === 'Pending Approval' ? <Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to={`/my-work?tab=waiting&approval=${encodeURIComponent(current.id)}`}>Review approval</Link> : null}
+          {current.status === 'Pending Approval' && (!me || (current.requesterId !== me.id && current.submittedById !== me.id)) ? (
+            <Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to={`/my-work?tab=waiting&approval=${encodeURIComponent(current.id)}`}>Review approval</Link>
+          ) : null}
           <ButtonV2 kind="secondary" onClick={() => go(current.id, 'edit')}>Edit requisition</ButtonV2>
           <ButtonV2 kind="secondary" onClick={() => go(current.id, 'target')}>{due ? 'Edit target' : 'Add target'}</ButtonV2>
           <ButtonV2 kind="tertiary" icon={<Copy />} onClick={() => void copyLink()}>Copy link</ButtonV2>

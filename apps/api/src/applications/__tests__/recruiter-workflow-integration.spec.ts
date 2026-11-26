@@ -453,6 +453,7 @@ describe('Recruiter workflow integration (Tickets 01–08)', () => {
 
     // Responsible recruiter with explicit joining date succeeds
     const techJoinDecision = decideJoining({
+      assessmentInterviews: [{ title: 'Second assessment', status: 'Completed', attendeeCount: 1, submittedScorecardCount: 1 }],
       organizationId: ORG,
       actor: { userId: 'rec-1', organizationId: ORG, permissions: [RECORD_ACTUAL_JOINING] },
       enforceActor: true,
@@ -510,6 +511,7 @@ describe('Recruiter workflow integration (Tickets 01–08)', () => {
       checks: validClinicalChecks,
     });
     const validClinicalJoin = decideJoining({
+      assessmentInterviews: [{ title: 'Second assessment', status: 'Completed', attendeeCount: 1, submittedScorecardCount: 1 }],
       organizationId: ORG,
       actor: { userId: 'rec-1', organizationId: ORG, permissions: [RECORD_ACTUAL_JOINING] },
       enforceActor: true,
@@ -793,7 +795,13 @@ describe('Recruiter workflow integration (Tickets 01–08)', () => {
         update: offerUpdate,
       },
       offerVersion: {
-        findUnique: vi.fn().mockResolvedValue({ id: 'ver-w1', versionNumber: 1, status: 'Approved', approvalStatus: 'Approved' }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'ver-w1',
+          versionNumber: 1,
+          status: 'Approved',
+          approvalStatus: 'Approved',
+          proposedJoiningDate: new Date('2026-12-01T00:00:00.000Z'),
+        }),
         update: offerVersionUpdate,
         updateMany: vi.fn(),
       },

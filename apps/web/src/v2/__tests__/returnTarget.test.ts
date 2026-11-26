@@ -113,8 +113,9 @@ describe('allowedReturn', () => {
     expect(allowedReturn('/candidates/compare?job=v1&ids=c1,c2', noCandidates)).toBeNull();
     expect(allowedReturn('/notifications', noCandidates)).toBeNull();
     expect(allowedReturn('/vacancies/j1', noVacancy)).toBeNull();
-    expect(allowedReturn('/candidates', routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW', 'CANDIDATE_VIEW'] }))).toBeNull();
-    expect(allowedReturn('/candidates/compare?job=v1&ids=c1,c2', routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW', 'CANDIDATE_VIEW'] }))).toBeNull();
+    // Ticket 14: managers with CANDIDATE_VIEW have a team-scoped Candidates page; without CANDIDATE_VIEW it is rejected.
+    expect(allowedReturn('/candidates', routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW', 'CANDIDATE_VIEW'] }))).toBe('/candidates');
+    expect(allowedReturn('/candidates', routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW'] }))).toBeNull();
   });
 });
 
